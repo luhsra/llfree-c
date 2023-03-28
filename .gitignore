@@ -2,6 +2,9 @@
 /target
 Cargo.lock
 
+# c
+/llc/build
+
 # misc
 .DS_Store
 memfile

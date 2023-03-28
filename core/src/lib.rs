@@ -34,6 +34,8 @@ mod bitfield;
 mod entry;
 mod llfree;
 pub use llfree::LLFree;
+mod llc;
+pub use llc::LLC;
 mod lower;
 mod trees;
 
