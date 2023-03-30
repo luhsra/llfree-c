@@ -1,20 +1,8 @@
-#include <stdatomic.h>
-#include <stdint.h>
+#include "llc.h"
 
-enum {
-  /// Success
-  ERR_OK = 0,
-  /// Not enough memory
-  ERR_MEMORY = -1,
-  /// Failed atomic operation, retry procedure
-  ERR_RETRY = -2,
-  /// Invalid address
-  ERR_ADDRESS = -3,
-  /// Allocator not initialized or initialization failed
-  ERR_INITIALIZATION = -4,
-  /// Corrupted allocator state
-  ERR_CORRUPTION = -5,
-};
+//Compilen und ausführen:
+//cargo test -r -p nvalloc -- llc::test --nocapture
+  
 
 /// Creates the allocator and returns a pointer to its data that is passed into
 /// all other functions
