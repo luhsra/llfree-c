@@ -4,6 +4,7 @@ Cargo.lock
 
 # c
 /llc/build
+llc/compile_commands.json
 
 # misc
 .DS_Store

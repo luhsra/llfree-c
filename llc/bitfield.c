@@ -37,7 +37,10 @@ int find_unset(bitfield_512_t* field, pos_t* pos){
     assert(field != NULL);
 
     for(int i = 0; i < N; i++){
-        int ret = __builtin_ctzll(~field->rows[i]);        
+        int ret;
+        // ctzll(x) -> If x is 0, the result is undefined. 
+        if(~field->rows[i] == 0) ret = CACHESIZE;
+        else ret = __builtin_ctzll(~field->rows[i]);        
 
         assert(ret >= 0 && "ctzll shoud never be negative");
         assert(ret <= 64 && "ctzll schould not count more zeros as there are Bits");

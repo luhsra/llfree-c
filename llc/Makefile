@@ -36,11 +36,19 @@ $(BUILDDIR)/$(LIBNAME): $(OBJS)
 clean:
 	rm -rf $(BUILDDIR)
 
+TESTSRCS = $(wildcard tests/*.c)
+TESTOBJS = $(addprefix build/,$(TESTSRCS:.c=.o))
+TESTDIR = tests
+
+
+$(TESTDIR): $(BUILDDIR)
+	mkdir -p $(BUILDDIR)/$(TESTDIR)
+
 
 # LDFLAGS = -L build -l llc
-test: TESTOBJS
-	$(CC) $(CFLAGS) test.c -o build/test $(LDFLAGS)
-	./build/test
+test: $(TESTDIR)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(TESTSRCS) -o $(BUILDDIR)/$(TESTDIR)/run_tests
+	./$(BUILDDIR)/$(TESTDIR)/run_tests
 
 
 .PHONY: all clean test
