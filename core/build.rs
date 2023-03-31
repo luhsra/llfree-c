@@ -27,6 +27,8 @@ fn main() {
 
     // Re-run the build script if any C source files change
     println!("cargo:rerun-if-changed={c_project_dir}/Makefile");
+    println!("cargo:rerun-if-changed={c_project_dir}/build/libllc.a");
+
     for entry in glob::glob(&format!("{c_project_dir}/*.[hc]")).unwrap() {
         match entry {
             Ok(path) => println!("cargo:rerun-if-changed={}", path.display()),

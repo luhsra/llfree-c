@@ -1,14 +1,14 @@
 # Compiler and flags
-CC = gcc
+CC = clang
 AR = ar
-CFLAGS = -Wall -Wextra -Werror -fPIE
+CFLAGS = -Wall -Wextra -Werror -fPIE -std=c11 -I $(PWD)
 DEBUG ?= 1
 
 # The rust wrapper calls this with DEBUG=1 on debug and DEBUG=0 on release builds
 ifeq ($(DEBUG), 1)
 	CFLAGS += -g -O1
 else
-	CFLAGS += -O3
+	CFLAGS += -O3 -D NDEBUG
 endif
 
 # Library name, sources, and build directory
@@ -36,4 +36,11 @@ $(BUILDDIR)/$(LIBNAME): $(OBJS)
 clean:
 	rm -rf $(BUILDDIR)
 
-.PHONY: all clean
+
+# LDFLAGS = -L build -l llc
+test: TESTOBJS
+	$(CC) $(CFLAGS) test.c -o build/test $(LDFLAGS)
+	./build/test
+
+
+.PHONY: all clean test
