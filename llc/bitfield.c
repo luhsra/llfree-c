@@ -11,14 +11,14 @@ static pos_t get_pos(int index){
 }
 
 //initializes the bitfield with zeros
-int init_field(bitfield_512_t* field, int number_Of_free_Frames){
+int init_field(bitfield_512_t* field, int number_Of_Frames){
     assert(field != NULL);
-    assert(0 <= number_Of_free_Frames && number_Of_free_Frames <= FIELDSIZE);
+    assert(0 <= number_Of_Frames && number_Of_Frames <= FIELDSIZE);
 
 
-    if(number_Of_free_Frames < FIELDSIZE){
+    if(number_Of_Frames < FIELDSIZE){
         // possible to ave not a fully saturated bitfield
-        pos_t pos = get_pos(number_Of_free_Frames);
+        pos_t pos = get_pos(number_Of_Frames);
         (void) pos;
         // TODO
     }
