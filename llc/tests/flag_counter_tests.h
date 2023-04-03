@@ -2,8 +2,5 @@
 
 
 //runns all tests an returns the number of failed Tests
-int bitfield_tests(int* test_counter, int* fail_counter);
-
-
-
+int flag_counter_tests(int* test_counter, int* fail_counter);
 
