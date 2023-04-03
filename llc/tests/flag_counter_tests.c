@@ -77,7 +77,7 @@ bool atomic_counter_inc_test(){
     check_equal(actual.flag, expect.flag);
 
     actual = (flag_counter_t) {{{0x3fff,true}}};
-    expect = (flag_counter_t) {{{0x4fff,true}}};
+    expect = (flag_counter_t) {{{0x4000,true}}};
 
     ret = atomic_counter_inc(&actual);
     check_equal(ret, 0);
