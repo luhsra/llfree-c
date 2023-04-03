@@ -6,7 +6,7 @@
 static pos_t get_pos(int index){
     assert(0 <= index && index < 512 && "max range for 512 Bits");
 
-    pos_t pos = {index % CACHESIZE, index / CACHESIZE};
+    pos_t pos = {index / CACHESIZE, index % CACHESIZE};
     return pos;
 }
 
@@ -17,16 +17,25 @@ int init_field(bitfield_512_t* field, int number_Of_Frames){
 
 
     if(number_Of_Frames < FIELDSIZE){
-        // possible to ave not a fully saturated bitfield
+        // possible to have not a fully saturated bitfield
         pos_t pos = get_pos(number_Of_Frames);
-        (void) pos;
-        // TODO
+        uint64_t mask = 0xffffffffffffffffull << pos.bit_number;
+        for(int i = 0; i < N; i++){
+            if(i < pos.row_number){
+                field->rows[i] = 0x0ull;
+            }else if (i > pos.row_number){
+                field->rows[i] = 0xffffffffffffffffull;
+            }else{
+                field->rows[i] = mask;
+            }
+        }
+    }else{
+        for(int i = 0; i < N; i++){
+            field->rows[i] = 0ull;
+        }
     }
 
 
-    for(int i = 0; i < N; i++){
-        field->rows[i] = 0ull;
-    }
     return 0;
 }
 
@@ -63,9 +72,6 @@ int set_Bit(bitfield_512_t* field, pos_t pos){
 
     uint64_t mask = 1ull << pos.bit_number; // 00...010...0 -> one at the bit-position
 
-    
-    field->rows[pos.row_number] |= mask;
-
     uint64_t before = __c11_atomic_fetch_or(&field->rows[pos.row_number], mask, __ATOMIC_ACQ_REL);
 
     if((before & mask) != 0ull){ // bit was already set
@@ -84,7 +90,7 @@ int reset_Bit(bitfield_512_t* field, pos_t pos){
 
     uint64_t before = __c11_atomic_fetch_and(&field->rows[pos.row_number], mask, __ATOMIC_ACQ_REL);
 
-    if((before | mask) != before){ // bit were already reset
+    if((before & mask) == before){ // bit were already reset
         return -1;
     }
 

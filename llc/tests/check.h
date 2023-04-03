@@ -1,17 +1,32 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-extern bool sucssess;
+
+#define run_test(test_func) \
+    (*test_counter)++;  \
+    printf(#test_func ":\n");    \
+    if(!test_func) (*fail_counter)++;   \
+    else printf("\tsuccess\n"); \
+
 
 #define check(x,msg)    \
     if(!(x)) {          \
         printf("\tFILE %s: LINE %d:\n\tCheck " #x " failed: %s\n",__FILE__, __LINE__, msg); \
-        sucssess = false;   \
+        success = false;   \
     }
 
 #define check_equal_m(actual,expected, msg)   \
     if(actual != expected) {    \
         printf("\tFILE %s: LINE %d: Check " #actual " == " #expected " failed: %s\n\texpected: %d, actual value: %d\n",__FILE__, __LINE__, msg, expected, actual); \
-        sucssess = false;   \
+        success = false;   \
     }
 #define check_equal(actual, expected) check_equal_m(actual, expected, "")
+
+#define check_equal_bitfield_m(actual, expected,msg) \
+    if(!equals(&actual, &expected)) { \
+        printf("\tFILE %s: LINE %d: Check equal bitfields failed: %s\n\tactual:\n",__FILE__, __LINE__, msg); \
+        print_field(&actual);   \
+        printf("\texpected:\n");    \
+        print_field(&expected);   \
+        success = false;   \
+    }

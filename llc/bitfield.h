@@ -16,8 +16,8 @@ typedef struct bitfield_512{
 
 // position of a bit in a bitfield
 typedef struct pos {
-    int bit_number;     // 0 <= bit_number < CACHESIZE
     int row_number;     // 0 <= row_number < N
+    int bit_number;     // 0 <= bit_number < CACHESIZE
 }pos_t;
 
 
