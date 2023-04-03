@@ -22,7 +22,7 @@ typedef struct pos {
 
 
 //initializes the bitfield with zeros
-int init_field(bitfield_512_t* field, int number_Of_free_Frames);
+int init_field(bitfield_512_t* field, int number_of_free_Frames, bool start_allocated);
 
 //Find first unset Bit. Stores position in pos
 int find_unset(bitfield_512_t* field, pos_t* pos);

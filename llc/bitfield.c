@@ -4,34 +4,34 @@
 #include <assert.h>
 
 static pos_t get_pos(int index){
-    assert(0 <= index && index < 512 && "max range for 512 Bits");
+    assert(0 <= index && index <= 512 && "max range for 512 Bits");
 
     pos_t pos = {index / CACHESIZE, index % CACHESIZE};
     return pos;
 }
 
 //initializes the bitfield with zeros
-int init_field(bitfield_512_t* field, int number_Of_Frames){
+int init_field(bitfield_512_t* field, int number_of_free_Frames, bool start_allocated){
     assert(field != NULL);
-    assert(0 <= number_Of_Frames && number_Of_Frames <= FIELDSIZE);
+    assert(0 <= number_of_free_Frames && number_of_free_Frames <= FIELDSIZE);
 
-
-    if(number_Of_Frames < FIELDSIZE){
-        // possible to have not a fully saturated bitfield
-        pos_t pos = get_pos(number_Of_Frames);
-        uint64_t mask = 0xffffffffffffffffull << pos.bit_number;
+    if(start_allocated){
         for(int i = 0; i < N; i++){
-            if(i < pos.row_number){
-                field->rows[i] = 0x0ull;
-            }else if (i > pos.row_number){
-                field->rows[i] = 0xffffffffffffffffull;
-            }else{
-                field->rows[i] = mask;
-            }
+            field->rows[i] = 0xffffffffffffffffull;
         }
-    }else{
-        for(int i = 0; i < N; i++){
-            field->rows[i] = 0ull;
+        return 0;
+    }
+
+    // possible to have not a fully saturated bitfield
+    pos_t pos = get_pos(number_of_free_Frames);
+    uint64_t mask = 0xffffffffffffffffull << pos.bit_number;
+    for(int i = 0; i < N; i++){
+        if(i < pos.row_number){
+            field->rows[i] = 0x0ull;
+        }else if (i > pos.row_number){
+            field->rows[i] = 0xffffffffffffffffull;
+        }else{
+            field->rows[i] = mask;
         }
     }
 
