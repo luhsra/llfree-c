@@ -25,7 +25,7 @@ int atomic_flag_reset(flag_counter_t* self){
 
 //increments the counter. returns new counter value for success; -1 if atomic was interrupted; -2 if out of range
 int atomic_counter_inc(flag_counter_t* self){
-    uint16_t mask = 0x7fff;
+    uint16_t mask = 0x7fff; //only flag bit is 0
 
     uint16_t expected = self->raw;
 
@@ -40,7 +40,15 @@ int atomic_counter_inc(flag_counter_t* self){
 
 //decrements the counter. returns new counter value for success; -1 if atomic was interrupted; -2 if out of range
 int atomic_counter_dec(flag_counter_t* self){
-    (void) self;
+    uint16_t mask = 0x7fff; //only flag bit is 0
+
+    uint16_t expected = self->raw;
+
+    if((expected & mask) <= 0) return -2;
+
+    uint16_t desired = expected - 1;
+    bool success =  __c11_atomic_compare_exchange_strong (&self->raw, &expected, desired, false, __ATOMIC_ACQ_REL);
+    if(success) return 0;
     return -1;
 }
 

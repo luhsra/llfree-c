@@ -93,7 +93,7 @@ bool atomic_counter_dec_test(){
     flag_counter_t actual = (flag_counter_t) {{{0,true}}};
     flag_counter_t expect = (flag_counter_t) {{{0,true}}};
 
-    int ret = atomic_counter_inc(&actual);
+    int ret = atomic_counter_dec(&actual);
     check_equal_m(ret, -2, "out of range");
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
@@ -101,7 +101,7 @@ bool atomic_counter_dec_test(){
     actual = (flag_counter_t) {{{9,false}}};
     expect = (flag_counter_t) {{{8,false}}};
 
-    ret = atomic_counter_inc(&actual);
+    ret = atomic_counter_dec(&actual);
     check_equal(ret, 0);
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
@@ -109,7 +109,7 @@ bool atomic_counter_dec_test(){
     actual = (flag_counter_t) {{{0x7fff,true}}};
     expect = (flag_counter_t) {{{0x7ffe,true}}};
 
-    ret = atomic_counter_inc(&actual);
+    ret = atomic_counter_dec(&actual);
     check_equal(ret, 0);
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
