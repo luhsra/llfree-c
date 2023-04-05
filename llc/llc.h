@@ -19,6 +19,15 @@ enum {
   ERR_CORRUPTION = -5,
 };
 
+enum {
+    /// Not persistent
+    Volatile,
+    /// Persistent and try recovery
+    Recover,
+    /// Overwrite the persistent memory
+    Overwrite,
+};
+
 /// Creates the allocator and returns a pointer to its data that is passed into
 /// all other functions
 void *llc_default();
