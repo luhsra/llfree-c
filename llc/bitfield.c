@@ -4,45 +4,53 @@
 #include <assert.h>
 
 static pos_t get_pos(int index){
-    assert(0 <= index && index <= 512 && "max range for 512 Bits");
+    assert(0 <= index && index < FIELDSIZE && "max range for 512 Bits");
 
     pos_t pos = {index / CACHESIZE, index % CACHESIZE};
     return pos;
 }
 
 //initializes the bitfield with zeros
-int init_field(bitfield_512_t* field, int number_of_free_Frames, bool start_allocated){
-    assert(field != NULL);
+bitfield_512_t init_field(int number_of_free_Frames, bool start_allocated){
     assert(0 <= number_of_free_Frames && number_of_free_Frames <= FIELDSIZE);
+    bitfield_512_t field;
 
     if(start_allocated){
         for(int i = 0; i < N; i++){
-            field->rows[i] = 0xffffffffffffffffull;
+            field.rows[i] = 0xffffffffffffffffull;
         }
-        return 0;
+        return field;
+    }
+    // 0 free frames mean all are free
+    // is nicer with mod syntax
+    if(number_of_free_Frames == 0){
+        for(int i = 0; i < N; i++){
+            field.rows[i] = 0x0;
+        }
+        return field;
     }
 
     // possible to have not a fully saturated bitfield
     pos_t pos = get_pos(number_of_free_Frames);
-    uint64_t mask = 0xffffffffffffffffull << pos.bit_number;
+    uint64_t mask = 0xfffffffffffffffful << pos.bit_number;
     for(int i = 0; i < N; i++){
         if(i < pos.row_number){
-            field->rows[i] = 0x0ull;
+            field.rows[i] = 0x0ull;
         }else if (i > pos.row_number){
-            field->rows[i] = 0xffffffffffffffffull;
+            field.rows[i] = 0xffffffffffffffffull;
         }else{
-            field->rows[i] = mask;
+            field.rows[i] = mask;
         }
     }
 
 
-    return 0;
+    return field;
 }
 
 
 
 //Find first unset Bit
-int find_unset(bitfield_512_t* field, pos_t* pos){
+int find_unset(bitfield_512_t* field,  size_t* index){
     assert(field != NULL);
 
     for(int i = 0; i < N; i++){
@@ -55,8 +63,7 @@ int find_unset(bitfield_512_t* field, pos_t* pos){
         assert(ret <= 64 && "ctzll schould not count more zeros as there are Bits");
 
         if(ret < CACHESIZE){
-            pos->bit_number = ret;
-            pos->row_number = i;
+            *index = i * CACHESIZE + ret;
             return 0;
         }
     }
@@ -65,10 +72,11 @@ int find_unset(bitfield_512_t* field, pos_t* pos){
 }
 
 //atomicly set Bin in position n
-int set_Bit(bitfield_512_t* field, pos_t pos){
+int set_Bit(bitfield_512_t* field, size_t index){
     assert(field != NULL);
-    assert(pos.bit_number < CACHESIZE);
-    assert(pos.row_number < N);
+    assert(0 <= index && index < FIELDSIZE);
+
+    pos_t pos = get_pos(index);
 
     uint64_t mask = 1ull << pos.bit_number; // 00...010...0 -> one at the bit-position
 
@@ -81,10 +89,11 @@ int set_Bit(bitfield_512_t* field, pos_t pos){
 }
 
 //atomicly unsets Bit in position n
-int reset_Bit(bitfield_512_t* field, pos_t pos){
+int reset_Bit(bitfield_512_t* field, size_t index){
     assert(field != NULL);
-    assert(pos.bit_number < CACHESIZE);
-    assert(pos.row_number < N);
+    assert(0 <= index && index < FIELDSIZE);
+
+    pos_t pos = get_pos(index);
 
     uint64_t mask = ~(1ull << pos.bit_number); // 11...101...11 -> zero at the bit-position
 

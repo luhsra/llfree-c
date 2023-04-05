@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdint.h>
 #include <stdalign.h>
 #include <stdbool.h>
@@ -22,16 +24,16 @@ typedef struct pos {
 
 
 //initializes the bitfield with zeros
-int init_field(bitfield_512_t* field, int number_of_free_Frames, bool start_allocated);
+bitfield_512_t init_field(int number_of_free_Frames, bool start_allocated);
 
 //Find first unset Bit. Stores position in pos
-int find_unset(bitfield_512_t* field, pos_t* pos);
+int find_unset(bitfield_512_t* field, size_t* index);
 
 //atomicly set Bin in position pos
-int set_Bit(bitfield_512_t* field, pos_t pos);
+int set_Bit(bitfield_512_t* field,size_t index);
 
 //atomicly unsets Bit in position pos
-int reset_Bit(bitfield_512_t* field, pos_t pos);
+int reset_Bit(bitfield_512_t* field,size_t index);
 
 //returns the number of Bits set
 int count_Set_Bits(bitfield_512_t* field);

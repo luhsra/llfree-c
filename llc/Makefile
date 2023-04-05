@@ -36,7 +36,7 @@ $(BUILDDIR)/$(LIBNAME): $(OBJS)
 clean:
 	rm -rf $(BUILDDIR)
 
-TESTSRCS = $(wildcard tests/*.c)
+TESTSRCS = $(wildcard tests/*s.c)
 TESTOBJS = $(addprefix build/,$(TESTSRCS:.c=.o))
 TESTDIR = tests
 
@@ -44,10 +44,12 @@ TESTDIR = tests
 $(TESTDIR): $(BUILDDIR)
 	mkdir -p $(BUILDDIR)/$(TESTDIR)
 
+build/tests/%.o: tests/%.c | $(BUILDDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-# LDFLAGS = -L build -l llc
-test: $(TESTDIR)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(TESTSRCS) -o $(BUILDDIR)/$(TESTDIR)/run_tests
+# LDFLAGS = -I $(TESTOBJS)
+test: clean $(TESTDIR) $(TESTOBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) tests/test.c $(TESTOBJS) -o $(BUILDDIR)/$(TESTDIR)/run_tests
 	./$(BUILDDIR)/$(TESTDIR)/run_tests
 
 

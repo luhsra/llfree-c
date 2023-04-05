@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdio.h>
 #include <stdbool.h>
 
@@ -22,6 +24,14 @@
     }
 #define check_equal(actual, expected) check_equal_m(actual, expected, "")
 
+#define check_uequal_m(actual,expected, msg)   \
+    if(actual != expected) {    \
+        printf("\tFILE %s: LINE %d: Check " #actual " == " #expected " failed: %s\n\texpected: %lu, actual value: %lu\n",__FILE__, __LINE__, msg, expected, actual); \
+        success = false;   \
+    }
+#define check_uequal(actual, expected) check_uequal_m(actual, expected, "")
+
+
 #define check_equal_bitfield_m(actual, expected,msg) \
     if(!equals(&actual, &expected)) { \
         printf("\tFILE %s: LINE %d: Check equal bitfields failed: %s\n\tactual:\n",__FILE__, __LINE__, msg); \
@@ -30,3 +40,4 @@
         print_field(&expected);   \
         success = false;   \
     }
+#define check_equal_bitfield(actual, expected) check_equal_bitfield_m(actual, expected,"")

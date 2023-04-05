@@ -3,6 +3,8 @@
 
 #include "bitfield_tests.h"
 #include "flag_counter_tests.h"
+#include "lower_tests.h"
+
 
 
 int main(){
@@ -14,6 +16,10 @@ int main(){
 
     printf("Running Flag-counter Tests:\n");
     flag_counter_tests(&test_counter, &fail_counter);
+    printf("---------------------------------------\n");
+
+    printf("Running lower allocator Tests:\n");
+    lower_tests(&test_counter, &fail_counter);
     printf("---------------------------------------\n");
     
     
