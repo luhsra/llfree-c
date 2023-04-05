@@ -15,6 +15,7 @@ typedef struct lower{
     flag_counter_t* childs;
 }lower_t;
 
+// end is exclusive
 typedef struct range{
     pfn_t start;
     pfn_t end;
