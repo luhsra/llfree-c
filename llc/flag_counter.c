@@ -37,7 +37,7 @@ int atomic_counter_inc(flag_counter_t* self){
 
     uint16_t expected = self->raw;
 
-    // 0x7fff ist der max counter; -2 für out of range
+    // 0x7fff ist der max counter; -1 für out of range
     if(0x7fff <= (expected & mask)) return -1;
 
     uint16_t desired = expected + 1;

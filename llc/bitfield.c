@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
+#include "enum.h"
 
 static pos_t get_pos(int index){
     assert(0 <= index && index < FIELDSIZE && "max range for 512 Bits");
@@ -12,7 +13,10 @@ static pos_t get_pos(int index){
 
 //initializes the bitfield with zeros
 bitfield_512_t init_field(int number_of_free_Frames, bool start_allocated){
-    assert(0 <= number_of_free_Frames && number_of_free_Frames <= FIELDSIZE);
+    
+    number_of_free_Frames = number_of_free_Frames % FIELDSIZE;
+
+    assert(0 <= number_of_free_Frames && number_of_free_Frames < FIELDSIZE);
     bitfield_512_t field;
 
     if(start_allocated){
@@ -68,7 +72,7 @@ int find_unset(bitfield_512_t* field,  size_t* index){
         }
     }
 
-    return -1; // ERR_MEMORY ->Kein freies Bit in diesem Feld
+    return ERR_MEMORY; // ERR_MEMORY ->Kein freies Bit in diesem Feld
 }
 
 //atomicly set Bin in position n

@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdalign.h>
+#include "enum.h"
 
 // counter can be used for child and tree counter
 typedef struct flag_counter{
@@ -16,6 +17,7 @@ typedef struct flag_counter{
 } flag_counter_t;
 
 //initializes the flag and counter
+// counter must be < 0x8000
 flag_counter_t init_flag_counter(uint16_t counter, bool flag);
 
 //sets the Flag. returns 0 for success and -2 if the flag was already set

@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "enum.h"
 
 #include <stdio.h>
 
@@ -36,11 +37,12 @@ lower_t* init_default(pfn_t start_pfn, uint64_t len, bool free_all){
 
 
     for(size_t i = 0; i < childnumber -1; i++){
-        self->fields[i] = init_field(512, free_all);
-        self->childs[i]= init_flag_counter(free_all ? 0: 512, false);
+        self->fields[i] = init_field(0, free_all);
+        self->childs[i]= init_flag_counter(free_all ? 0: FIELDSIZE, false);
     }
-    self->fields[childnumber -1] = init_field(self->length%512, free_all);
-    self->childs[childnumber -1] = init_flag_counter(self->length%512, false);
+    size_t frames_in_last_field = self->length & FIELDSIZE;
+    self->fields[childnumber -1] = init_field(self->length % FIELDSIZE, free_all);
+    self->childs[childnumber -1] = init_flag_counter(free_all ? 0 :self->length - (childnumber -1) * FIELDSIZE, false);
 
     return self;
 }
@@ -71,14 +73,14 @@ int get(lower_t* self, range_t range, size_t order, pfn_t* ret){
     }
     if(index == index_end) return -1; // No free frame was found
 
-    int result = atomic_counter_inc(&self->childs[index]);
+    int result = atomic_counter_dec(&self->childs[index]);
     assert(result != -1 && "must never be out of range");
 
-    //TODO childcounter muss wieder decrementiert werden
     if(result == -2) return -2; // if atomic failed return 
 
     result = set_Bit(&self->fields[index], pos);
 
+    //TODO childcounter muss wieder incrementiert werden
     if(result != 0) return result;
 
     *ret = index * FIELDSIZE + pos;
@@ -90,10 +92,10 @@ int put(lower_t* self, pfn_t frame, size_t order);
 int is_free(lower_t* self, pfn_t frame, size_t order);
 
 uint64_t allocated_frames(lower_t* self){
-    uint64_t counter = 0;
+    uint64_t counter = self->length;
     for(size_t i = 0; i < num_of_childs(self); i++){
-        counter += count_Set_Bits(&self->fields[i]);
-        //counter+= self.childs->counter;
+        //counter += count_Set_Bits(&self->fields[i]);
+        counter -= self->childs[i].counter;
     }
     return counter;
 };
