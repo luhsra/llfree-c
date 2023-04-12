@@ -47,25 +47,28 @@ bool find_unset_test(){
 
     bitfield_512_t actual = (bitfield_512_t) {{0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
     bitfield_512_t expected = actual;
-    uint64_t pos;
+    pos_t pos;
 
     int ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
-    check_uequal(pos, 0ul);
+    check_equal(pos.row_number, 0);
+    check_equal(pos.bit_number, 0);
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
     actual = (bitfield_512_t) {{0x1,0x0,0x0,0x1,0x0,0x0,0x0,0x0}};
     expected = actual;
     ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
-    check_uequal(pos, 1ul);
+    check_equal(pos.row_number, 0);
+    check_equal(pos.bit_number, 1);
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
     actual = (bitfield_512_t) {{0x1fffffffff,0x0,0x0,0x1,0x0,0x0,0x0,0xffffffffffffffff}};
     expected = actual;
     ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
-    check_uequal(pos, 37ul);
+    check_equal(pos.row_number, 0);
+    check_equal(pos.bit_number, 37);
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
 
@@ -73,7 +76,8 @@ bool find_unset_test(){
     expected = actual;
     ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
-    check_uequal(pos, 2ul * 64);
+    check_equal(pos.row_number, 2);
+    check_equal(pos.bit_number, 0);
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
 
@@ -81,20 +85,22 @@ bool find_unset_test(){
     expected = actual;
     ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
-    check_uequal(pos, 3ul * 64 + 63);
+    check_equal(pos.row_number, 3);
+    check_equal(pos.bit_number, 63);
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
     actual = (bitfield_512_t) {{0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0x7fffffffffffffff}};
     expected = actual;
     ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
-    check_uequal(pos, 7ul * 64 + 63);
+    check_equal(pos.row_number, 7);
+    check_equal(pos.bit_number, 63);
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
     actual = (bitfield_512_t) {{0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff}};
     expected = actual;
     ret = find_unset(&actual, &pos);
-    check_equal_m(ret, -1, "should be no space available");
+    check_equal_m(ret, ERR_MEMORY, "should be no space available");
     check_equal_bitfield_m(actual, expected, "field should not be changed");
     
 
@@ -107,45 +113,40 @@ bool set_Bit_test(){
 
     bitfield_512_t actual =   (bitfield_512_t) {{0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
     bitfield_512_t expected = (bitfield_512_t) {{0x1,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
-    uint64_t pos = 0;
 
-    int ret = set_Bit(&actual, pos);
-    check_equal_m(ret, 0, "no faliure");
+    int ret = set_Bit(&actual);
+    check_equal(ret, 0);
     check_equal_bitfield_m(actual, expected, "first bit must be set");
 
 
     actual = (bitfield_512_t)   {{0x1,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
-    expected = (bitfield_512_t) {{0x1,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
-    pos = 0;
+    expected = (bitfield_512_t) {{0x3,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
 
-    ret = set_Bit(&actual, pos);
-    check_equal_m(ret, -1, "faliure");
-    check_equal_bitfield_m(actual, expected, "first bit is already set");
+    ret = set_Bit(&actual);
+    check_equal(ret, 1);
+    check_equal_bitfield(actual, expected);
 
-    actual = (bitfield_512_t)   {{0x1,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
-    expected = (bitfield_512_t) {{0x1,0x0,0x0,0x0,0x0,0x0,0x0,0x8000000000000000}};
-    pos = 7ul * 64 + 63;
+    actual = (bitfield_512_t)   {{0xffffffffffffffff,0xf,0x0,0x0,0x0,0x0,0x0,0x0}};
+    expected = (bitfield_512_t) {{0xffffffffffffffff,0x1f,0x0,0x0,0x0,0x0,0x0,0x0}};
 
-    ret = set_Bit(&actual, pos);
-    check_equal_m(ret, 0, "call should be a succsess");
-    check_equal_bitfield_m(actual, expected, "last bit must be set");
+    ret = set_Bit(&actual);
+    check_equal_m(ret, 68, "call should be a success");
+    check_equal_bitfield(actual, expected);
 
 
-    actual = (bitfield_512_t)   {{0x1,0x0,0x0,0xfabdeadbeef00700,0x0,0x0,0x0,0x8000000000000000}};
-    expected = (bitfield_512_t) {{0x1,0x0,0x0,0xfafdeadbeef00700,0x0,0x0,0x0,0x8000000000000000}};
-    pos = 3ul *64 + 54;
+    actual = (bitfield_512_t)   {{0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xfabdeadbeeffffff,0x0,0xdeadbeefdeadbeef,0x0,0x8000000000000000}};
+    expected = (bitfield_512_t) {{0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xfabdeadbefffffff,0x0,0xdeadbeefdeadbeef,0x0,0x8000000000000000}};
 
-    ret = set_Bit(&actual, pos);
-    check_equal_m(ret, 0, "call should be a succsess");
-    check_equal_bitfield_m(actual, expected, "row 3 bit 54 -> b to a");
+    ret = set_Bit(&actual);
+    check_equal_m(ret, 216, "call should be a success");
+    check_equal_bitfield_m(actual, expected, "row 3 bit 24 -> e to f");
 
 
-    actual = (bitfield_512_t)   {{0x1,0x0,0x0,0xfafdeadbeef00700,0x0,0x0,0x0,0x8000000000000000}};
-    expected = (bitfield_512_t) {{0x1,0x0,0x0,0xfafdeadbeef00700,0x0,0x0,0x0,0x8000000000000000}};
-    pos = 3ul * 64 + 22;
+    actual = (bitfield_512_t)   {{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}};
+    expected = (bitfield_512_t) {{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}};
 
-    ret = set_Bit(&actual, pos);
-    check_equal_m(ret, -1, "call should fail");
+    ret = set_Bit(&actual);
+    check_equal_m(ret, ERR_MEMORY, "call should fail");
     check_equal_bitfield_m(actual, expected, "no change");
 
     return success;
