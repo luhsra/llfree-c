@@ -61,27 +61,28 @@ static size_t get_child_index(pfn_t pfn){
     return pfn / FIELDSIZE;
 }
 
-int get(lower_t* self, range_t range, size_t order, pfn_t* ret){
+int get(lower_t* self, size_t start, size_t order, pfn_t* ret){
     (void) order; //TODO Different Orders
-    size_t index = get_child_index(range.start);
-    size_t index_end = get_child_index(range.end);
+    size_t index_start = get_child_index(start);
+    index_start /= 32; //allways search in a chunk of 32 childs
+    size_t index_end = index_start + 32;
+    if(index_end > num_of_childs(self)) index_end = num_of_childs(self);
 
-    for(;index < index_end; index++){
-        if(self->childs[index].counter <= 0) continue;
+    for(size_t index = index_start;index < index_end; index++){
+        flag_counter_t child = {atomic_load(&self->childs[index].raw)};
+        if(child.counter <= 0) continue;
 
         int result = child_counter_dec(&self->childs[index]);
         assert(result == ERR_OK); //TODO Return Error
+        int pos;
+        while (true) { //the atomic counter assures that here must be a free bit left in the field
+            pos = set_Bit(&self->fields[index]);
+            if(pos >= 0) break;
+        }
+        *ret = index * FIELDSIZE + pos;
+        return ERR_OK;
     }
-    if(index == index_end) return ERR_MEMORY; // No free frame was found
-
-    int pos;
-    while (true) { //the atomic counter assures that here must be a free bit left in the field
-        pos = set_Bit(&self->fields[index]);
-        if(pos > 0) break;
-    }
-
-    *ret = index * FIELDSIZE + pos;
-    return ERR_OK;
+    return ERR_MEMORY; // No free frame was found
 }
 
 int put(lower_t* self, pfn_t frame, size_t order);

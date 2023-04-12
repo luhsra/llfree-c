@@ -16,11 +16,6 @@ typedef struct lower{
     flag_counter_t* childs;
 }lower_t;
 
-// end is exclusive
-typedef struct range{
-    pfn_t start;
-    pfn_t end;
-} range_t;
 
 // the default allocates only memory
 lower_t* init_default(pfn_t start_pfn, uint64_t len);
@@ -29,7 +24,7 @@ lower_t* init_default(pfn_t start_pfn, uint64_t len);
 int init_lower(lower_t* self, pfn_t start_pfn, uint64_t len, bool free_all);
 
 //ret will be set to a pfn of a newly allocated frame whitch will be allocated after start; returns -1 if not enough memory; -2 if atomic operation failed
-int get(lower_t* self, range_t range, size_t order, pfn_t* ret);
+int get(lower_t* self, size_t start, size_t order, pfn_t* ret);
 
 //will free the given frame returns; -1 on error;  -2 if atomic operation failed
 int put(lower_t* self, pfn_t frame, size_t order);
