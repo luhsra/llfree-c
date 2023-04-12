@@ -5,8 +5,11 @@
 #include <stdbool.h>
 #include <stdatomic.h>
 
+//TODO Nice Function Descriptions
+
+
 /*
-Implements The Bitfield and bahaviour.
+Implements The Bitfield and behaviour.
 */
 #define FIELDSIZE 512           // Amount of Bits in a Field
 #define CACHESIZE 64            // Size of the Biggest Datatype for atomic operations. uint64
@@ -26,11 +29,8 @@ typedef struct pos {
 //initializes the bitfield with zeros
 bitfield_512_t init_field(int number_of_free_Frames, bool start_allocated);
 
-//Find first unset Bit. Stores position in pos
-int find_unset(bitfield_512_t* field, size_t* index);
-
-//atomicly set Bin in position pos
-int set_Bit(bitfield_512_t* field,size_t index);
+//finds unset bit and sets it. returns the index on success, ERR_MEM on failure
+int set_Bit(bitfield_512_t* field);
 
 //atomicly unsets Bit in position pos
 int reset_Bit(bitfield_512_t* field,size_t index);

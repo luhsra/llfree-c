@@ -54,20 +54,22 @@ bitfield_512_t init_field(int number_of_free_Frames, bool start_allocated){
 
 
 //Find first unset Bit
-int find_unset(bitfield_512_t* field,  size_t* index){
+int find_unset(bitfield_512_t* field,  pos_t* pos){
     assert(field != NULL);
 
     for(int i = 0; i < N; i++){
         int ret;
-        // ctzll(x) -> If x is 0, the result is undefined. 
-        if(~field->rows[i] == 0) ret = CACHESIZE;
-        else ret = __builtin_ctzll(~field->rows[i]);        
+        uint64_t row = atomic_load(&field->rows[i]);
+        // ctzll(x) -> If x is 0, the result is undefined.
+        if(~row == 0) ret = CACHESIZE;
+        else ret = __builtin_ctzll(~row);        
 
         assert(ret >= 0 && "ctzll shoud never be negative");
         assert(ret <= 64 && "ctzll schould not count more zeros as there are Bits");
 
         if(ret < CACHESIZE){
-            *index = i * CACHESIZE + ret;
+            pos->row_number = i;
+            pos->bit_number = ret;
             return 0;
         }
     }
@@ -76,20 +78,20 @@ int find_unset(bitfield_512_t* field,  size_t* index){
 }
 
 //atomicly set Bin in position n
-int set_Bit(bitfield_512_t* field, size_t index){
+int set_Bit(bitfield_512_t* field){
     assert(field != NULL);
-    assert(0 <= index && index < FIELDSIZE);
 
-    pos_t pos = get_pos(index);
+    pos_t pos;
+    if(find_unset(field, &pos) < 0) return ERR_MEMORY;
 
     uint64_t mask = 1ull << pos.bit_number; // 00...010...0 -> one at the bit-position
 
-    uint64_t before = __c11_atomic_fetch_or(&field->rows[pos.row_number], mask, __ATOMIC_ACQ_REL);
+    uint64_t before = atomic_fetch_or(&field->rows[pos.row_number], mask);
 
     if((before & mask) != 0ull){ // bit was already set
-        return -1;
+        return ERR_RETRY;
     }
-    return 0;
+    return pos.row_number * CACHESIZE + pos.bit_number;
 }
 
 //atomicly unsets Bit in position n
@@ -101,7 +103,7 @@ int reset_Bit(bitfield_512_t* field, size_t index){
 
     uint64_t mask = ~(1ull << pos.bit_number); // 11...101...11 -> zero at the bit-position
 
-    uint64_t before = __c11_atomic_fetch_and(&field->rows[pos.row_number], mask, __ATOMIC_ACQ_REL);
+    uint64_t before = atomic_fetch_and(&field->rows[pos.row_number], mask);
 
     if((before & mask) == before){ // bit were already reset
         return -1;
