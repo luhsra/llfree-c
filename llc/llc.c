@@ -1,5 +1,5 @@
 #include "llc.h"
-
+#include "enum.h"
 //Compilen und ausführen:
 //cargo test -r -p nvalloc -- llc::test --nocapture
   

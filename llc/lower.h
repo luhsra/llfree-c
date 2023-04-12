@@ -7,6 +7,7 @@
 #include "bitfield.h"
 #include "pfn.h"
 
+//TODO Nice Function Descriptions
 
 typedef struct lower{
     pfn_t start_pfn;
@@ -21,8 +22,8 @@ typedef struct range{
     pfn_t end;
 } range_t;
 
-// the default allocates its own memory
-lower_t* init_default(pfn_t start_pfn, uint64_t len, bool free_all);
+// the default allocates only memory
+lower_t* init_default(pfn_t start_pfn, uint64_t len);
 
 
 int init_lower(lower_t* self, pfn_t start_pfn, uint64_t len, bool free_all);

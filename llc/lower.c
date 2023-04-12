@@ -21,8 +21,8 @@ static size_t num_of_childs(lower_t* self){
 }
 
 
-
-lower_t* init_default(pfn_t start_pfn, uint64_t len, bool free_all){
+// allocs memory for initialisation
+lower_t* init_default(pfn_t start_pfn, uint64_t len){
     lower_t* self = malloc(sizeof(lower_t));
     assert(self != NULL);
 
@@ -35,56 +35,53 @@ lower_t* init_default(pfn_t start_pfn, uint64_t len, bool free_all){
     self->childs = malloc(sizeof(flag_counter_t) * childnumber);
     assert(self->childs != NULL);
 
+    return self;
+}
+
+int init_lower(lower_t* self, pfn_t start_pfn, uint64_t len, bool free_all){
+    assert(self != NULL);
+
+    self->start_pfn = start_pfn;
+    self->length = len;
+    size_t childnumber = num_of_childs(self);
 
     for(size_t i = 0; i < childnumber -1; i++){
         self->fields[i] = init_field(0, free_all);
         self->childs[i]= init_flag_counter(free_all ? 0: FIELDSIZE, false);
     }
-    size_t frames_in_last_field = self->length & FIELDSIZE;
-    self->fields[childnumber -1] = init_field(self->length % FIELDSIZE, free_all);
-    self->childs[childnumber -1] = init_flag_counter(free_all ? 0 :self->length - (childnumber -1) * FIELDSIZE, false);
+    size_t frames_in_last_field = self->length % FIELDSIZE;
+    if(frames_in_last_field == 0) frames_in_last_field = FIELDSIZE;
 
-    return self;
-}
-
-int init_lower(lower_t* self, pfn_t start_pfn, uint64_t len, bool free_all){
-    (void) self;
-    (void) start_pfn;
-    (void) len;
-    (void) free_all; 
-
-    return -1;
+    self->fields[childnumber -1] = init_field(frames_in_last_field, free_all);
+    self->childs[childnumber -1] = init_flag_counter(free_all ? 0 :frames_in_last_field, false);
+    return ERR_OK;
 }
 
 static size_t get_child_index(pfn_t pfn){
-    return div_ceil(pfn, FIELDSIZE);
+    return pfn / FIELDSIZE;
 }
 
 int get(lower_t* self, range_t range, size_t order, pfn_t* ret){
-    (void) order;
+    (void) order; //TODO Different Orders
     size_t index = get_child_index(range.start);
     size_t index_end = get_child_index(range.end);
 
-    uint64_t pos;
     for(;index < index_end; index++){
-        if(self->childs[index].counter > 0){
-            if(find_unset(&self->fields[index], &pos) == 0) break;
-        }
+        if(self->childs[index].counter <= 0) continue;
+
+        int result = child_counter_dec(&self->childs[index]);
+        assert(result == ERR_OK); //TODO Return Error
     }
-    if(index == index_end) return -1; // No free frame was found
+    if(index == index_end) return ERR_MEMORY; // No free frame was found
 
-    int result = atomic_counter_dec(&self->childs[index]);
-    assert(result != -1 && "must never be out of range");
-
-    if(result == -2) return -2; // if atomic failed return 
-
-    result = set_Bit(&self->fields[index], pos);
-
-    //TODO childcounter muss wieder incrementiert werden
-    if(result != 0) return result;
+    int pos;
+    while (true) { //the atomic counter assures that here must be a free bit left in the field
+        pos = set_Bit(&self->fields[index]);
+        if(pos > 0) break;
+    }
 
     *ret = index * FIELDSIZE + pos;
-    return 0;
+    return ERR_OK;
 }
 
 int put(lower_t* self, pfn_t frame, size_t order);
