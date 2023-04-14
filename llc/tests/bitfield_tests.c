@@ -161,7 +161,7 @@ bool reset_Bit_test(){
 
     int ret = reset_Bit(&actual, pos);
     check_equal_bitfield_m(actual, expect, "no change if original Bit was already 0");
-    check_equal(ret, -1);
+    check_equal(ret, ERR_ADDRESS);
 
 
     actual = (bitfield_512_t) {{0x1,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
@@ -194,7 +194,7 @@ bool reset_Bit_test(){
     pos = 4ul * 64 + 62;
 
     ret = reset_Bit(&actual, pos);
-    check_equal(ret, -1);
+    check_equal(ret, ERR_ADDRESS);
     check_equal_bitfield_m(actual, expect, "no change");
 
     return success;
@@ -243,6 +243,39 @@ bool count_Set_Bits_test(){
     return success;
 }
 
+bool is_free_bit_test(){
+    bool success = true;
+
+    bitfield_512_t actual = (bitfield_512_t) {{0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
+    bitfield_512_t expect = actual;
+
+    int ret = is_free_bit(&actual, 0);
+    check_equal(ret, true);
+    check_equal_bitfield_m(actual, expect, "no change!");
+
+
+    ret = is_free_bit(&actual, 511);
+    check_equal(ret, true);
+    check_equal_bitfield_m(actual, expect, "no change!");
+
+
+    actual = (bitfield_512_t) {{0x618f66ac6dead122,0xffffffffffffffff,0x0,0x0,0x0,0x0,0x0,0x0}};
+    expect = actual;
+
+    ret = is_free_bit(&actual, 43);
+    check_equal(ret, true);
+    check_equal_bitfield_m(actual, expect, "no change!");
+
+    ret = is_free_bit(&actual, 42);
+    check_equal(ret, false);
+    check_equal_bitfield_m(actual, expect, "no change!");
+
+    ret = is_free_bit(&actual, 84);
+    check_equal(ret, false);
+    check_equal_bitfield_m(actual, expect, "no change!");
+    
+    return success;
+}
 
 int bitfield_tests(int* test_counter, int* fail_counter){
     
@@ -251,6 +284,6 @@ int bitfield_tests(int* test_counter, int* fail_counter){
     run_test(set_Bit_test());
     run_test(reset_Bit_test());
     run_test(count_Set_Bits_test());
-
+    run_test(is_free_bit_test());
     return 0;
 }

@@ -1,4 +1,5 @@
 #include "bitfield.h"
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
@@ -106,10 +107,10 @@ int reset_Bit(bitfield_512_t* field, size_t index){
     uint64_t before = atomic_fetch_and(&field->rows[pos.row_number], mask);
 
     if((before & mask) == before){ // bit were already reset
-        return -1;
+        return ERR_ADDRESS;
     }
 
-    return 0;
+    return ERR_OK;
 }
 
 //returns the number os set Bits
@@ -147,4 +148,16 @@ bool equals(bitfield_512_t* f1, bitfield_512_t* f2){
         if(f1->rows[i] != f2->rows[i]) return false;
     }
     return true;
+}
+
+
+bool is_free_bit(bitfield_512_t* self,size_t index){
+    assert(self != NULL);
+    assert(0 <= index && index < FIELDSIZE);
+    pos_t pos = get_pos(index);
+
+    uint64_t row = atomic_load(&self->rows[pos.row_number]);
+    uint64_t mask = 1ul << pos.bit_number;
+
+    return (row & mask) == 0;
 }

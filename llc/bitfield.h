@@ -38,6 +38,9 @@ int reset_Bit(bitfield_512_t* field,size_t index);
 //returns the number of Bits set
 int count_Set_Bits(bitfield_512_t* field);
 
+//checks it the bit is free
+bool is_free_bit(bitfield_512_t* self,size_t index);
+
 //prints the bitfield
 void print_field(bitfield_512_t* field);
 
