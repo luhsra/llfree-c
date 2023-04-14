@@ -42,4 +42,7 @@ int atomic_counter_dec(flag_counter_t* self);
 // checks if flag is not set and counter boundry bovore calling atomic_counter_dec
 int child_counter_dec(flag_counter_t* self);
 
+// reads atomicly the counter and returns the value
+uint16_t get_counter(flag_counter_t* self);
+
 

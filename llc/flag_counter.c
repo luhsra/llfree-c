@@ -104,3 +104,7 @@ int child_counter_dec(flag_counter_t* self){
     return atomic_counter_dec(self);
 }
 
+
+uint16_t get_Counter(flag_counter_t* self){
+    return atomic_load(&self->raw);
+}
