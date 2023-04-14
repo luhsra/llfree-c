@@ -27,7 +27,7 @@ int init_lower(lower_t* self, pfn_t start_pfn, uint64_t len, bool free_all);
 int get(lower_t* self, size_t start, size_t order, pfn_t* ret);
 
 //will free the given frame returns; -1 on error;  -2 if atomic operation failed
-int put(lower_t* self, pfn_t frame, size_t order);
+int put(lower_t* self, size_t order, pfn_t frame);
 
 //checks if the frame is not allocated
 int is_free(lower_t* self, pfn_t frame, size_t order);
