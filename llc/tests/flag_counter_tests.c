@@ -54,7 +54,7 @@ bool free_HP_test(){
     expect = init_flag_counter(0,false);
 
     ret = free_HP(&actual);
-    check_equal_m(ret, ERR_CORRUPTION, "must fail if already reset");
+    check_equal_m(ret, ERR_ADDRESS, "must fail if already reset");
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
 
@@ -63,7 +63,7 @@ bool free_HP_test(){
     expect = init_flag_counter(320,true);
 
     ret = free_HP(&actual);
-    check_equal_m(ret, ERR_CORRUPTION, "should not be possible to have a flag with a counter > 0");
+    check_equal_m(ret, ERR_ADDRESS, "should not be possible to have a flag with a counter > 0");
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
 
@@ -115,7 +115,7 @@ bool atomic_counter_dec_test(){
     flag_counter_t expect = init_flag_counter(0,true);
 
     int ret = atomic_counter_dec(&actual);
-    check_equal_m(ret, ERR_CORRUPTION, "out of range");
+    check_equal_m(ret, ERR_MEMORY, "out of range");
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
 
