@@ -51,9 +51,9 @@ int init_lower(lower_t* self, pfn_t start_pfn, uint64_t len, bool free_all){
         self->childs[i]= init_flag_counter(free_all ? 0: FIELDSIZE, false);
     }
     size_t frames_in_last_field = self->length % FIELDSIZE;
-    if(frames_in_last_field == 0) frames_in_last_field = FIELDSIZE;
-
     self->fields[childnumber -1] = init_field(frames_in_last_field, free_all);
+    
+    if(frames_in_last_field == 0) frames_in_last_field = FIELDSIZE;
     self->childs[childnumber -1] = init_flag_counter(free_all ? 0 :frames_in_last_field, false);
     return ERR_OK;
 }

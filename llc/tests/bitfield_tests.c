@@ -51,24 +51,24 @@ bool find_unset_test(){
 
     int ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
-    check_equal(pos.row_number, 0);
-    check_equal(pos.bit_number, 0);
+    check_uequal(pos.row_index, 0lu);
+    check_uequal(pos.bit_index, 0lu);
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
     actual = (bitfield_512_t) {{0x1,0x0,0x0,0x1,0x0,0x0,0x0,0x0}};
     expected = actual;
     ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
-    check_equal(pos.row_number, 0);
-    check_equal(pos.bit_number, 1);
+    check_uequal(pos.row_index, 0lu);
+    check_uequal(pos.bit_index, 1lu);
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
     actual = (bitfield_512_t) {{0x1fffffffff,0x0,0x0,0x1,0x0,0x0,0x0,0xffffffffffffffff}};
     expected = actual;
     ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
-    check_equal(pos.row_number, 0);
-    check_equal(pos.bit_number, 37);
+    check_uequal(pos.row_index, 0lu);
+    check_uequal(pos.bit_index, 37lu);
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
 
@@ -76,8 +76,8 @@ bool find_unset_test(){
     expected = actual;
     ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
-    check_equal(pos.row_number, 2);
-    check_equal(pos.bit_number, 0);
+    check_uequal(pos.row_index, 2lu);
+    check_uequal(pos.bit_index, 0lu);
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
 
@@ -85,16 +85,16 @@ bool find_unset_test(){
     expected = actual;
     ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
-    check_equal(pos.row_number, 3);
-    check_equal(pos.bit_number, 63);
+    check_uequal(pos.row_index, 3lu);
+    check_uequal(pos.bit_index, 63lu);
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
     actual = (bitfield_512_t) {{0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0x7fffffffffffffff}};
     expected = actual;
     ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
-    check_equal(pos.row_number, 7);
-    check_equal(pos.bit_number, 63);
+    check_uequal(pos.row_index, 7lu);
+    check_uequal(pos.bit_index, 63lu);
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
     actual = (bitfield_512_t) {{0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff}};

@@ -9,7 +9,7 @@
 
 //initializes the flag and counter
 flag_counter_t init_flag_counter(uint16_t counter, bool flag){
-    assert(counter < 0x8000);
+    assert(counter < 0x8000); // max limit for 15 bit
     flag_counter_t ret;
     ret.flag = flag;
     ret.counter = counter;
@@ -17,6 +17,7 @@ flag_counter_t init_flag_counter(uint16_t counter, bool flag){
 }
 
 static int cas(flag_counter_t* self, uint16_t* expect, uint16_t desire){
+    assert(self != NULL);
     for(size_t i = 0; i < MAX_ATOMIC_RETRY; i++){
         int ret = atomic_compare_exchange_strong(&self->raw, expect, desire);
         if(ret) return ERR_OK;
@@ -27,6 +28,8 @@ static int cas(flag_counter_t* self, uint16_t* expect, uint16_t desire){
 
 //sets the Flag. returns 0 for success and -1 if the flag was already set
 int reserve_HP(flag_counter_t* self){
+    assert(self != NULL);
+
     flag_counter_t old = {atomic_load(&self->raw)};
     if(old.counter != 512 || old.flag == true){
         return ERR_MEMORY;
@@ -35,12 +38,7 @@ int reserve_HP(flag_counter_t* self){
     uint16_t expect = 0x0100; // flag not set and all (512) Frames Free
     uint16_t desire = 0x8000;  // flag is set and counter = 0
 
-    int ret = cas(self, &expect, desire);
-    if(ret == ERR_OK){
-        assert(self->flag == true);
-        assert(self->counter == 0);
-    }
-    return ret;
+    return cas(self, &expect, desire);
 }
 
 //resets the Flag. returns 0 for success and -1 if the flag was already reset
@@ -53,14 +51,11 @@ int free_HP(flag_counter_t* self){
     uint16_t expect = 0x8000; // flag is set and counter = 0
     uint16_t desire = 0x0200;  // flag not set and all (512) Frames Free
 
-    int faliure = cas(self, &expect, desire);
+    int ret = cas(self, &expect, desire);
 
-    if(faliure) {  //should never be a competiton for freeing a Huge-Page
+    if(ret == ERR_RETRY) {  //should never be a competiton for freeing a Huge-Page
         return ERR_CORRUPTION; 
     }
-    
-    assert(self->flag == false);
-    assert(self->counter == FIELDSIZE);
     return ERR_OK;
 }
 
