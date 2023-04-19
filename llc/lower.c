@@ -21,8 +21,13 @@ static size_t num_of_childs(lower_t* self){
     return div_ceil(self->length, FIELDSIZE);
 }
 
+/**
+ * helper to get the childindex from the pfn
+ */
+static size_t get_child_index(lower_t* self, pfn_t pfn){
+    return (pfn - self->start_pfn) / FIELDSIZE;
+}
 
-// allocs memory for initialisation
 lower_t* init_default(pfn_t start_pfn, uint64_t len){
     lower_t* self = malloc(sizeof(lower_t));
     assert(self != NULL);
@@ -58,9 +63,6 @@ int init_lower(lower_t* self, pfn_t start_pfn, uint64_t len, bool free_all){
     return ERR_OK;
 }
 
-static size_t get_child_index(lower_t* self, pfn_t pfn){
-    return (pfn - self->start_pfn) / FIELDSIZE;
-}
 
 int get(lower_t* self, size_t start, size_t order, pfn_t* ret){
     (void) order; //TODO Different Orders
@@ -74,32 +76,33 @@ int get(lower_t* self, size_t start, size_t order, pfn_t* ret){
         if(child_counter <= 0) continue;
 
         int result = child_counter_dec(&self->childs[index]);
-        assert(result == ERR_OK); //TODO Return Error
+        if(result != ERR_OK) continue; //if atomic failed multiple times or counter reaches 0 try next child
+
         int pos;
-        while (true) { //the atomic counter assures that here must be a free bit left in the field
+        do{ //the atomic counter decrease asures that here must be a free bit left in the field
             pos = set_Bit(&self->fields[index]);
-            if(pos >= 0) break;
-        }
-        *ret = index * FIELDSIZE + pos;
+        } while (pos < 0);
+
+        *ret = index * FIELDSIZE + pos + self->start_pfn;
         return ERR_OK;
     }
     return ERR_MEMORY; // No free frame was found
 }
 
-int put(lower_t* self, size_t order, pfn_t frame){
+int put(lower_t* self, pfn_t frame, size_t order){
     (void) order; //TODO orders
 
-    //chek iif outside of managed space
-    if(frame >= self->start_pfn + self->length || frame < self->start_pfn) return ERR_CORRUPTION;
+    //chek if outside of managed space
+    if(frame >= self->start_pfn + self->length || frame < self->start_pfn) return ERR_ADDRESS;
     size_t child_index = get_child_index(self, frame);
     size_t field_index = (frame - self->start_pfn) % FIELDSIZE;
 
     int ret = reset_Bit(&self->fields[child_index], field_index);
-    if(ret != ERR_OK) return ret;
+    if(ret != ERR_OK) return ERR_ADDRESS;
 
     ret = child_counter_inc(&self->childs[child_index]);
     assert(ret == ERR_OK); // should allways be ok
-    return ret;
+    return ERR_OK;
 }
 
 int is_free(lower_t* self, pfn_t frame, size_t order){
@@ -118,7 +121,6 @@ int is_free(lower_t* self, pfn_t frame, size_t order){
 uint64_t allocated_frames(lower_t* self){
     uint64_t counter = self->length;
     for(size_t i = 0; i < num_of_childs(self); i++){
-        //counter += count_Set_Bits(&self->fields[i]);
         counter -= get_counter(&self->childs[i]);
     }
     return counter;

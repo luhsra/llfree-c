@@ -57,26 +57,33 @@ int free_HP(flag_counter_t* self){
     uint16_t desire = 0x0200;  // flag not set and all (512) Frames Free
 
     int ret = cas(self, &expect, desire);
-
     assert(ret != ERR_RETRY);
     return ret;
 }
 
 int atomic_counter_inc(flag_counter_t* self){
+    assert(self != NULL);
 
     uint16_t expect = atomic_load(&self->raw);
-    flag_counter_t old = {expect};
-    if(old.counter >= 0x7fff) return ERR_MEMORY;
-    old.counter++;
-    uint16_t desired = old.raw;
-    int ret =  cas(self, &expect, desired); //TODO cas klappt hier nicht mit den retrys, da desired nicht mitverändert wird
 
-    return ret;
+    for(size_t i = 0; i < MAX_ATOMIC_RETRY; ++i){
+        flag_counter_t old = {expect};
+        if(old.counter >= 0x7fff) return ERR_MEMORY;
+        old.counter++;
+        uint16_t desire = old.raw;
+        int ret = atomic_compare_exchange_strong(&self->raw, &expect, desire);
+        if(ret) return ERR_OK;
+    }
+    return ERR_RETRY;
 }
 
 int child_counter_inc(flag_counter_t* self){
+    assert(self != NULL);
+
     flag_counter_t old = {atomic_load(&self->raw)};
     if(old.flag == true) return ERR_ADDRESS;
+    
+    assert(old.counter <= FIELDSIZE);
     return atomic_counter_inc(self);
 }
 

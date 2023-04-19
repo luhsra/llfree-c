@@ -52,5 +52,8 @@ test: clean $(TESTDIR) $(TESTOBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) tests/test.c $(TESTOBJS) -o $(BUILDDIR)/$(TESTDIR)/run_tests
 	./$(BUILDDIR)/$(TESTDIR)/run_tests
 
+debug: clean $(TESTDIR) $(TESTOBJS)
+	$(CC) $(CFLAGS) -g $(LDFLAGS) tests/test.c $(TESTOBJS) -o $(BUILDDIR)/$(TESTDIR)/run_tests
+	gdb ./$(BUILDDIR)/$(TESTDIR)/run_tests
 
-.PHONY: all clean test
+.PHONY: all clean test debug

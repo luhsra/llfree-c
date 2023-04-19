@@ -159,37 +159,38 @@ bool put_test(){
     check_equal_bitfield(actual->fields[1], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
 
     pfn = 0;
-    ret = put(actual, order, pfn);
+    ret = put(actual, pfn, order);
     check_equal(ret, ERR_OK)
     check_equal_bitfield(actual->fields[0], ((bitfield_512_t){0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
     check_equal_bitfield(actual->fields[1], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
 
     // wiederholtes put auf selbe stelle
     pfn = 0;
-    ret = put(actual, order, pfn);
+    ret = put(actual, pfn, order);
     check_equal(ret, ERR_ADDRESS)
     check_equal_bitfield(actual->fields[0], ((bitfield_512_t){0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
     check_equal_bitfield(actual->fields[1], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
 
     pfn = 957;
-    ret = put(actual, order, pfn);
+    ret = put(actual, pfn, order);
     check_equal(ret, ERR_ADDRESS)
     check_equal_bitfield(actual->fields[0], ((bitfield_512_t){0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
     check_equal_bitfield(actual->fields[1], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
     
     pfn = 561;
-    ret = put(actual, order, pfn);
+    ret = put(actual, pfn, order);
     check_equal(ret, ERR_OK)
     check_equal_bitfield(actual->fields[0], ((bitfield_512_t){0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
     check_equal_bitfield(actual->fields[1], ((bitfield_512_t) {0xfffdffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
 
     //größer als die größte pfn
     pfn = 1361;
-    ret = put(actual, order, pfn);
-    check_equal(ret, ERR_CORRUPTION)
+    ret = put(actual, pfn, order);
+    check_equal(ret, ERR_ADDRESS)
     check_equal_bitfield(actual->fields[0], ((bitfield_512_t){0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
     check_equal_bitfield(actual->fields[1], ((bitfield_512_t) {0xfffdffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
 
+    free_lower(actual);
     return success;
 }
 
@@ -222,9 +223,8 @@ bool is_free_test(){
     pfn = 910;
     ret = is_free(actual, pfn, order);
     check_equal(ret, false);
-
-    assert(put(actual,order,513) == ERR_OK);
-    assert(put(actual,order,511) == ERR_OK);
+    assert(put(actual,513, order) == ERR_OK);
+    assert(put(actual,511, order) == ERR_OK);
     ret = is_free(actual, 513, order);
     check_equal(ret, true);
     ret = is_free(actual, 511, order);
