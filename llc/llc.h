@@ -1,8 +1,42 @@
 #pragma once
+#include <bits/stdint-uintn.h>
 #include <stdint.h>
 #include <stdatomic.h>
+#include "lower.h"
+#include "flag_counter.h"
 //Compilen und ausführen:
 //cargo test -r -p nvalloc -- llc::test --nocapture
+
+#define MAX_ORDER 10
+#define MIN_PAGES 1ul << 9        //WHY?
+#define MAX_PAGES 1ul << (9 * 4)  //TODO Nachrechnen
+
+
+struct meta {
+    uint32_t magic;
+    size_t frames;
+    bool crashed;
+};
+
+typedef struct local { //TODO rediesign with atomic in mind
+    flag_counter_t copy;
+    uint16_t start_pfn; // zu wenig speicher?
+    uint16_t free_counter;
+    uint16_t last_free_idx;
+
+}local_t;
+
+typedef struct upper {
+    struct meta* meta;
+    lower_t lower;
+    size_t cores;   //array_size of local
+    struct local* local;
+    size_t num_of_trees;    //array_size of trees
+    flag_counter_t* trees;
+} upper_t;
+
+
+
 
 /// Creates the allocator and returns a pointer to its data that is passed into
 /// all other functions
