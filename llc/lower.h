@@ -8,6 +8,8 @@
 #include "pfn.h"
 
 //TODO Nice Function Descriptions
+#define CHILDS_PER_TREE 32
+
 
 typedef struct lower{
     pfn_t start_pfn;
@@ -39,7 +41,7 @@ int init_lower(lower_t* self, pfn_t start_pfn, uint64_t len, bool free_all);
 
 /**
  * @brief allocates frames
- * allocation will be searched in a chunk of 32 children.
+ * allocation will be searched in a chunk of CHILDS_PER_TREE children.
  * @param self pointer to lower object
  * @param start defines the chunk to be searched (will start at start of the chunk even when start points to the middle)
  * @param order determines the amount consecutive pages to be alloced (2^order)
@@ -47,7 +49,7 @@ int init_lower(lower_t* self, pfn_t start_pfn, uint64_t len, bool free_all);
  * @return ERR_OK in success
  *         ERR_MEMORY if not enough space was found (ret will be undefined)
  */
-int get(lower_t* self, size_t start, size_t order, pfn_t* ret);
+int lower_get(lower_t* self, size_t start, size_t order, pfn_t* ret);
 
 /**
  * @brief deallocates given frames
@@ -57,7 +59,7 @@ int get(lower_t* self, size_t start, size_t order, pfn_t* ret);
  * @return ERR_OK in success
  *         ERR_ADDRESS if the pointed to frames were not alloced
  */
-int put(lower_t* self, pfn_t frame, size_t order);
+int lower_put(lower_t* self, pfn_t frame, size_t order);
 
 /**
  * @brief checks if the memory location is free

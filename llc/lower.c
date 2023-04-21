@@ -50,10 +50,10 @@ int init_lower(lower_t* self, pfn_t start_pfn, uint64_t len, bool free_all){
 }
 
 
-int get(lower_t* self, size_t start, size_t order, pfn_t* ret){
+int lower_get(lower_t* self, size_t start, size_t order, pfn_t* ret){
     (void) order; //TODO Different Orders
     size_t index_start = get_child_index(self, start);
-    index_start /= 32; //allways search in a chunk of 32 childs
+    index_start /= CHILDS_PER_TREE; //allways search in a chunk of 32 childs
     size_t index_end = index_start + 32;
     if(index_end > self->num_of_childs) index_end = self->num_of_childs;
 
@@ -75,7 +75,7 @@ int get(lower_t* self, size_t start, size_t order, pfn_t* ret){
     return ERR_MEMORY; // No free frame was found
 }
 
-int put(lower_t* self, pfn_t frame, size_t order){
+int lower_put(lower_t* self, pfn_t frame, size_t order){
     (void) order; //TODO orders
 
     //chek if outside of managed space

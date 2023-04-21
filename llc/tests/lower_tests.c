@@ -95,24 +95,24 @@ bool get_test(){
     int ret;
     int order = 0;
 
-    ret = get(&actual,0,order,&pfn);
+    ret = lower_get(&actual,0,order,&pfn);
     check_equal(ret, ERR_OK);
     check_uequal(pfn, 0ul);
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}))
 
-    ret = get(&actual,0,order,&pfn);
+    ret = lower_get(&actual,0,order,&pfn);
     check_equal(ret, ERR_OK);
     check_uequal(pfn, 1ul);
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0x3, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}))
 
 
-    ret = get(&actual,320,order,&pfn);
+    ret = lower_get(&actual,320,order,&pfn);
     check_equal(ret, ERR_OK);
     check_uequal(pfn, 2ul);
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0x7, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}))
 
     for(int i = 0; i < 954; i++){
-        ret = get(&actual,0,order,&pfn);
+        ret = lower_get(&actual,0,order,&pfn);
         check_equal(ret, ERR_OK);
         check_uequal(pfn, (i + 3ul));
     }
@@ -124,17 +124,17 @@ bool get_test(){
     init_default(&actual, 0, 2);
     assert(init_lower(&actual, 0, 2, false) == ERR_OK);
 
-    ret = get(&actual,0,order,&pfn);
+    ret = lower_get(&actual,0,order,&pfn);
     check_equal(ret, ERR_OK);
     check_uequal(pfn, 0ul);
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0xfffffffffffffffd, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
 
-    ret = get(&actual,0,order,&pfn);
+    ret = lower_get(&actual,0,order,&pfn);
     check_equal(ret, ERR_OK);
     check_uequal(pfn, 1ul);
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
 
-    ret = get(&actual,0,order,&pfn);
+    ret = lower_get(&actual,0,order,&pfn);
     check_equal(ret, ERR_MEMORY);
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
 
@@ -154,40 +154,40 @@ bool put_test(){
     int order = 0;
 
     for(int i = 0; i < 957; i++){
-        ret = get(&actual,0,order, &pfn);
+        ret = lower_get(&actual,0,order, &pfn);
         assert(ret == ERR_OK);
     }
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
     check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
 
     pfn = 0;
-    ret = put(&actual, pfn, order);
+    ret = lower_put(&actual, pfn, order);
     check_equal(ret, ERR_OK)
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
     check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
 
     // wiederholtes put auf selbe stelle
     pfn = 0;
-    ret = put(&actual, pfn, order);
+    ret = lower_put(&actual, pfn, order);
     check_equal(ret, ERR_ADDRESS)
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
     check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
 
     pfn = 957;
-    ret = put(&actual, pfn, order);
+    ret = lower_put(&actual, pfn, order);
     check_equal(ret, ERR_ADDRESS)
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
     check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
     
     pfn = 561;
-    ret = put(&actual, pfn, order);
+    ret = lower_put(&actual, pfn, order);
     check_equal(ret, ERR_OK)
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
     check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xfffdffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
 
     //größer als die größte pfn
     pfn = 1361;
-    ret = put(&actual, pfn, order);
+    ret = lower_put(&actual, pfn, order);
     check_equal(ret, ERR_ADDRESS)
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
     check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xfffdffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
@@ -226,8 +226,8 @@ bool is_free_test(){
     pfn = 910;
     ret = is_free(&actual, pfn, order);
     check_equal(ret, false);
-    assert(put(&actual,513, order) == ERR_OK);
-    assert(put(&actual,511, order) == ERR_OK);
+    assert(lower_put(&actual,513, order) == ERR_OK);
+    assert(lower_put(&actual,511, order) == ERR_OK);
     ret = is_free(&actual, 513, order);
     check_equal(ret, true);
     ret = is_free(&actual, 511, order);
