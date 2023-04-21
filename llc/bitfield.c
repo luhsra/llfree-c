@@ -6,11 +6,6 @@
 #include "enum.h"
 
 
-// Helping struct to store the position of a bit in a bitfield.
-typedef struct pos {
-    size_t row_index;     // 0 <= row_number < N
-    size_t bit_index;     // 0 <= bit_number < CACHESIZE
-}pos_t;
 
 //Translates the index of the bit to the position in the field.
 static pos_t get_pos(int index){
@@ -59,15 +54,7 @@ bitfield_512_t init_field(int number_of_free_Frames, bool start_allocated){
 
 
 
-/**
- * @brief finds the position of the first 0 in the bitfield
- * @param field Pointer to the bitfield
- * @param pos Pointer to a struct the position will be Stored in
- * @return  ERR_OK on success
- *          ERR_MEMORY if no unset Bit was found.
- *
- */
-static int find_unset(bitfield_512_t* field,  pos_t* pos){
+int find_unset(bitfield_512_t* field,  pos_t* pos){
     assert(field != NULL);
     assert(pos != NULL);
 

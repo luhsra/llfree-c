@@ -17,6 +17,11 @@ typedef struct bitfield_512{
     alignas(CACHESIZE) _Atomic(uint64_t) rows[N];
 } bitfield_512_t;
 
+// Helping struct to store the position of a bit in a bitfield.
+typedef struct pos {
+    size_t row_index;     // 0 <= row_number < N
+    size_t bit_index;     // 0 <= bit_number < CACHESIZE
+}pos_t;
 
 /**
  * @brief Initializes the Bitfield of 512 Bit size.
@@ -72,3 +77,12 @@ void print_field(bitfield_512_t* field);
 *         false otherwise
 */
 bool equals(bitfield_512_t* field1, bitfield_512_t* field2);
+
+/**
+ * @brief finds the position of the first 0 in the bitfield
+ * @param field Pointer to the bitfield
+ * @param pos Pointer to a struct the position will be Stored in
+ * @return  ERR_OK on success
+ *          ERR_MEMORY if no unset Bit was found.
+ */
+int find_unset(bitfield_512_t* field,  pos_t* pos);

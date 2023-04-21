@@ -36,10 +36,9 @@ $(BUILDDIR)/$(LIBNAME): $(OBJS)
 clean:
 	rm -rf $(BUILDDIR)
 
-TESTSRCS = $(wildcard tests/*s.c)
+TESTSRCS = $(wildcard tests/*.c)
 TESTOBJS = $(addprefix build/,$(TESTSRCS:.c=.o))
 TESTDIR = tests
-
 
 $(TESTDIR): $(BUILDDIR)
 	mkdir -p $(BUILDDIR)/$(TESTDIR)
@@ -47,13 +46,14 @@ $(TESTDIR): $(BUILDDIR)
 build/tests/%.o: tests/%.c | $(BUILDDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# LDFLAGS = -I $(TESTOBJS)
-test: clean $(TESTDIR) $(TESTOBJS)
-	$(CC) $(CFLAGS) $(LDFLAGS) tests/test.c $(TESTOBJS) -o $(BUILDDIR)/$(TESTDIR)/run_tests
+
+test_build: clean $(TESTDIR) $(OBJS) $(TESTOBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(TESTOBJS) -o $(BUILDDIR)/$(TESTDIR)/run_tests
+
+test: test_build
 	./$(BUILDDIR)/$(TESTDIR)/run_tests
 
-debug: clean $(TESTDIR) $(TESTOBJS)
-	$(CC) $(CFLAGS) -g $(LDFLAGS) tests/test.c $(TESTOBJS) -o $(BUILDDIR)/$(TESTDIR)/run_tests
+debug: test_build
 	gdb ./$(BUILDDIR)/$(TESTDIR)/run_tests
 
 .PHONY: all clean test debug

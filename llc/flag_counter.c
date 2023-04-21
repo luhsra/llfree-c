@@ -88,17 +88,19 @@ int child_counter_inc(flag_counter_t* self){
 }
 
 int atomic_counter_dec(flag_counter_t* self){
+    assert(self != NULL);
+
     uint16_t expect = atomic_load(&self->raw);
-    flag_counter_t old = {expect};
-    if(old.counter <= 0){
-        return ERR_MEMORY; // counter should not be able to go negative
+
+    for(size_t i = 0; i < MAX_ATOMIC_RETRY; ++i){
+        flag_counter_t old = {expect};
+        if(old.counter == 0x0) return ERR_MEMORY;
+        --old.counter;
+        uint16_t desire = old.raw;
+        int ret = atomic_compare_exchange_strong(&self->raw, &expect, desire);
+        if(ret) return ERR_OK;
     }
-
-    old.counter--;
-    uint16_t desired = old.raw;
-    int ret =  cas(self, &expect, desired); //TODO cas klappt hier nicht mit den retrys, da desired nicht mitverändert wird
-
-    return ret;
+    return ERR_RETRY;
 }
 
 int child_counter_dec(flag_counter_t* self){

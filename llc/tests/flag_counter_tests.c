@@ -1,7 +1,8 @@
 #include "flag_counter_tests.h"
 #include "check.h"
 
-#include "../flag_counter.c"
+#include "../flag_counter.h"
+#include "../bitfield.h"
 
 #define check_counter(actual,expect)  \
     check_equal(actual.counter, expect.counter);    \

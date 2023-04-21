@@ -12,18 +12,19 @@
 typedef struct lower{
     pfn_t start_pfn;
     uint64_t length;
+    size_t num_of_childs;   //arraylenght for fields and childs
     bitfield_512_t* fields;
     flag_counter_t* childs;
 }lower_t;
 
 
 /**
- * @brief allocates memory for the lower_t, bitfields and flagcounters
+ * @brief allocates memory for the bitfields and flagcounters
+ * @param self pointer to the lower object
  * @param start_pfn currently ununsed
  * @param len amount of frames to be managed
- * @return pointer to lower object
  */
-lower_t* init_default(pfn_t start_pfn, uint64_t len);
+void init_default(lower_t* self, pfn_t start_pfn, uint64_t len);
 
 /**
  * @brief initialize the lower object and the bitfields and childs

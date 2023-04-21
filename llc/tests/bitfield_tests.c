@@ -1,10 +1,11 @@
 #include "bitfield_tests.h"
 #include "check.h"
 
-#include "../bitfield.c"
+#include "../bitfield.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include "../enum.h"
 
 bool init_field_test(){
     bool success = true;
