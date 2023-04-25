@@ -40,7 +40,7 @@ typedef struct last_free last_free_t;
  * 
  *
  */
-int set_preferred(local_t* self, size_t pfn, flag_counter_t* tree);
+int set_preferred(local_t* self, size_t pfn, uint16_t tree);
 
 //init and set preferred to magic value
 void init_local(local_t* self);

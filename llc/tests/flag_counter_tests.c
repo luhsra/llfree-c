@@ -13,7 +13,7 @@
 bool reserve_HP_test(){
     bool success = true;
 
-    flag_counter_t actual = init_flag_counter(512,0);
+    flag_counter_t actual = init_flag_counter(512,false);
     flag_counter_t expect = init_flag_counter(0,true);
 
     int ret = reserve_HP(&actual);
@@ -25,7 +25,7 @@ bool reserve_HP_test(){
     expect = init_flag_counter(0,true);
 
     ret = reserve_HP(&actual);
-    check_equal_m(ret, ERR_MEMORY, "must fail if already set");
+    check_equal_m(ret, ERR_CANCEL, "must fail if already set");
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
 
@@ -34,7 +34,7 @@ bool reserve_HP_test(){
     expect = init_flag_counter(320,false);
 
     ret = reserve_HP(&actual);
-    check_equal_m(ret, ERR_MEMORY, "must fail if some frame are allocated");
+    check_equal_m(ret, ERR_CANCEL, "must fail if some frame are allocated");
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
     return success;
@@ -55,7 +55,7 @@ bool free_HP_test(){
     expect = init_flag_counter(0,false);
 
     ret = free_HP(&actual);
-    check_equal_m(ret, ERR_ADDRESS, "must fail if already reset");
+    check_equal_m(ret, ERR_CANCEL, "must fail if already reset");
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
 
@@ -64,7 +64,7 @@ bool free_HP_test(){
     expect = init_flag_counter(320,true);
 
     ret = free_HP(&actual);
-    check_equal_m(ret, ERR_ADDRESS, "should not be possible to have a flag with a counter > 0");
+    check_equal_m(ret, ERR_CANCEL, "should not be possible to have a flag with a counter > 0");
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
 
@@ -78,7 +78,7 @@ bool atomic_counter_inc_test(){
     flag_counter_t expect = init_flag_counter(0x7fff,true);
 
     int ret = atomic_counter_inc(&actual);
-    check_equal_m(ret, ERR_MEMORY, "out of range");
+    check_equal_m(ret, ERR_CANCEL, "out of range");
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
 
@@ -116,7 +116,7 @@ bool atomic_counter_dec_test(){
     flag_counter_t expect = init_flag_counter(0,true);
 
     int ret = atomic_counter_dec(&actual);
-    check_equal_m(ret, ERR_MEMORY, "out of range");
+    check_equal_m(ret, ERR_CANCEL, "out of range");
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
 
@@ -124,7 +124,7 @@ bool atomic_counter_dec_test(){
     expect = init_flag_counter(8,false);
 
     ret = atomic_counter_dec(&actual);
-    check_equal(ret, 0);
+    check_equal(ret, ERR_OK);
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
 
@@ -132,7 +132,7 @@ bool atomic_counter_dec_test(){
     expect = init_flag_counter(0x7ffe,true);
 
     ret = atomic_counter_dec(&actual);
-    check_equal(ret, 0);
+    check_equal(ret, ERR_OK);
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
 

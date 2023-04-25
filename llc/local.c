@@ -15,16 +15,15 @@ void init_local(local_t* self){
     self->reserved.preferred_index = MAX_TREE_INDEX;
 }
 
-int set_preferred(local_t* self, size_t pfn, flag_counter_t* tree_p){
+int set_preferred(local_t* self, size_t pfn, uint16_t free_count){
     assert(self != NULL);
 
     reserved_t old = {atomic_load(&self->reserved.raw)};
 
     assert(old.in_reservation);
 
-    flag_counter_t tree = {atomic_load(&tree_p->raw)};
     reserved_t new = {0};
-    new.fcounter = tree.counter;
+    new.fcounter = free_count;
     new.preferred_index = pfn >> 6; // index of row in the bitfield 2^6 (64) einträge pro atomic field
 
     assert(new.preferred_index != MAX_TREE_INDEX);

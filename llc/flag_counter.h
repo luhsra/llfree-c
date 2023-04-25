@@ -5,7 +5,7 @@
 #include <stdalign.h>
 #include <stdatomic.h>
 #include "enum.h"
-
+//TODO make child and tree seperate things :)
 /**
  * This Flagcounter combines a Flag with a 15-Bit counter in 2 Bytes of Space.
  * It Provides Functions to check and set these atomically.

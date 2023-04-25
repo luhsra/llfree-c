@@ -14,6 +14,9 @@ enum {
   ERR_INITIALIZATION = -4,
   /// Corrupted allocator state
   ERR_CORRUPTION = -5,
+
+  //Expectes in cas operation did not match
+  ERR_CANCEL = -6,
 };
 
 //init mode
