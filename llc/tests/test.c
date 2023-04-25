@@ -5,6 +5,7 @@
 #include "bitfield_tests.h"
 #include "flag_counter_tests.h"
 #include "lower_tests.h"
+#include "local_tests.h"
 
 
 
@@ -23,7 +24,9 @@ int main(){
     lower_tests(&test_counter, &fail_counter);
     printf("---------------------------------------\n");
     
-    
+    printf("Running local Tests:\n");
+    local_tests(&test_counter, &fail_counter);
+    printf("---------------------------------------\n");
     
     
     
