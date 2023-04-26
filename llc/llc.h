@@ -55,5 +55,8 @@ pfn_at llc_frames(const void *self);
 /// Returns number of currently free frames
 pfn_at llc_free_frames(const void *self);
 
+/// Destructs the allocator
+void llc_drop(void* self);
+
 /// Prints the allocators state for debugging
 void llc_debug(const void *self, void (*writer)(void *, char *), void *arg);

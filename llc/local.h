@@ -5,10 +5,11 @@
 #include "flag_counter.h"
 #include <stdint.h>
 #include "pfn.h"
+#include <stdalign.h>
 
 #define MAX_TREE_INDEX 0x3FFFFFFFFFFF // identifier if a tree is reserved.
 
-struct /*alignas(CACHESIZE)*/ local { //TODO align
+ struct __attribute__((aligned(CACHESIZE))) local  { 
     struct reserved{
         union{
             _Atomic(uint64_t) raw;

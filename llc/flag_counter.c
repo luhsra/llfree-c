@@ -1,9 +1,10 @@
-#include "flag_counter.h"
-#include "bitfield.h"
-#include "enum.h"
 #include <assert.h>
 #include <stdatomic.h>
 #include <stdint.h>
+
+#include "bitfield.h"
+#include "enum.h"
+#include "flag_counter.h"
 #include "utils.h"
 
 
@@ -17,7 +18,7 @@ flag_counter_t init_flag_counter(uint16_t counter, bool flag){
 }
 
 
-static bool update_reserve_HP(uint16_t* expect, uint16_t* desire){
+static bool update_reserve_HP(uint16_t* const expect, uint16_t* const desire){
     flag_counter_t old = {*expect};
     if(old.flag == true || old.counter != FIELDSIZE) return false;
     flag_counter_t desired;

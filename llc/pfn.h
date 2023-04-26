@@ -12,3 +12,4 @@ typedef uint64_t pfn_at;
 typedef uint64_t pfn_rt;
 
 
+uint64_t get_child_index(pfn_rt);

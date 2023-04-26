@@ -64,6 +64,12 @@ impl Alloc for LLC {
     // Optional functions ...
 }
 
+impl Drop for LLC {
+    fn drop(&mut self) {
+        unsafe { llc_drop(self.raw) }
+    }
+}
+
 /// Converting return codes to errors
 fn to_result(code: i64) -> Result<u64> {
     if code > 0 {
@@ -117,6 +123,9 @@ extern "C" {
         init: u8,
         free_all: u8,
     ) -> i64;
+
+    /// Destructs the allocator
+    fn llc_drop(this: *mut c_void);
 
     /// Allocates a frame and returns its address, or a negative error code
     fn llc_get(this: *const c_void, core: u64, order: u64) -> i64;

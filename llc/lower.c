@@ -12,13 +12,13 @@
 
 #include <stdio.h>
 
+
 /**
  * helper to get the childindex from the pfn
  */
-static size_t get_child_index(pfn_rt pfn){
+size_t get_child_index(pfn_rt pfn){
     return pfn / FIELDSIZE;
 }
-
 
 void init_default(lower_t* self, pfn_at start_pfn, size_t len){
     self->start_pfn = start_pfn;
