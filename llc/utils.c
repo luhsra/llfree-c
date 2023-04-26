@@ -30,7 +30,7 @@ int cas16_complete(_Atomic(uint16_t)* obj, uint16_t* expect, bool (*update)(uint
     assert(expect != NULL);
     assert(update != NULL);
 
-
+    *expect = atomic_load(obj);
     uint16_t desire;
     for(size_t i = 0; i < MAX_ATOMIC_RETRY; ++i){
         if(!update(expect, &desire)) return ERR_CANCEL;

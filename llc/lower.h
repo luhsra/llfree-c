@@ -12,8 +12,8 @@
 
 
 typedef struct lower{
-    pfn_t start_pfn;
-    uint64_t length;
+    pfn_at start_pfn;
+    size_t length;
     size_t num_of_childs;   //arraylenght for fields and childs
     bitfield_512_t* fields;
     flag_counter_t* childs;
@@ -26,7 +26,7 @@ typedef struct lower{
  * @param start_pfn currently ununsed
  * @param len amount of frames to be managed
  */
-void init_default(lower_t* self, pfn_t start_pfn, uint64_t len);
+void init_default(lower_t* self, pfn_at start_pfn, size_t len);
 
 /**
  * @brief initialize the lower object and the bitfields and childs
@@ -37,7 +37,7 @@ void init_default(lower_t* self, pfn_t start_pfn, uint64_t len);
  * @param free_all if set all the space will be marked allocated at start. (free otherwise)
  * @return ERR_OK
  */
-int init_lower(lower_t* self, pfn_t start_pfn, uint64_t len, bool free_all);
+int init_lower(lower_t* self, pfn_at start_pfn, size_t len, bool free_all);
 
 /**
  * @brief allocates frames
@@ -49,7 +49,7 @@ int init_lower(lower_t* self, pfn_t start_pfn, uint64_t len, bool free_all);
  * @return ERR_OK in success
  *         ERR_MEMORY if not enough space was found (ret will be undefined)
  */
-int lower_get(lower_t* self, size_t start, size_t order, pfn_t* ret);
+int lower_get(lower_t* self, pfn_rt start, size_t order, pfn_rt* ret);
 
 /**
  * @brief deallocates given frames
@@ -59,7 +59,7 @@ int lower_get(lower_t* self, size_t start, size_t order, pfn_t* ret);
  * @return ERR_OK in success
  *         ERR_ADDRESS if the pointed to frames were not alloced
  */
-int lower_put(lower_t* self, pfn_t frame, size_t order);
+int lower_put(lower_t* self, pfn_rt frame, size_t order);
 
 /**
  * @brief checks if the memory location is free
@@ -69,7 +69,7 @@ int lower_put(lower_t* self, pfn_t frame, size_t order);
  * @return true if the pages pointed to are free
  *         false otherwise
  */
-int is_free(lower_t* self, pfn_t frame, size_t order);
+int is_free(lower_t* self, pfn_rt frame, size_t order);
 
 /**
  * @brief calculates the number of allocated Frames
@@ -77,7 +77,7 @@ int is_free(lower_t* self, pfn_t frame, size_t order);
  * @param self pointer lo lower objekt
  * @return number of allocated frames
  */
-uint64_t allocated_frames(lower_t* self);
+size_t allocated_frames(lower_t* self);
 
 /**
 * Helper to print the number of childen, allocated and managed Frames

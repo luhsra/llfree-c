@@ -91,7 +91,7 @@ bool get_test(){
     init_default(& actual, 0, 1360);
     assert(init_lower(&actual, 0, 1360, false) == ERR_OK);
 
-    pfn_t pfn;
+    pfn_at pfn;
     int ret;
     int order = 0;
 
@@ -149,7 +149,7 @@ bool put_test(){
     init_default(&actual, 0, 1360);
     assert(init_lower(&actual, 0, 1360, false) == ERR_OK);
 
-    pfn_t pfn;
+    pfn_at pfn;
     int ret;
     int order = 0;
 
@@ -207,7 +207,7 @@ bool is_free_test(){
     int ret;
     int order = 0;
 
-    pfn_t pfn = 0;
+    pfn_at pfn = 0;
     ret = is_free(&actual, pfn, order);
     check_equal(ret, true);
 
