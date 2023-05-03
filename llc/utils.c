@@ -1,7 +1,7 @@
 #include "utils.h"
 #include "assert.h"
 #include "enum.h"
-#include "flag_counter.h"
+#include "child.h"
 #include <stdatomic.h>
 #include <stdint.h>
 
@@ -11,17 +11,6 @@ size_t div_ceil(uint64_t a, int b){
     //wenn es einen Rest gibt muss aufgerundet werden
     return a % b ? a / b + 1 : a / b;
 }
-
-#if false
-//allways try next no change in desire
-bool update16_default(uint16_t* current, uint16_t* desire){
-    return true;
-}
-
-bool update64_default(uint64_t* current, uint64_t* desire){
-    return true;
-}
-#endif
 
 
 
