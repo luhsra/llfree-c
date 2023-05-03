@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "flag_counter.h"
+#include "child.h"
 #include "bitfield.h"
 #include "pfn.h"
 
@@ -16,7 +16,7 @@ typedef struct lower{
     size_t length;
     size_t num_of_childs;   //arraylenght for fields and childs
     bitfield_512_t* fields;
-    flag_counter_t* childs;
+    child_t* childs;
 }lower_t;
 
 

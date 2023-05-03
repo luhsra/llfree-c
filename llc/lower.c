@@ -1,6 +1,6 @@
 #include "lower.h"
 #include "bitfield.h"
-#include "flag_counter.h"
+#include "child.h"
 #include "pfn.h"
 #include <stdatomic.h>
 #include <stddef.h>
@@ -27,7 +27,7 @@ void init_default(lower_t* self, pfn_at start_pfn, size_t len){
     self->num_of_childs = div_ceil(self->length, FIELDSIZE);
     self->fields = malloc(sizeof(bitfield_512_t) * self->num_of_childs);
     assert(self->fields != NULL);
-    self->childs = malloc(sizeof(flag_counter_t) * self->num_of_childs);
+    self->childs = malloc(sizeof(child_t) * self->num_of_childs);
     assert(self->childs != NULL);   
 }
 
@@ -39,13 +39,13 @@ int init_lower(lower_t* self, pfn_at start_pfn, size_t len, bool free_all){
 
     for(size_t i = 0; i < self->num_of_childs -1; i++){
         self->fields[i] = init_field(0, free_all);
-        self->childs[i]= init_flag_counter(free_all ? 0: FIELDSIZE, false);
+        self->childs[i]= init_child(free_all ? 0: FIELDSIZE, false);
     }
     size_t frames_in_last_field = self->length % FIELDSIZE;
     self->fields[self->num_of_childs -1] = init_field(frames_in_last_field, free_all);
     
     if(frames_in_last_field == 0) frames_in_last_field = FIELDSIZE;
-    self->childs[self->num_of_childs -1] = init_flag_counter(free_all ? 0 :frames_in_last_field, false);
+    self->childs[self->num_of_childs -1] = init_child(free_all ? 0 :frames_in_last_field, false);
     return ERR_OK;
 }
 

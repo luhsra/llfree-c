@@ -2,8 +2,9 @@
 #include <stdint.h>
 #include <stdatomic.h>
 #include "lower.h"
-#include "flag_counter.h"
+#include "child.h"
 #include "local.h"
+#include "tree.h"
 //Compilen und ausführen:
 //cargo test -r -p nvalloc -- llc::test --nocapture
 
@@ -24,7 +25,7 @@ typedef struct upper {
     size_t cores;   //array_size of local
     struct local* local;
     size_t num_of_trees;    //array_size of trees
-    flag_counter_t* trees;
+    tree_t* trees;
 } upper_t;
 
 

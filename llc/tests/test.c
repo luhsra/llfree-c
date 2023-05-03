@@ -3,11 +3,11 @@
 
 
 #include "bitfield_tests.h"
-#include "flag_counter_tests.h"
+#include "child_tests.h"
 #include "lower_tests.h"
 #include "local_tests.h"
 
-
+//TODO test for right alignment
 
 int main(){
     int test_counter = 0;
@@ -17,7 +17,7 @@ int main(){
     printf("---------------------------------------\n");
 
     printf("Running Flag-counter Tests:\n");
-    flag_counter_tests(&test_counter, &fail_counter);
+    child_tests(&test_counter, &fail_counter);
     printf("---------------------------------------\n");
 
     printf("Running lower allocator Tests:\n");

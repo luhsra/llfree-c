@@ -2,7 +2,7 @@
 
 #include "pfn.h"
 #include "bitfield.h"
-#include "flag_counter.h"
+#include "child.h"
 #include <stdint.h>
 #include "pfn.h"
 #include <stdalign.h>
