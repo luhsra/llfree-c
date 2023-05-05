@@ -11,9 +11,9 @@ bool init_local_test(){
     init_local(&actual);
     check_equal(actual.last_free.free_counter, 0);
     check_uequal(actual.last_free.last_free_idx, 0ul);
-    check_equal(actual.reserved.fcounter, 0);
-    check_equal(actual.reserved.in_reservation, false);
-    check_uequal(actual.reserved.preferred_index, MAX_TREE_INDEX);
+    check_equal(actual.reserved.free_counter, 0);
+    check_equal(actual.reserved.reservation_in_progress, false);
+    check_equal(actual.reserved.has_reserved_tree,false);
 
     return success;
 }

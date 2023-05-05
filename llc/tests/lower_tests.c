@@ -35,7 +35,7 @@ bool init_test(){
     lower_t actual;
     init_default(&actual, pfn_start, frames);
     int ret = init_lower(&actual, pfn_start, frames, false);
-
+    check_equal(ret, ERR_OK);
     check_child_number(1ul);
     bitfield_is_free(actual.fields[0])
     check_uequal(allocated_frames(&actual),0ul)

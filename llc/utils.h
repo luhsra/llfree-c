@@ -20,6 +20,8 @@ bool update64_default(uint64_t* current, uint64_t* desire);
 #define cas(obj, expect, desire) atomic_compare_exchange_strong_explicit(obj, expect, desire, MEMORY_ORDER, MEMORY_ORDER)
 #define load(obj) atomic_load_explicit(obj, MEMORY_ORDER)
 
+
+#if false
 #define FIRST(A, ...) A
 #define CAS(_1, ...) _Generic((FIRST(__VA_ARGS__)),                                     \
                             bool(*)(uint16_t*, uint16_t*): cas16_update,                \
@@ -35,3 +37,4 @@ int cas16_update(_Atomic(uint16_t)* obj, bool (*update)(uint16_t* expect, uint16
 int cas64_complete(_Atomic(uint64_t)* obj, uint64_t* expect, bool (*update)(uint64_t* expect, uint64_t* desire));
 
 int cas64_update(_Atomic(uint64_t)* obj, bool (*update)(uint64_t* expect, uint64_t* desire));
+#endif
