@@ -37,15 +37,15 @@ int reserve_tree(tree_t* self){
 }
 
 
-int tree_status(tree_t* self){
+saturation_level_t tree_status(tree_t* self){
   assert(self != NULL);
 
   tree_t tree = {load(&self->raw)};
   size_t upper_limit = FIELDSIZE * (1- BREAKPOINT);
   size_t lower_limit = FIELDSIZE * BREAKPOINT;
 
+  if(tree.counter > upper_limit || tree.flag) return ALLOCATED; // reserved trees will be counted as allocated
   if(tree.counter < lower_limit) return FREE;
-  if(tree.counter > upper_limit) return ALLOCATED;
   return PARTIAL;
 
 }

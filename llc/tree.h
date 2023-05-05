@@ -20,11 +20,11 @@ typedef struct tree {
 
 // TODO description
 #define BREAKPOINT 0.125
-enum {
+typedef enum saturation_level{
   ALLOCATED,
   FREE,
   PARTIAL,
-};
+}saturation_level_t;
 
 
 /**
@@ -73,4 +73,4 @@ int reserve_tree(tree_t *self);
  *          FREE if most of the Frames are Free
  *          PARTIAL for everything in between
  */
-int tree_status(tree_t* self);
+saturation_level_t tree_status(tree_t* self);
