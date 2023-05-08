@@ -47,10 +47,13 @@ typedef struct __attribute__((aligned(CACHESIZE))) local {
 /**
  * @brief atomicly sets the preferred tree to given tree
  * @param self pointer to local object
- *
- * @return freecounter of old tree
+ * @param pfn pfn of new tree
+ * @param free_count count of free Frames
+ * @param old_reservation the old reservation
+ * @return ERR_RETRY if atomic operation fails
+ *         ERR_OK on success         
  */
-int set_preferred(local_t *self, pfn_rt pfn, uint16_t free_count);
+int set_preferred(local_t *self, pfn_rt pfn, uint16_t free_count, reserved_t* old_reservation);
 
 // init and set preferred to magic value
 void init_local(local_t *self);

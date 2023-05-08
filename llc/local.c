@@ -2,6 +2,7 @@
 #include "assert.h"
 #include "enum.h"
 #include "child.h"
+#include "pfn.h"
 #include "utils.h"
 #include <stdatomic.h>
 #include <stdint.h>
@@ -17,7 +18,7 @@ void init_local(local_t* self){
     self->reserved.has_reserved_tree = false;
 }
 
-int set_preferred(local_t* self, pfn_rt pfn, uint16_t free_count){
+int set_preferred(local_t* self, pfn_rt pfn, uint16_t free_count, reserved_t* old_reservation) {
     assert(self != NULL);
     assert(free_count < 0x8000);
 
@@ -33,7 +34,10 @@ int set_preferred(local_t* self, pfn_rt pfn, uint16_t free_count){
 
     for(size_t i = 0; i < MAX_ATOMIC_RETRY; ++i){
         int ret = cas(&self->reserved.raw, (uint64_t*) &old.raw, new.raw);
-        if(ret) return ERR_OK;
+        if(ret) {
+            *old_reservation = old;
+            return ERR_OK;
+        }
     }
 
     return ERR_RETRY;

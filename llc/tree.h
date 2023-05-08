@@ -65,6 +65,18 @@ int tree_counter_dec(tree_t *self);
 int reserve_tree(tree_t *self);
 
 
+/**
+ * @brief adds the given counter to the existing counter and sets the flag to 0
+ * 
+ * @param self pointer to tree
+ * @param free_counter counter to add
+ * @return ERR_OK on success
+ *         ERR_RETRY on atomic operration fail
+ */
+int unreserve_tree(tree_t* self, uint16_t free_counter);
+
+
+
 
 /**
  * @brief evaluatex how many frames are allocates in given tree

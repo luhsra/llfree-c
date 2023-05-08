@@ -36,6 +36,19 @@ int reserve_tree(tree_t* self){
   return ERR_RETRY;
 }
 
+int unreserve_tree(tree_t* self, uint16_t free_counter){
+  assert(self != NULL);
+  tree_t old = {load(&self->raw)};
+  tree_t new = init_tree(free_counter + old.counter, false);
+
+  for(size_t i = 0; i < MAX_ATOMIC_RETRY; ++i){
+    int ret = cas(&self->raw, (uint16_t*)&old.raw, new.raw);
+    if(ret) return ERR_OK;
+  }
+
+  return ERR_RETRY;
+}
+
 
 saturation_level_t tree_status(tree_t* self){
   assert(self != NULL);
