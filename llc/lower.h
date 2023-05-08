@@ -49,7 +49,7 @@ int init_lower(lower_t* self, pfn_at start_pfn, size_t len, bool free_all);
  * @return ERR_OK in success
  *         ERR_MEMORY if not enough space was found (ret will be undefined)
  */
-int lower_get(lower_t* self, pfn_rt start, size_t order, pfn_rt* ret);
+int64_t lower_get(lower_t* self, pfn_rt start, size_t order, pfn_rt* ret);
 
 /**
  * @brief deallocates given frames

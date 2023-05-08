@@ -181,10 +181,10 @@ int reserve_new_tree(upper_t *self, size_t core) {
     if (counter >= 0) {
       // successfully reserved a tree
       break;
-    } 
+    }
     // on reservation fail search a new tree and try again
   }
-  if(counter < 0){
+  if (counter < 0) {
     // found reserveable tree but was never possible to reserve it
     return ERR_RETRY;
   }
@@ -271,16 +271,43 @@ int64_t llc_get(const void *this, size_t core, size_t order) {
   assert(this != NULL);
   (void)(order);
 
-  upper_t *upper = (upper_t *)this;
-  local_t *local = get_local(upper, core);
-  (void)(local);
-  // überprüfe b ein baum reserviert /genügend platz im reservierten baum
-  // vorhanden ist
-  //-> reserviere neuen Baum
+  upper_t *self = (upper_t *)this;
+  local_t *local = get_local(self, core);
 
-  // reserviere seite im lokalen baum
+  for (size_t i = 0; i < MAX_ATOMIC_RETRY; ++i) {
+    reserved_t reserved = {load(&local->reserved.raw)};
 
-  return ERR_CORRUPTION;
+    // check if a tree is reserved && tree has enough space.
+    if (!reserved.has_reserved_tree || reserved.free_counter < 1) {
+      int ret = reserve_new_tree(self, core);
+      // TODO handle reservation faliure
+      assert(ret == ERR_OK);
+
+      // start and check again if enough space is availabe
+      continue;
+    }
+    assert(reserved.free_counter > 0);
+
+    // reserviere seite im lokalen baum
+    reserved_t new = reserved;
+    new.free_counter -= 1;
+
+    int ret = cas(&local->reserved.raw, (uint64_t*) &reserved, new.raw);
+    if(ret){
+      pfn_at reserved_adr;
+      ret = lower_get(&self->lower,pfnFromAtomicIdx(reserved.preferred_index), order,&reserved_adr);
+      if(ret == ERR_MEMORY){
+        // not enough memory despite reserved had enogh frames
+        //TODO increment reserved or tree
+        // try in other tree
+        continue;
+      }
+      // sucessfully reserved frame in lower
+      assert(ret == ERR_OK);
+      return reserved_adr;
+    }
+  }
+  return ERR_MEMORY;
 }
 
 /// Frees a frame, returning 0 on success or a negative error code

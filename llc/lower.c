@@ -13,13 +13,6 @@
 #include <stdio.h>
 
 
-/**
- * helper to get the childindex from the pfn
- */
-size_t get_child_index(pfn_rt pfn){
-    return pfn / FIELDSIZE;
-}
-
 void init_default(lower_t* self, pfn_at start_pfn, size_t len){
     self->start_pfn = start_pfn;
     self->length = len;
@@ -50,9 +43,9 @@ int init_lower(lower_t* self, pfn_at start_pfn, size_t len, bool free_all){
 }
 
 
-int lower_get(lower_t* self, pfn_rt start, size_t order, pfn_rt* ret){
+int64_t lower_get(lower_t* self, pfn_rt start, size_t order, pfn_at* ret){
     (void) order; //TODO Different Orders
-    size_t index_start = get_child_index(start);
+    size_t index_start = getChildIdx(start);
     index_start /= CHILDS_PER_TREE; //allways search in a chunk of 32 childs
     size_t index_end = index_start + 32;
     if(index_end > self->num_of_childs) index_end = self->num_of_childs;
@@ -80,7 +73,7 @@ int lower_put(lower_t* self, pfn_rt frame, size_t order){
 
     //chek if outside of managed space
     if(frame >= self->start_pfn + self->length || frame < self->start_pfn) return ERR_ADDRESS;
-    size_t child_index = get_child_index(frame);
+    size_t child_index = getChildIdx(frame);
     size_t field_index = (frame - self->start_pfn) % FIELDSIZE;
 
     int ret = reset_Bit(&self->fields[child_index], field_index);
@@ -95,7 +88,7 @@ int is_free(lower_t* self, pfn_rt frame, size_t order){
     (void) order; //TODO orders
     // check if outside of managed space
     if(frame >= self->start_pfn + self->length || frame < self->start_pfn) return ERR_ADDRESS;
-    size_t child_index = get_child_index(frame);
+    size_t child_index = getChildIdx(frame);
     size_t field_index = (frame - self->start_pfn) % FIELDSIZE;
     
     uint16_t child_counter = get_counter(&self->childs[child_index]);
