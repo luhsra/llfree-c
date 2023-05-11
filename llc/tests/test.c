@@ -6,6 +6,7 @@
 #include "child_tests.h"
 #include "lower_tests.h"
 #include "local_tests.h"
+#include "tree_tests.h"
 
 //TODO test for right alignment
 
@@ -23,7 +24,11 @@ int main(){
     printf("Running lower allocator Tests:\n");
     lower_tests(&test_counter, &fail_counter);
     printf("---------------------------------------\n");
-    
+
+    printf("Running tree Tests:\n");
+    tree_tests(&test_counter, &fail_counter);
+    printf("---------------------------------------\n");
+
     printf("Running local Tests:\n");
     local_tests(&test_counter, &fail_counter);
     printf("---------------------------------------\n");

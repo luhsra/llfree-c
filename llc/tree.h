@@ -42,18 +42,16 @@ tree_t init_tree(uint16_t counter, bool flag);
  * @param self pointer to the tree
  * @return ERR_OK on success
  *         ERR_RETRY if the atomic access failed
- *         ERR_MEMORY if the Counder already reached the maximum Value
  */
-int tree_counter_inc(tree_t *self);
+int tree_counter_inc(tree_t *self, size_t order);
 
 /**
  * @brief atomically decreases the counter
  * @param self pointer to the tree
  * @return ERR_OK on success
  *         ERR_RETRY if the atomic access failed
- *         ERR_MEMORY if the counter already reached the minimum Value
  */
-int tree_counter_dec(tree_t *self);
+int tree_counter_dec(tree_t *self, size_t order);
 
 /**
  * @brief atomically serts counter to 0 and flag as true
@@ -81,7 +79,7 @@ int unreserve_tree(tree_t* self, uint16_t free_counter);
 /**
  * @brief evaluatex how many frames are allocates in given tree
  * @param self pointer to the tree
- * @return  ALLOCATED if most of the Frames are allocated
+ * @return  ALLOCATED if most of the Frames are allocated or the tree is reserved
  *          FREE if most of the Frames are Free
  *          PARTIAL for everything in between
  */
