@@ -59,7 +59,7 @@ int64_t lower_get(lower_t* self, pfn_rt start, size_t order, pfn_rt* ret);
  * @return ERR_OK in success
  *         ERR_ADDRESS if the pointed to frames were not alloced
  */
-int lower_put(lower_t* self, pfn_rt frame, size_t order);
+int lower_put(lower_t* self, pfn_at frame, size_t order);
 
 /**
  * @brief checks if the memory location is free

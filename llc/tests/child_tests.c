@@ -3,7 +3,6 @@
 
 #include "../child.h"
 #include "../bitfield.h"
-#include "enum.h"
 
 #define check_counter(actual,expect)  \
     check_equal(actual.counter, expect.counter);    \
@@ -150,10 +149,10 @@ bool child_counter_dec_test(){
 
 
 int child_tests(int* test_counter, int* fail_counter){
-    run_test(reserve_HP_test());
-    run_test(free_HP_test());
-    run_test(child_counter_inc_test());
-    run_test(child_counter_dec_test());
+    run_test(reserve_HP_test);
+    run_test(free_HP_test);
+    run_test(child_counter_inc_test);
+    run_test(child_counter_dec_test);
 
     return 0;
 }

@@ -280,11 +280,11 @@ bool is_free_bit_test(){
 
 int bitfield_tests(int* test_counter, int* fail_counter){
     
-    run_test(init_field_test());
-    run_test(find_unset_test());
-    run_test(set_Bit_test());
-    run_test(reset_Bit_test());
-    run_test(count_Set_Bits_test());
-    run_test(is_free_bit_test());
+    run_test(init_field_test);
+    run_test(find_unset_test);
+    run_test(set_Bit_test);
+    run_test(reset_Bit_test);
+    run_test(count_Set_Bits_test);
+    run_test(is_free_bit_test);
     return 0;
 }

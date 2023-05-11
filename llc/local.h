@@ -61,9 +61,14 @@ void init_local(local_t *self);
 bool has_reserved_tree(local_t *self);
 // get the reserved tree index
 pfn_rt get_reserved_tree_index(local_t *self);
+pfn_rt get_last_free_tree_index(local_t* self);
 // set the flag for searching
 int mark_as_searchig(local_t *self);
 // check if already reserving a new tree
 bool is_searching(local_t *self);
 // set last free index
-int inc_free_counter(local_t *self, pfn_at tree_index);
+int inc_free_counter(local_t *self, pfn_rt frame, size_t order);
+
+
+// sets last_free to tree of given frame
+int set_free_tree(local_t* self, pfn_rt frame);

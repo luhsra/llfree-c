@@ -68,13 +68,14 @@ int64_t lower_get(lower_t* self, pfn_rt start, size_t order, pfn_at* ret){
     return ERR_MEMORY; // No free frame was found
 }
 
-int lower_put(lower_t* self, pfn_rt frame, size_t order){
+int lower_put(lower_t* self, pfn_at frame_adr, size_t order){
     (void) order; //TODO orders
 
     //chek if outside of managed space
-    if(frame >= self->start_pfn + self->length || frame < self->start_pfn) return ERR_ADDRESS;
+    if(frame_adr >= self->start_pfn + self->length || frame_adr < self->start_pfn) return ERR_ADDRESS;
+    pfn_rt frame = frame_adr - self->start_pfn;
     size_t child_index = getChildIdx(frame);
-    size_t field_index = (frame - self->start_pfn) % FIELDSIZE;
+    size_t field_index = (frame) % FIELDSIZE;
 
     int ret = reset_Bit(&self->fields[child_index], field_index);
     if(ret != ERR_OK) return ERR_ADDRESS;

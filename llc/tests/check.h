@@ -7,7 +7,7 @@
 #define run_test(test_func) \
     (*test_counter)++;  \
     printf(#test_func ":\n");    \
-    if(!test_func) (*fail_counter)++;   \
+    if(!test_func()) (*fail_counter)++;   \
     else printf("\tsuccess\n"); \
 
 

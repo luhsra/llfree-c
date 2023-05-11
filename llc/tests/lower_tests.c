@@ -27,7 +27,7 @@
     free(lower.childs);
 
 
-bool init_test(){
+bool init_lower_test(){
     bool success = true;
 
     int pfn_start = 0;
@@ -248,10 +248,10 @@ bool is_free_test(){
 //runns all tests an returns the number of failed Tests
 int lower_tests(int* test_counter, int* fail_counter){
 
-    run_test(init_test());
-    run_test(get_test());
-    run_test(put_test());
-    run_test(is_free_test());
+    run_test(init_lower_test);
+    run_test(get_test);
+    run_test(put_test);
+    run_test(is_free_test);
 
     return 0;
 }
