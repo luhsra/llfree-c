@@ -9,8 +9,8 @@
 //cargo test -r -p nvalloc -- llc::test --nocapture
 
 #define MAX_ORDER 10
-#define MIN_PAGES 1ul << 9        //WHY?
-#define MAX_PAGES 1ul << 52  //TODO Nachrechnen
+#define MIN_PAGES 1ul << 9        //TODO WHY?
+#define MAX_PAGES 1ul << 52
 
 
 struct meta {
@@ -44,11 +44,11 @@ int64_t llc_init(void *self, size_t cores, pfn_at start_pfn, size_t len,
 int64_t llc_get(const void *self, size_t core, size_t order);
 
 /// Frees a frame, returning 0 on success or a negative error code
-int64_t llc_put(const void *self, size_t core, pfn_at frame,
+int64_t llc_put(const void *self, size_t core, pfn_at frame_adr,
                 size_t order);
 
 /// Checks if a frame is allocated, returning 0 if not
-uint8_t llc_is_free(const void *self, pfn_at frame, size_t order);
+uint8_t llc_is_free(const void *self, pfn_at frame_adr, size_t order);
 
 /// Returns the total number of frames the allocator can allocate
 pfn_at llc_frames(const void *self);

@@ -6,6 +6,7 @@
 #include "child_tests.h"
 #include "lower_tests.h"
 #include "local_tests.h"
+#include "llc_tests.h"
 #include "tree_tests.h"
 
 //TODO test for right alignment
@@ -33,6 +34,9 @@ int main(){
     local_tests(&test_counter, &fail_counter);
     printf("---------------------------------------\n");
     
+    printf("Running llc Tests:\n");
+    llc_tests(&test_counter, &fail_counter);
+    printf("---------------------------------------\n");
     
     
     if(fail_counter == 0)
