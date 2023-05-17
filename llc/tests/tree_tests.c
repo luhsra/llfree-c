@@ -2,6 +2,7 @@
 #include "check.h"
 #include "../tree.h"
 #include "../enum.h"
+#include <stdbool.h>
 
 
 #define equal_trees(actual,expect) \
@@ -103,12 +104,162 @@ bool unreserve_test(){
     return success;
 }
 
+bool tree_status_test(){
+    bool success = true;
+
+    tree_t actual;
+    tree_t expect;
+    int ret;
+
+    actual = init_tree(1, false);
+    expect = actual; // no change
+
+    ret = tree_status(&actual);
+    check_equal(ret, ALLOCATED); //TODO
+    equal_trees(actual, expect)
+
+
+    actual = init_tree(1, false);
+    expect = actual; // no change
+
+    ret = tree_status(&actual);
+    check_equal(ret, ALLOCATED);
+    equal_trees(actual, expect)
+
+
+    return success;
+}
+
+
+bool tree_inc_test(){
+    bool success = true;
+
+    tree_t actual;
+    tree_t expect;
+    size_t order;
+    int counter;
+    int ret;
+
+    order = 0;
+    counter = 0;
+    actual = init_tree(counter, false);
+    expect = init_tree(counter + (1 << order), false);
+
+    ret = tree_counter_inc(&actual, order);
+    check_equal(ret, ERR_OK)
+    equal_trees(actual, expect)
+
+    order = 0;
+    counter = 16383;    //max counter for success
+    actual = init_tree(counter, false);
+    expect = init_tree(counter + (1 << order), false);
+    ret = tree_counter_inc(&actual, order);
+
+    check_equal(ret, ERR_OK)
+    equal_trees(actual, expect)
+
+
+    order = 0;
+    counter = 3456;
+    actual = init_tree(counter, true);  //should be no differende if flag is true
+    expect = init_tree(counter + (1 << order), true);
+
+    ret = tree_counter_inc(&actual, order);
+    check_equal(ret, ERR_OK)
+    equal_trees(actual, expect)
+
+
+    order = 9;  //HP
+    counter = 3456;
+    actual = init_tree(counter, true);
+    expect = init_tree(counter + (1 << order), true);
+
+    ret = tree_counter_inc(&actual, order);
+    check_equal(ret, ERR_OK)
+    equal_trees(actual, expect)
+
+
+    order = 9;  //HP
+    counter = (1 << 14) - (1 << 9); // max counter
+    actual = init_tree(counter, true);
+    expect = init_tree(counter + (1 << order), true);
+
+    ret = tree_counter_inc(&actual, order);
+    check_equal(ret, ERR_OK)
+    equal_trees(actual, expect)
+
+    return success;
+}
+
+bool tree_dec_test(){
+    bool success = true;
+
+    tree_t actual;
+    tree_t expect;
+    size_t order;
+    int counter;
+    int ret;
+
+    order = 0;
+    counter = 1 << 14;
+    actual = init_tree(counter, false);
+    expect = init_tree(counter - (1 << order), false);
+
+    ret = tree_counter_dec(&actual, order);
+    check_equal(ret, ERR_OK)
+    equal_trees(actual, expect)
+
+    order = 0;
+    counter = 1;    //min counter for success
+    actual = init_tree(counter, false);
+    expect = init_tree(counter - (1 << order), false);
+    ret = tree_counter_dec(&actual, order);
+
+    check_equal(ret, ERR_OK)
+    equal_trees(actual, expect)
+
+
+    order = 0;
+    counter = 3456;
+    actual = init_tree(counter, true);  //should be no differende if flag is true
+    expect = init_tree(counter - (1 << order), true);
+
+    ret = tree_counter_dec(&actual, order);
+    check_equal(ret, ERR_OK)
+    equal_trees(actual, expect)
+
+
+    order = 9;  //HP
+    counter = 13370;
+    actual = init_tree(counter, true);
+    expect = init_tree(counter - (1 << order), true);
+
+    ret = tree_counter_dec(&actual, order);
+    check_equal(ret, ERR_OK)
+    equal_trees(actual, expect)
+
+
+    order = 9;  //HP
+    counter = (1 << 9); // min counter
+    actual = init_tree(counter, true);
+    expect = init_tree(counter - (1 << order), true);
+
+    ret = tree_counter_dec(&actual, order);
+    check_equal(ret, ERR_OK)
+    equal_trees(actual, expect)
+
+
+    return success;
+}
+
 
 int tree_tests(int* test_counter, int* fail_counter){
     run_test(init_tree_test)
     run_test(reserve_test)
     run_test(unreserve_test);
-
+    run_test(tree_status_test)
+    run_test(tree_inc_test)
+    run_test(tree_dec_test)
 
     return 0;
 }

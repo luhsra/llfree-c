@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define TREESIZE (1 << 9 << 5)
 /**
  * the raw value is for atomic access purpose and for allignment
  * the counter and flag tags allow easy access to the components.
@@ -83,4 +84,4 @@ int unreserve_tree(tree_t* self, uint16_t free_counter);
  *          FREE if most of the Frames are Free
  *          PARTIAL for everything in between
  */
-saturation_level_t tree_status(tree_t* self);
+saturation_level_t tree_status(const tree_t* self);
