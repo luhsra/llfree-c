@@ -19,9 +19,9 @@ enum {
 //init mode
 enum {
     /// Not persistent
-    Volatile = 0,
+    VOLATILE = 0,
     /// Persistent and try recovery
-    Recover = 1,
+    RECOVER = 1,
     /// Overwrite the persistent memory
-    Overwrite = 1,
+    OVERWRITE = 2,
 };

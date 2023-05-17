@@ -9,7 +9,7 @@
 /*
  * Implements The Bitfield and behaviour.
 */
-#define FIELDSIZE 512                       // Amount of Bits in a Field
+#define FIELDSIZE (1 << 9)                    // Amount of Bits in a Field
 #define CACHESIZE (sizeof(uint64_t) * 8)    // Bit-Size of the Biggest Datatype for atomic operations. uint64
 #define N FIELDSIZE/CACHESIZE               // number of uint64 in the Bitfield.
 

@@ -8,9 +8,13 @@
 //Compilen und ausführen:
 //cargo test -r -p nvalloc -- llc::test --nocapture
 
+//cargo test upper::test::[testname] -- --nocapture
+// testnamen siehe mod.rs
+// nocapture für anzeige welche assertion fehlschlägt
+
 #define MAX_ORDER 10
-#define MIN_PAGES 1ul << 9        //TODO WHY?
-#define MAX_PAGES 1ul << 52
+#define MIN_PAGES 1ul << 9        //TODO check amount - Min size needed for datastructure in persistend memory
+#define MAX_PAGES 1ul << 52        // 64 Bit Adresses - 12 Bit needed for offset inside the Page
 
 
 struct meta {

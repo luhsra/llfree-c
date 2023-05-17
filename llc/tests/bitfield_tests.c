@@ -12,31 +12,31 @@ bool init_field_test(){
 
     bitfield_512_t expect = {{0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
     bitfield_512_t actual;
-    actual = init_field(0, false);
+    actual = init_field(0, true);
     check_equal_bitfield_m(actual, expect, "full init");
 
     expect = (bitfield_512_t) {{0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}};
-    actual = init_field(1, false);
+    actual = init_field(1, true);
     check_equal_bitfield_m(actual, expect, "init with no free frames");
 
 
     expect = (bitfield_512_t) {{0x0, 0x0, 0x0, 0xffc0000000000000, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}};
-    actual = init_field(246, false);
+    actual = init_field(246, true);
     check_equal_bitfield_m(actual, expect, "init with partial frames");
 
 
     //Initial all allocated tests
 
     expect = (bitfield_512_t) {{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}};
-    actual = init_field(312, true);
+    actual = init_field(312, false);
     check_equal_bitfield_m(actual, expect, "all allocated");
 
     expect = (bitfield_512_t) {{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}};
-    actual = init_field(0, true);
+    actual = init_field(0, false);
     check_equal_bitfield_m(actual, expect, "all allocated");
 
 
-    actual = init_field(1, true);
+    actual = init_field(1, false);
     check_equal_bitfield_m(actual, expect, "all allocated");
 
 

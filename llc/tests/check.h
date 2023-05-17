@@ -18,14 +18,14 @@
     }
 
 #define check_equal_m(actual,expected, msg)   \
-    if(actual != expected) {    \
+    if((actual) != (expected)) {    \
         printf("\tFILE %s:%d: Check " #actual " == " #expected " failed: %s\n\texpected: %d, actual value: %d\n",__FILE__, __LINE__, msg, expected, actual); \
         success = false;   \
     }
 #define check_equal(actual, expected) check_equal_m(actual, expected, "")
 
 #define check_uequal_m(actual,expected, msg)   \
-    if(actual != expected) {    \
+    if((actual) != (expected)) {    \
         printf("\tFILE %s:%d: Check " #actual " == " #expected " failed: %s\n\texpected: %lu, actual value: %lu\n",__FILE__, __LINE__, msg, expected, actual); \
         success = false;   \
     }

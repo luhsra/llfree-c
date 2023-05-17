@@ -34,7 +34,7 @@ bool init_lower_test(){
     int frames = 512;
     lower_t actual;
     init_default(&actual, pfn_start, frames);
-    int ret = init_lower(&actual, pfn_start, frames, false);
+    int ret = init_lower(&actual, pfn_start, frames, true);
     check_equal(ret, ERR_OK);
     check_child_number(1ul);
     bitfield_is_free(actual.fields[0])
@@ -44,7 +44,7 @@ bool init_lower_test(){
     pfn_start = 0;
     frames = 511;
     init_default(&actual, pfn_start, frames);
-    ret = init_lower(&actual, pfn_start, frames, false);
+    ret = init_lower(&actual, pfn_start, frames, true);
     check_child_number(1ul);
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0,0,0,0,0,0,0,0x8000000000000000}))
     check_uequal(allocated_frames(&actual),0ul)
@@ -53,7 +53,7 @@ bool init_lower_test(){
     pfn_start = 0;
     frames = 632;
     init_default(&actual, pfn_start, frames);
-    ret = init_lower(&actual, pfn_start, frames, true);
+    ret = init_lower(&actual, pfn_start, frames, false);
     check_child_number(2ul);
     bitfield_is_blocked_n(actual.fields,2)
     check_uequal(allocated_frames(&actual),632ul)
@@ -62,7 +62,7 @@ bool init_lower_test(){
     pfn_start = 0;
     frames = 968;
     init_default(&actual, pfn_start, frames);
-    ret = init_lower(&actual, pfn_start, frames, false);
+    ret = init_lower(&actual, pfn_start, frames, true);
     check_child_number(2ul);
     bitfield_is_free(actual.fields[0])
     check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0x0,0x0,0x0,0x0,0x0,0x0,0x0,0xffffffffffffff00}))
@@ -73,7 +73,7 @@ bool init_lower_test(){
     pfn_start = 0;
     frames = 685161;
     init_default(&actual, pfn_start, frames);
-    ret = init_lower(&actual, pfn_start, frames, false);
+    ret = init_lower(&actual, pfn_start, frames, true);
     check_child_number(1339ul);
     bitfield_is_free_n(actual.fields, 1338)
     check_equal_bitfield(actual.fields[1338], ((bitfield_512_t) {0x0,0xfffffe0000000000,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff}))
@@ -89,7 +89,7 @@ bool get_test(){
 
     lower_t actual;
     init_default(& actual, 0, 1360);
-    assert(init_lower(&actual, 0, 1360, false) == ERR_OK);
+    assert(init_lower(&actual, 0, 1360, true) == ERR_OK);
 
     pfn_at pfn;
     int ret;
@@ -122,7 +122,7 @@ bool get_test(){
 
     free_lower(actual)
     init_default(&actual, 0, 2);
-    assert(init_lower(&actual, 0, 2, false) == ERR_OK);
+    assert(init_lower(&actual, 0, 2, true) == ERR_OK);
 
     ret = lower_get(&actual,0,order,&pfn);
     check_equal(ret, ERR_OK);
@@ -147,7 +147,7 @@ bool put_test(){
 
     lower_t actual;
     init_default(&actual, 0, 1360);
-    assert(init_lower(&actual, 0, 1360, false) == ERR_OK);
+    assert(init_lower(&actual, 0, 1360, true) == ERR_OK);
 
     pfn_at pfn;
     int ret;
@@ -202,7 +202,7 @@ bool is_free_test(){
 
     lower_t actual;
     init_default(&actual, 0, 1360);
-    assert(init_lower(&actual, 0, 1360, false) == ERR_OK);
+    assert(init_lower(&actual, 0, 1360, true) == ERR_OK);
 
     int ret;
     int order = 0;
@@ -218,7 +218,7 @@ bool is_free_test(){
     free_lower(actual);
 
     init_default(&actual, 0, 1360);
-    assert(init_lower(&actual, 0, 1360, true) == ERR_OK);
+    assert(init_lower(&actual, 0, 1360, false) == ERR_OK);
 
     ret = is_free(&actual, pfn, order);
     check_equal(ret, false);

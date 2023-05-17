@@ -11,7 +11,8 @@
  * 
 */
 
-
+// child has 512 Eintrage
+#define CHILDSIZE FIELDSIZE
 
 /**
  * the raw value is for atomic access purpose and for allignment

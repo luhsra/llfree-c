@@ -32,13 +32,13 @@ int init_lower(lower_t* self, pfn_at start_pfn, size_t len, bool free_all){
 
     for(size_t i = 0; i < self->num_of_childs -1; i++){
         self->fields[i] = init_field(0, free_all);
-        self->childs[i]= init_child(free_all ? 0: FIELDSIZE, false);
+        self->childs[i]= init_child(free_all ? FIELDSIZE: 0, false);
     }
     size_t frames_in_last_field = self->length % FIELDSIZE;
     self->fields[self->num_of_childs -1] = init_field(frames_in_last_field, free_all);
     
     if(frames_in_last_field == 0) frames_in_last_field = FIELDSIZE;
-    self->childs[self->num_of_childs -1] = init_child(free_all ? 0 :frames_in_last_field, false);
+    self->childs[self->num_of_childs -1] = init_child(free_all ? frames_in_last_field : 0, false);
     return ERR_OK;
 }
 
@@ -81,6 +81,7 @@ int lower_put(lower_t* self, pfn_at frame_adr, size_t order){
     if(ret != ERR_OK) return ERR_ADDRESS;
 
     ret = child_counter_inc(&self->childs[child_index]);
+    //TODO what if ret == ERR_RETRY?
     assert(ret == ERR_OK); // should allways be ok
     return ERR_OK;
 }

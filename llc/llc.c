@@ -165,6 +165,15 @@ int write_back_tree(upper_t *self, reserved_t old_reserved) {
   return unreserve_tree(&self->trees[tree_idx], old_reserved.free_counter);
 }
 
+/**
+ * @brief Set the preffered tree in local data to given tree and writes back the prevoius tree;
+ * 
+ * @param self 
+ * @param core 
+ * @param tree_idx 
+ * @param free_counter 
+ * @return int 
+ */
 int set_pref_andwb(upper_t *self, size_t core, size_t tree_idx,
                    uint16_t free_counter) {
   local_t *local = get_local(self, core);
@@ -184,7 +193,7 @@ int set_pref_andwb(upper_t *self, size_t core, size_t tree_idx,
     ret = write_back_tree(self, old_reserved);
     if (ret == ERR_RETRY) {
       // writeback counter to tree failed
-      // TODO try to infinity? just remove flag and lose some frames=
+      // TODO try to infinity? just remove flag and lose some frames?
       assert(false && "set write counter back to trees failed");
     }
     assert(ret == ERR_OK);
@@ -258,8 +267,9 @@ void *llc_default() {
 /// success or a negative error code
 int64_t llc_init(void *this, size_t cores, pfn_at start_pfn, size_t len,
                  uint8_t init, uint8_t free_all) {
-  (void)(init); // TODO recover
   assert(this != NULL);
+
+  assert(init == VOLATILE && "other modes not implemented"); // TODO recover
 
   // check if given memory is enough
   if (len < MIN_PAGES || len > MAX_PAGES)
@@ -281,9 +291,16 @@ int64_t llc_init(void *this, size_t cores, pfn_at start_pfn, size_t len,
       malloc(sizeof(child_t) * upper->num_of_trees); // TODO remove malloc
   assert(upper->trees != NULL);
 
-  upper->cores = cores;
-  assert(upper->num_of_trees >= cores); // TODO Wrap cores
-  upper->local = malloc(sizeof(local_t) * cores);
+  // check if more cores than trees -> if not shared locale data
+  size_t len_locale;
+  if(cores > upper->num_of_trees){
+    len_locale = upper->num_of_trees;
+  }else{
+    len_locale =  cores;
+  }
+  upper->cores = len_locale;
+  upper->local = malloc(sizeof(local_t) * len_locale);
+
   assert(upper->local != NULL);
 
   // init local data do default 0
@@ -309,11 +326,11 @@ int64_t llc_get(const void *this, size_t core, size_t order) {
     reserved_t reserved = {load(&local->reserved.raw)};
     p("check reserved:\nhasReserved: %d\ntree idx: %lu\ncounter: %d\n",
       reserved.has_reserved_tree, reserved.preferred_index,
-      reserved.free_counter)
-        // check if a tree is reserved && tree has enough space.
-        if (!reserved.has_reserved_tree || reserved.free_counter < 1) {
-      p("local has no reserved Tree or not enough space\n") int ret =
-          reserve_new_tree(self, core);
+      reserved.free_counter);
+    // check if a tree is reserved && tree has enough space.
+    if (!reserved.has_reserved_tree || reserved.free_counter < 1) {
+      p("local has no reserved Tree or not enough space\n");
+      int ret = reserve_new_tree(self, core);
       if (ret != ERR_OK) {
         // TODO find new tree to reserve failed
         assert(false && "find new tree to reserve failed");
@@ -435,4 +452,8 @@ void llc_debug(const void *this, void (*writer)(void *, char *), void *arg) {
   (void)(this);
   writer(arg, "Hello from LLC!\n");
   writer(arg, "Can be called multiple times...");
+}
+
+void llc_drop(void *self){
+  (void)(self);
 }
