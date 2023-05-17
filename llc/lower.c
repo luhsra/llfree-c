@@ -112,4 +112,11 @@ void print_lower(lower_t* self){
 
 }
 
+void lower_drop(lower_t* self){
+    assert(self != NULL);
+
+    free(self->childs);
+    free(self->fields);
+}
+
 

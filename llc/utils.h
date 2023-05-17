@@ -16,7 +16,7 @@ size_t div_ceil(uint64_t a, int b);
 #define cas(obj, expect, desire) atomic_compare_exchange_strong_explicit(obj, expect, desire, MEMORY_ORDER, MEMORY_ORDER)
 #define load(obj) atomic_load_explicit(obj, MEMORY_ORDER)
 
-#define verbose
+//#define verbose
 
 #ifdef verbose
     #define p(...) printf(__VA_ARGS__);

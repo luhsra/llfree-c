@@ -84,3 +84,10 @@ size_t allocated_frames(lower_t* self);
 */
 void print_lower(lower_t* self);
 
+
+/**
+ * @brief Frees the allocated Memory
+ * 
+ * @param self pointer to lower
+ */
+void lower_drop(lower_t* self);

@@ -310,7 +310,7 @@ int64_t llc_init(void *this, size_t cores, pfn_at start_pfn, size_t len,
 
   init_trees(upper);
 
-  upper->meta->crashed = true; // TODO atomic?
+  upper->meta->crashed = true;
   return ERR_OK;
 }
 
@@ -454,6 +454,14 @@ void llc_debug(const void *this, void (*writer)(void *, char *), void *arg) {
   writer(arg, "Can be called multiple times...");
 }
 
-void llc_drop(void *self){
-  (void)(self);
+void llc_drop(void *this){
+  assert(this != NULL);
+  upper_t *self = (upper_t *)this;
+
+  self->meta->magic = false;
+
+  lower_drop(&self->lower);
+  free(self->trees);
+  free(self->local);
+  free(self->meta);
 }
