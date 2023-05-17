@@ -158,9 +158,9 @@ mod test {
     use crate::Error;
     use crate::{Alloc, AllocExt, Init};
 
-    use super::LLFree;
+    use super::LLC;
 
-    type Allocator = LLFree;
+    type Allocator = LLC;
 
     #[test]
     fn simple() {

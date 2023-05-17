@@ -72,7 +72,7 @@ impl Drop for LLC {
 
 /// Converting return codes to errors
 fn to_result(code: i64) -> Result<u64> {
-    if code > 0 {
+    if code >= 0 {
         Ok(code as _)
     } else {
         match code {
