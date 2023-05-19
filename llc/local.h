@@ -6,6 +6,8 @@
 #include <stdalign.h>
 #include <stdint.h>
 
+#define UPDATE_RESERVED 1
+
 
 //TODO Description
 typedef struct reserved {
@@ -68,7 +70,10 @@ int mark_as_searchig(local_t *self);
 bool is_searching(local_t *self);
 // set last free index
 int inc_free_counter(local_t *self, pfn_rt frame, size_t order);
+int dec_free_counter(local_t *self, pfn_rt frame, size_t order);
+
 
 
 // sets last_free to tree of given frame
+// returns UPDATE_RESERVED after 4 consecutive free on the same tree
 int set_free_tree(local_t* self, pfn_rt frame);

@@ -4,8 +4,7 @@
 #include <stdint.h>
 #include <stdalign.h>
 #include <stdbool.h>
-#include <stdatomic.h>
-
+#include "utils.h"
 /*
  * Implements The Bitfield and behaviour.
 */

@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdalign.h>
-#include <stdatomic.h>
 #include "enum.h"
 /**
  * This Flagcounter combines a Flag with a 15-Bit counter in 2 Bytes of Space.

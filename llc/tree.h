@@ -1,7 +1,7 @@
 #include <stdalign.h>
-#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include "utils.h"
 
 #define TREESIZE (1 << 9 << 5)
 /**
