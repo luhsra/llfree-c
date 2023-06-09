@@ -76,7 +76,7 @@ int find_unset(bitfield_512_t* field,  pos_t* pos){
     return ERR_MEMORY; // ERR_MEMORY ->Kein freies Bit in diesem Feld
 }
 
-int set_Bit(bitfield_512_t* field){
+int64_t set_Bit(bitfield_512_t* field){
     assert(field != NULL);
 
     pos_t pos;
@@ -109,12 +109,14 @@ int reset_Bit(bitfield_512_t* field, size_t index){
     return ERR_OK;
 }
 
+
+
 int count_Set_Bits(bitfield_512_t* field){
     assert(field != NULL);
-
     int counter = 0;
     for(size_t i = 0; i < N; i++){
-        counter += __builtin_popcountll(field->rows[i]); //TODO wrapper popcount ?
+        uint64_t row = load(&field->rows[i]);
+        counter += __builtin_popcountll(row); //TODO wrapper popcount ?
     }
     
     assert(0 <= counter && counter <= FIELDSIZE);
@@ -127,7 +129,7 @@ bool is_free_bit(bitfield_512_t* self,size_t index){
     assert(0 <= index && index < FIELDSIZE);
     pos_t pos = get_pos(index);
 
-    uint64_t row = atomic_load(&self->rows[pos.row_index]);
+    uint64_t row = load(&self->rows[pos.row_index]);
     uint64_t mask = 1ul << pos.bit_index;
 
     return (row & mask) == 0;

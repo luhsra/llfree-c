@@ -1,6 +1,5 @@
 #pragma once
 #include <stdint.h>
-#include <stdatomic.h>
 #include "lower.h"
 #include "child.h"
 #include "local.h"
@@ -65,3 +64,5 @@ void llc_drop(void* self);
 
 /// Prints the allocators state for debugging
 void llc_debug(const void *self, void (*writer)(void *, char *), void *arg);
+
+void llc_print(upper_t* self);

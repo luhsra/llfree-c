@@ -43,39 +43,73 @@ int init_lower(lower_t *self, pfn_at start_pfn, size_t len, bool free_all) {
   return ERR_OK;
 }
 
-int64_t lower_get(lower_t *self, pfn_rt start, size_t order, pfn_at *ret) {
-  (void)order; // TODO Different Orders
-  size_t index_start = getChildIdx(start);
-  index_start /= CHILDS_PER_TREE; // allways search in a chunk of 32 childs
-  size_t index_end = index_start + 32;
-  if (index_end > self->num_of_childs)
-    index_end = self->num_of_childs;
+int64_t get_HP(lower_t *self, pfn_rt atomic_idx) {
+  assert(self != 0);
 
-  for (size_t index = index_start; index < index_end; index++) {
-    uint16_t child_counter = get_counter(&self->childs[index]);
-    if (child_counter <= 0)
-      continue;
+  size_t idx = getChildIdx(pfnFromAtomicIdx(atomic_idx));
+  size_t offset = idx % CHILDS_PER_TREE;
+  size_t start_idx = idx - offset;
 
-    int result = child_counter_dec(&self->childs[index]);
-    if (result != ERR_OK)
-      continue; // if atomic failed multiple times or counter reaches 0 try next
-                // child
-
-    int pos;
-    do { // the atomic counter decrease asures that here must be a free bit left
-         // in the field
-      pos = set_Bit(&self->fields[index]);
-    } while (pos < 0);
-
-    *ret = index * FIELDSIZE + pos + self->start_pfn;
-    return ERR_OK;
+  for (size_t i = 0; i < CHILDS_PER_TREE; ++i) {
+    size_t current_idx = start_idx + offset;
+    if (update(reserve_HP(&self->childs[current_idx]) == ERR_OK)) {
+      return pfnFromChildIdx(current_idx) + self->start_pfn;
+    }
+    ++offset;
+    offset %= CHILDS_PER_TREE;
   }
-  return ERR_MEMORY; // No free frame was found
+  return ERR_MEMORY;
+}
+
+int64_t lower_get(lower_t *self, int64_t atomic_idx, size_t order) {
+  assert(order == 0 || order == HP);
+  pfn_rt pfn = pfnFromAtomicIdx(atomic_idx);
+  if (pfn >= self->length)
+    return ERR_ADDRESS;
+
+  if (order == HP)
+    return get_HP(self, atomic_idx);
+
+  const size_t start_idx = getChildIdx(pfn);
+  const size_t base = start_idx - (start_idx % CHILDS_PER_TREE);
+
+  for (size_t i = 0; i < CHILDS_PER_TREE; ++i) {
+    size_t current_idx = base + ((start_idx + i) % CHILDS_PER_TREE);
+
+    if (current_idx >= self->num_of_childs)
+      current_idx = base;
+      
+    if (update(child_counter_dec(&self->childs[current_idx])) == ERR_OK) {
+      int64_t pos;
+      do {
+        pos = set_Bit(&self->fields[current_idx]);
+        if (pos >= 0) {
+          // found and reserved a frame
+          return pfnFromChildIdx(current_idx) + pos + self->start_pfn;
+        }
+      } while (pos == ERR_RETRY);
+
+      assert(pos == ERR_MEMORY);
+      // not possible to reserve a frame even in child were enough free frames
+
+      int ret = try_update(child_counter_inc(&self->childs[current_idx]));
+      if(ret != ERR_OK){
+        // not possible to restore childcounter to correct value
+        return ERR_CORRUPTION;
+      }
+
+      //childcounter is restored
+      assert(false); //TODO make sure caller handels this case correctly
+      return ERR_RETRY;
+    }
+  }
+
+  return ERR_MEMORY;
 }
 
 int lower_put(lower_t *self, pfn_at frame_adr, size_t order) {
-  (void)order; // TODO orders
-  assert(order == 0 || order == 9);
+  assert(order == 0 || order == HP);
+
   // chek if outside of managed space
   if (frame_adr >= self->start_pfn + self->length ||
       frame_adr < self->start_pfn)
@@ -84,7 +118,7 @@ int lower_put(lower_t *self, pfn_at frame_adr, size_t order) {
   size_t child_index = getChildIdx(frame);
 
   if (order == 9) {
-    return free_HP(&self->childs[child_index]);
+    return update(free_HP(&self->childs[child_index]));
   }
 
   size_t field_index = (frame) % FIELDSIZE;
@@ -92,24 +126,35 @@ int lower_put(lower_t *self, pfn_at frame_adr, size_t order) {
   if (ret != ERR_OK)
     return ERR_ADDRESS;
 
-  ret = child_counter_inc(&self->childs[child_index]);
-  if(ret == ERR_ADDRESS){
-    // somehow we are not able to increase the child_counter ->try reset the bitfield
+  ret = update(child_counter_inc(&self->childs[child_index]));
+  if (ret == ERR_ADDRESS) {
+    // somehow we are not able to increase the child_counter ->try reset the
+    // bitfield
   }
 
   return ERR_OK;
 }
 
+
+
 int is_free(lower_t *self, pfn_rt frame, size_t order) {
-  (void)order; // TODO orders
+  assert(order == 0 || order == HP);
+
   // check if outside of managed space
   if (frame >= self->start_pfn + self->length || frame < self->start_pfn)
     return ERR_ADDRESS;
+  
   size_t child_index = getChildIdx(frame);
-  size_t field_index = (frame - self->start_pfn) % FIELDSIZE;
 
-  uint16_t child_counter = get_counter(&self->childs[child_index]);
-  if (child_counter == 0)
+  child_t child = {load(&self->childs[child_index].raw)};
+
+  if(order == HP){
+    return (!child.flag && child.counter == FIELDSIZE);
+  }
+
+  size_t field_index = frame % FIELDSIZE;
+
+  if (child.counter < 1 << order)
     return false;
 
   return is_free_bit(&self->fields[child_index], field_index);

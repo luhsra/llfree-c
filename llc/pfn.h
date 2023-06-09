@@ -14,5 +14,7 @@ typedef uint64_t pfn_rt;
 size_t getTreeIdx(pfn_rt pfn);
 size_t getChildIdx(pfn_rt pfn);
 size_t getAtomicIdx(pfn_rt pfn);
+size_t childIDXfromTreeIDX(size_t tree_idx);
 pfn_rt pfnFromTreeIdx(size_t tree_idx);
+pfn_rt pfnFromChildIdx(size_t idx);
 pfn_rt pfnFromAtomicIdx(size_t idx);

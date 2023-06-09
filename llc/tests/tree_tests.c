@@ -115,7 +115,7 @@ bool tree_status_test(){
     expect = actual; // no change
 
     ret = tree_status(&actual);
-    check_equal(ret, ALLOCATED); //TODO
+    check_equal(ret, ALLOCATED);
     equal_trees(actual, expect)
 
 

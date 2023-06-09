@@ -70,7 +70,7 @@ int mark_as_searchig(local_t *self);
 bool is_searching(local_t *self);
 // set last free index
 int inc_free_counter(local_t *self, pfn_rt frame, size_t order);
-int dec_free_counter(local_t *self, pfn_rt frame, size_t order);
+int dec_free_counter(local_t *self, size_t order);
 
 
 

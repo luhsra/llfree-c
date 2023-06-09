@@ -18,21 +18,24 @@ int reserve_tree(tree_t *self) {
 
   tree_t desire = init_tree(0, true);
 
-  tree_t before = fetch_update(self, desire,
-                               // tree is already reserved
-                               if (old.flag) return ERR_ADDRESS;);
-  return before.counter;
+  tree_t before = {load(&self->raw)};
+  // tree is already reserved
+  if (before.flag)
+    return ERR_ADDRESS;
+  if (cas(self, before, desire) == ERR_OK)
+    return before.counter;
+  return ERR_RETRY;
 }
 
 int unreserve_tree(tree_t *self, uint16_t free_counter) {
   assert(self != NULL);
-  tree_t desire;
-  fetch_update(self, desire, assert(free_counter + old.counter <= TREESIZE);
-               assert(old.flag == true && "must be reserved to release it");
-               desire = init_tree(free_counter + old.counter, false);
+  tree_t old = {load(&self->raw)};
 
-  );
-  return ERR_OK;
+  assert(free_counter + old.counter <= TREESIZE);
+  assert(old.flag == true && "must be reserved to release it");
+  tree_t desire = init_tree(free_counter + old.counter, false);
+
+  return cas(self, old, desire);
 }
 
 saturation_level_t tree_status(const tree_t *self) {
@@ -51,17 +54,22 @@ saturation_level_t tree_status(const tree_t *self) {
 
 int tree_counter_inc(tree_t *self, size_t order) {
   assert(self != NULL);
-  tree_t desire;
-  fetch_update(self, desire, assert(old.counter + (1 << order) <= TREESIZE);
-               desire = old; desire.counter += 1 << order;);
+  tree_t old = {load(&self->raw)};
 
-  return ERR_OK;
+  assert(old.counter + (1 << order) <= TREESIZE);
+
+  tree_t desire = old;
+  desire.counter += 1 << order;
+
+  return cas(self, old, desire);
 }
 
 int tree_counter_dec(tree_t *self, size_t order) {
   assert(self != NULL);
-  tree_t desire;
-  fetch_update(self, desire, assert(old.counter >= 1 << order); desire = old;
-               desire.counter -= 1 << order;);
-  return ERR_OK;
+  tree_t old = {load(&self->raw)};
+
+  assert(old.counter >= 1 << order);
+  tree_t desire = old;
+  desire.counter -= 1 << order;
+  return cas(self, old, desire);
 }

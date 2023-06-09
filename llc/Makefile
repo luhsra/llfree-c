@@ -6,7 +6,7 @@ DEBUG ?= 1
 
 # The rust wrapper calls this with DEBUG=1 on debug and DEBUG=0 on release builds
 ifeq ($(DEBUG), 1)
-	CFLAGS += -g -O1
+	CFLAGS += -g
 else
 	CFLAGS += -O3 -D NDEBUG
 endif

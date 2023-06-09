@@ -116,7 +116,7 @@ bool child_counter_dec_test(){
     child_t expect = init_child(0,false);
 
     int ret = child_counter_dec(&actual);
-    check_equal_m(ret, ERR_ADDRESS, "out of range");
+    check_equal_m(ret, ERR_MEMORY, "out of range");
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
 
@@ -140,7 +140,7 @@ bool child_counter_dec_test(){
     expect = init_child(320,true);
 
     ret = child_counter_dec(&actual);
-    check_equal(ret, ERR_ADDRESS);
+    check_equal(ret, ERR_MEMORY);
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
 

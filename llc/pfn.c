@@ -15,4 +15,7 @@ size_t getAtomicIdx(pfn_rt pfn) {
   return pfn >> 6;
 }
 pfn_rt pfnFromTreeIdx(size_t tree_idx) { return tree_idx << 14; }
+pfn_rt pfnFromChildIdx(size_t tree_idx) { return tree_idx << 9; }
 pfn_rt pfnFromAtomicIdx(size_t idx) { return idx << 6; }
+
+size_t childIDXfromTreeIDX(size_t tree_idx){return tree_idx << (14 - 9);}

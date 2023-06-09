@@ -2,6 +2,7 @@
 #include "../bitfield.h"
 #include "../lower.h"
 #include "check.h"
+#include "pfn.h"
 #include <assert.h>
 #include <stdlib.h>
 
@@ -91,30 +92,25 @@ bool get_test(){
     init_default(& actual, 0, 1360);
     assert(init_lower(&actual, 0, 1360, true) == ERR_OK);
 
-    pfn_at pfn;
     int ret;
     int order = 0;
 
-    ret = lower_get(&actual,0,order,&pfn);
-    check_equal(ret, ERR_OK);
-    check_uequal(pfn, 0ul);
+    ret = lower_get(&actual,0,order);
+    check_equal(ret, 0);
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}))
 
-    ret = lower_get(&actual,0,order,&pfn);
-    check_equal(ret, ERR_OK);
-    check_uequal(pfn, 1ul);
+    ret = lower_get(&actual,0,order);
+    check_equal(ret, 1);
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0x3, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}))
 
 
-    ret = lower_get(&actual,320,order,&pfn);
-    check_equal(ret, ERR_OK);
-    check_uequal(pfn, 2ul);
+    ret = lower_get(&actual,getTreeIdx(320),order);
+    check_equal(ret, 2);
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0x7, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}))
 
     for(int i = 0; i < 954; i++){
-        ret = lower_get(&actual,0,order,&pfn);
-        check_equal(ret, ERR_OK);
-        check_uequal(pfn, (i + 3ul));
+        ret = lower_get(&actual,0,order);
+        check_equal(ret, (i + 3));
     }
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
     check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
@@ -124,19 +120,33 @@ bool get_test(){
     init_default(&actual, 0, 2);
     assert(init_lower(&actual, 0, 2, true) == ERR_OK);
 
-    ret = lower_get(&actual,0,order,&pfn);
-    check_equal(ret, ERR_OK);
-    check_uequal(pfn, 0ul);
+    ret = lower_get(&actual,0,order);
+    check_equal(ret, 0);
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0xfffffffffffffffd, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
 
-    ret = lower_get(&actual,0,order,&pfn);
-    check_equal(ret, ERR_OK);
-    check_uequal(pfn, 1ul);
+    ret = lower_get(&actual,0,order);
+    check_equal(ret, 1);
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
 
-    ret = lower_get(&actual,0,order,&pfn);
+    ret = lower_get(&actual,0,order);
     check_equal(ret, ERR_MEMORY);
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
+
+    free_lower(actual)
+    init_default(&actual, 0, 166120);
+    assert(init_lower(&actual, 0, 166120, true) == ERR_OK);
+
+    ret = lower_get(&actual, 0,0);
+    check(ret == 0, "");
+    ret = lower_get(&actual, 0,HP);
+    check_equal(actual.childs[1].flag, true);
+    check_equal(actual.childs[1].counter, 0);
+    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0, 0, 0, 0, 0, 0, 0, 0}))
+
+
+    check_equal(ret, 1<<9);
+
+
 
     return success;
 }
@@ -154,8 +164,8 @@ bool put_test(){
     int order = 0;
 
     for(int i = 0; i < 957; i++){
-        ret = lower_get(&actual,0,order, &pfn);
-        assert(ret == ERR_OK);
+        ret = lower_get(&actual,0,order);
+        assert(ret >= 0);
     }
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
     check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))

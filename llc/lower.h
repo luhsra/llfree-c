@@ -45,11 +45,10 @@ int init_lower(lower_t* self, pfn_at start_pfn, size_t len, bool free_all);
  * @param self pointer to lower object
  * @param start defines the chunk to be searched (will start at start of the chunk even when start points to the middle)
  * @param order determines the amount consecutive pages to be alloced (2^order)
- * @param ret will be set to the pfn of the first of the new allocated pages.
- * @return ERR_OK in success
+ * @return absolute pfn on success;
  *         ERR_MEMORY if not enough space was found (ret will be undefined)
  */
-int64_t lower_get(lower_t* self, pfn_rt start, size_t order, pfn_rt* ret);
+int64_t lower_get(lower_t* self, int64_t start, size_t order);
 
 /**
  * @brief deallocates given frames

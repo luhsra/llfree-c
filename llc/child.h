@@ -43,9 +43,7 @@ child_t init_child(uint16_t counter, bool flag);
  * @brief same as atomic_counter_inc but only increments if the flag is not set
  * @param self pointer to the counter
  * @return ERR_OK on success
- *         ERR_RETRY if the atomic access failed
- *         ERR_MEMORY if the Counder already reached the maximum Value
- *         ERR_CORRUPTION if flag was set
+ *         ERR_ADRESS if the Counder already reached the maximum Value
  */
 int child_counter_inc(child_t* self);
 
@@ -55,9 +53,7 @@ int child_counter_inc(child_t* self);
  * @brief same as atomic_counter_dec bit only decrements if the flag is not set.
  * @param self pointer to the counter
  * @return ERR_OK on success
- *         ERR_RETRY if the atomic access failed
  *         ERR_MEMORY if the counter already reached the minimum Value
- *         ERR_ADDRESS if the flag was is set
  */
 int child_counter_dec(child_t* self);
 
@@ -74,7 +70,6 @@ int reserve_HP(child_t* self);
  * @param self Pointer to the flagcounter
  * @return ERR_OK on success
  *         ERR_ADRESS if the flagcounter is not a reserved HP
- *         ERR_RETRY if atomic Fails (should never be the case, because there schould not be a competition for access)
  */
 int free_HP(child_t* self);
 

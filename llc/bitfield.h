@@ -38,19 +38,18 @@ bitfield_512_t init_field(int number_of_free_Frames, bool start_allocated);
 *         ERR_MEMORY if no free bit was found
 *         ERR_RETRY  if the atomic operation failed
 */
-int set_Bit(bitfield_512_t* field);
+int64_t set_Bit(bitfield_512_t* field);
 
 /**
 * @brief Atomically resets the Bit in given field at index position
 * @param field Field to search in
-* @return ERR_OK on success
+* @return ERR_OK on success 
 *         ERR_ADRESS if the bit was already reset
 */
 int reset_Bit(bitfield_512_t* field,size_t index);
 
 /**
 * @brief Count the Number of bits in the Field
-* works non-atomicly!
 * @param field Field to count bits in.
 * @return number of set Bits
 */
