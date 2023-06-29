@@ -72,8 +72,18 @@ int reserve_tree(tree_t *self);
  * @return ERR_OK on success
  *         ERR_RETRY on atomic operration fail
  */
-int unreserve_tree(tree_t* self, uint16_t free_counter);
+int writeback_tree(tree_t* self, uint16_t free_counter);
 
+
+
+/**
+ * @brief merges the counters of both trees and returns the value. Tree stays reserved
+ * 
+ * @param self 
+ * @param free_counter 
+ * @return int 
+ */
+int writeback_and_reserve_tree(tree_t *self, uint16_t free_counter);
 
 
 
@@ -85,3 +95,6 @@ int unreserve_tree(tree_t* self, uint16_t free_counter);
  *          PARTIAL for everything in between
  */
 saturation_level_t tree_status(const tree_t* self);
+
+// steals the counter of a reserved tree
+int steal_counter(tree_t *self);

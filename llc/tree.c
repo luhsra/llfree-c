@@ -22,20 +22,45 @@ int reserve_tree(tree_t *self) {
   // tree is already reserved
   if (before.flag)
     return ERR_ADDRESS;
-  if (cas(self, before, desire) == ERR_OK)
+  if (cas(self, &before, desire) == ERR_OK){
+    assert(before.counter <= TREESIZE);
+    return before.counter;
+  }
+  return ERR_RETRY;
+}
+
+int steal_counter(tree_t *self) {
+  assert(self != NULL);
+
+  tree_t desire = init_tree(0, true);
+
+  tree_t before = {load(&self->raw)};
+  if (cas(self, &before, desire) == ERR_OK)
     return before.counter;
   return ERR_RETRY;
 }
 
-int unreserve_tree(tree_t *self, uint16_t free_counter) {
+int writeback_and_reserve_tree(tree_t *self, uint16_t free_counter) {
   assert(self != NULL);
   tree_t old = {load(&self->raw)};
 
   assert(free_counter + old.counter <= TREESIZE);
-  assert(old.flag == true && "must be reserved to release it");
+  tree_t desire = init_tree(0, true);
+
+  int ret = cas(self, &old, desire);
+  if(ret == ERR_OK) return free_counter + old.counter;
+  else return ret;
+}
+
+int writeback_tree(tree_t *self, uint16_t free_counter) {
+  assert(self != NULL);
+  tree_t old = {load(&self->raw)};
+
+  assert(free_counter + old.counter <= TREESIZE);
+  //assert(old.flag == true && "must be reserved to release it");
   tree_t desire = init_tree(free_counter + old.counter, false);
 
-  return cas(self, old, desire);
+  return cas(self, &old, desire);
 }
 
 saturation_level_t tree_status(const tree_t *self) {
@@ -61,7 +86,7 @@ int tree_counter_inc(tree_t *self, size_t order) {
   tree_t desire = old;
   desire.counter += 1 << order;
 
-  return cas(self, old, desire);
+  return cas(self, &old, desire);
 }
 
 int tree_counter_dec(tree_t *self, size_t order) {
@@ -71,5 +96,5 @@ int tree_counter_dec(tree_t *self, size_t order) {
   assert(old.counter >= 1 << order);
   tree_t desire = old;
   desire.counter -= 1 << order;
-  return cas(self, old, desire);
+  return cas(self, &old, desire);
 }

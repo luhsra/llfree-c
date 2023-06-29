@@ -11,7 +11,7 @@
 
 #include <stdio.h>
 
-void init_default(lower_t *self, pfn_at start_pfn, size_t len) {
+void init_default(lower_t * const self, pfn_at start_pfn, size_t len) {
   self->start_pfn = start_pfn;
   self->length = len;
 
@@ -22,11 +22,8 @@ void init_default(lower_t *self, pfn_at start_pfn, size_t len) {
   assert(self->childs != NULL);
 }
 
-int init_lower(lower_t *self, pfn_at start_pfn, size_t len, bool free_all) {
+int init_lower(lower_t const * const self, bool free_all) {
   assert(self != NULL);
-
-  self->start_pfn = start_pfn;
-  self->length = len;
 
   for (size_t i = 0; i < self->num_of_childs - 1; i++) {
     self->fields[i] = init_field(0, free_all);
@@ -43,7 +40,7 @@ int init_lower(lower_t *self, pfn_at start_pfn, size_t len, bool free_all) {
   return ERR_OK;
 }
 
-int64_t get_HP(lower_t *self, pfn_rt atomic_idx) {
+int64_t get_HP(lower_t const*const self, pfn_rt atomic_idx) {
   assert(self != 0);
 
   size_t idx = getChildIdx(pfnFromAtomicIdx(atomic_idx));
@@ -61,7 +58,7 @@ int64_t get_HP(lower_t *self, pfn_rt atomic_idx) {
   return ERR_MEMORY;
 }
 
-int64_t lower_get(lower_t *self, int64_t atomic_idx, size_t order) {
+int64_t lower_get(lower_t const*const self, int64_t atomic_idx, size_t order) {
   assert(order == 0 || order == HP);
   pfn_rt pfn = pfnFromAtomicIdx(atomic_idx);
   if (pfn >= self->length)
@@ -107,7 +104,7 @@ int64_t lower_get(lower_t *self, int64_t atomic_idx, size_t order) {
   return ERR_MEMORY;
 }
 
-int lower_put(lower_t *self, pfn_at frame_adr, size_t order) {
+int lower_put(lower_t const*const self, pfn_at frame_adr, size_t order) {
   assert(order == 0 || order == HP);
 
   // chek if outside of managed space
@@ -137,7 +134,7 @@ int lower_put(lower_t *self, pfn_at frame_adr, size_t order) {
 
 
 
-int is_free(lower_t *self, pfn_rt frame, size_t order) {
+int is_free(lower_t const*const self, pfn_rt frame, size_t order) {
   assert(order == 0 || order == HP);
 
   // check if outside of managed space
@@ -160,7 +157,7 @@ int is_free(lower_t *self, pfn_rt frame, size_t order) {
   return is_free_bit(&self->fields[child_index], field_index);
 }
 
-size_t allocated_frames(lower_t *self) {
+size_t allocated_frames(lower_t const*const self) {
   size_t counter = self->length;
   for (size_t i = 0; i < self->num_of_childs; i++) {
     counter -= get_counter(&self->childs[i]);
@@ -168,12 +165,28 @@ size_t allocated_frames(lower_t *self) {
   return counter;
 };
 
-void print_lower(lower_t *self) {
-  printf("lower allocator: with %zu childs\n%lu/%lu frames are allocated\n",
+void print_lower(lower_t const*const self) {
+  printf("\n-------------------------------------\nlower allocator: with %zu childs\n%lu/%lu frames are allocated\nChilds:\n",
          self->num_of_childs, allocated_frames(self), self->length);
+  if (self->num_of_childs > 20)
+    printf(
+        "There are over 20 Childs. Print will only contain first and last 10\n\n");
+  printf("Nr:\t\t");
+  for (size_t i = 0; i < self->num_of_childs; ++i) {
+    if (i < 10 || i >= self->num_of_childs - 10) printf("%lu\t", i);
+  }
+  printf("\nHp?:\t\t");
+  for (size_t i = 0; i < self->num_of_childs; ++i) {
+    if (i < 10 || i >= self->num_of_childs - 10) printf("%d\t", self->childs[i].flag);
+  }
+  printf("\free:\t\t");
+  for (size_t i = 0; i < self->num_of_childs; ++i) {
+    if (i < 10 || i >= self->num_of_childs - 10) printf("%d\t", self->childs[i].counter);
+  }
+  printf("\n");
 }
 
-void lower_drop(lower_t *self) {
+void lower_drop(lower_t const* const self) {
   assert(self != NULL);
 
   free(self->childs);

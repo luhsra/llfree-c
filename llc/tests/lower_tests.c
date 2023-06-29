@@ -2,8 +2,10 @@
 #include "../bitfield.h"
 #include "../lower.h"
 #include "check.h"
+#include "enum.h"
 #include "pfn.h"
 #include <assert.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 #define check_child_number(expect)  \
@@ -35,7 +37,7 @@ bool init_lower_test(){
     int frames = 512;
     lower_t actual;
     init_default(&actual, pfn_start, frames);
-    int ret = init_lower(&actual, pfn_start, frames, true);
+    int ret = init_lower(&actual, true);
     check_equal(ret, ERR_OK);
     check_child_number(1ul);
     bitfield_is_free(actual.fields[0])
@@ -45,7 +47,7 @@ bool init_lower_test(){
     pfn_start = 0;
     frames = 511;
     init_default(&actual, pfn_start, frames);
-    ret = init_lower(&actual, pfn_start, frames, true);
+    ret = init_lower(&actual, true);
     check_child_number(1ul);
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0,0,0,0,0,0,0,0x8000000000000000}))
     check_uequal(allocated_frames(&actual),0ul)
@@ -54,7 +56,7 @@ bool init_lower_test(){
     pfn_start = 0;
     frames = 632;
     init_default(&actual, pfn_start, frames);
-    ret = init_lower(&actual, pfn_start, frames, false);
+    ret = init_lower(&actual, false);
     check_child_number(2ul);
     bitfield_is_blocked_n(actual.fields,2)
     check_uequal(allocated_frames(&actual),632ul)
@@ -63,7 +65,7 @@ bool init_lower_test(){
     pfn_start = 0;
     frames = 968;
     init_default(&actual, pfn_start, frames);
-    ret = init_lower(&actual, pfn_start, frames, true);
+    ret = init_lower(&actual, true);
     check_child_number(2ul);
     bitfield_is_free(actual.fields[0])
     check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0x0,0x0,0x0,0x0,0x0,0x0,0x0,0xffffffffffffff00}))
@@ -74,7 +76,7 @@ bool init_lower_test(){
     pfn_start = 0;
     frames = 685161;
     init_default(&actual, pfn_start, frames);
-    ret = init_lower(&actual, pfn_start, frames, true);
+    ret = init_lower(&actual, true);
     check_child_number(1339ul);
     bitfield_is_free_n(actual.fields, 1338)
     check_equal_bitfield(actual.fields[1338], ((bitfield_512_t) {0x0,0xfffffe0000000000,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff}))
@@ -90,7 +92,7 @@ bool get_test(){
 
     lower_t actual;
     init_default(& actual, 0, 1360);
-    assert(init_lower(&actual, 0, 1360, true) == ERR_OK);
+    assert(init_lower(&actual, true) == ERR_OK);
 
     int ret;
     int order = 0;
@@ -118,7 +120,7 @@ bool get_test(){
 
     free_lower(actual)
     init_default(&actual, 0, 2);
-    assert(init_lower(&actual, 0, 2, true) == ERR_OK);
+    assert(init_lower(&actual, true) == ERR_OK);
 
     ret = lower_get(&actual,0,order);
     check_equal(ret, 0);
@@ -134,7 +136,7 @@ bool get_test(){
 
     free_lower(actual)
     init_default(&actual, 0, 166120);
-    assert(init_lower(&actual, 0, 166120, true) == ERR_OK);
+    assert(init_lower(&actual, true) == ERR_OK);
 
     ret = lower_get(&actual, 0,0);
     check(ret == 0, "");
@@ -157,7 +159,7 @@ bool put_test(){
 
     lower_t actual;
     init_default(&actual, 0, 1360);
-    assert(init_lower(&actual, 0, 1360, true) == ERR_OK);
+    assert(init_lower(&actual, true) == ERR_OK);
 
     pfn_at pfn;
     int ret;
@@ -212,7 +214,7 @@ bool is_free_test(){
 
     lower_t actual;
     init_default(&actual, 0, 1360);
-    assert(init_lower(&actual, 0, 1360, true) == ERR_OK);
+    assert(init_lower(&actual, true) == ERR_OK);
 
     int ret;
     int order = 0;
@@ -228,7 +230,7 @@ bool is_free_test(){
     free_lower(actual);
 
     init_default(&actual, 0, 1360);
-    assert(init_lower(&actual, 0, 1360, false) == ERR_OK);
+    assert(init_lower(&actual, false) == ERR_OK);
 
     ret = is_free(&actual, pfn, order);
     check_equal(ret, false);
@@ -250,7 +252,76 @@ bool is_free_test(){
 }
 
 
+int lower_HP_tests(){
+    bool success = true;
 
+    lower_t actual;
+    init_default(&actual, 0, FIELDSIZE * 60);
+    assert(init_lower(&actual, true) == ERR_OK);
+
+    int64_t pfn1 = lower_get(&actual, 0, HP);
+    check( pfn1 >= 0, "");
+    uint64_t offset = pfn1 % FIELDSIZE;
+    check_uequal(offset, 0ul);
+    int64_t pfn2 = lower_get(&actual, 0, HP);
+    check( pfn2 >= 0, "");
+    offset = pfn2 % FIELDSIZE;
+    check_uequal(offset, 0ul);
+    check(pfn1 != pfn2, "");
+    check_uequal(allocated_frames(&actual), 2ul * FIELDSIZE);
+    
+    // request a regular frame
+    int64_t regular = lower_get(&actual, 0, 0);
+    //regular frame cannot be returned as HP
+    check_equal(lower_put(&actual, regular, HP), ERR_ADDRESS);
+
+
+    assert(regular >= 0);
+    //this HF must be in another child than the regular frame.
+    int64_t pfn3 = lower_get(&actual, 10, HP);
+    check(pfn3 >= 0,"");
+    offset = pfn3 % FIELDSIZE;
+    check_uequal(offset, 0ul);
+    check_uequal((uint64_t)pfn3, 3*FIELDSIZE + actual.start_pfn);
+
+    // free regular page und try get this child as complete HP
+    assert(lower_put(&actual, regular, 0) == ERR_OK);
+    int64_t pfn4 = lower_get(&actual, 0, HP);
+    check(pfn4 >= 0,"");
+    check(pfn4 == regular, "");
+
+
+    int ret = lower_put(&actual, pfn2, HP);
+    check_equal(ret, ERR_OK);
+
+    //allocate the complete memory with HPs
+    for(int i = 3; i < 60; ++i){
+        // get allocates only in chunks of 32 children. if there is no free HP in given chung it returns ERR_MEMORY
+        int64_t pfn = lower_get(&actual, i < 32? 0 : getAtomicIdx(32*FIELDSIZE), HP);
+        check(pfn > 0, "");
+    }
+
+    check_uequal_m(allocated_frames(&actual), actual.length, "fully allocated with Huge Frames");
+
+    //reservation at full memory must fail
+    int64_t pfn = lower_get(&actual, 0, HP);
+    check(pfn == ERR_MEMORY,"");
+
+    // return HP as regular Frame must fail
+    check(lower_put(&actual, pfn1, 0) == ERR_ADDRESS, "");
+
+    check(lower_put(&actual, pfn1, HP) == ERR_OK, "");
+    check(lower_put(&actual, pfn2, HP) == ERR_OK, "");
+
+    //check if right amout of free reguale frames are present
+    check_uequal(actual.length - allocated_frames(&actual), 2ul * FIELDSIZE);
+
+    //new aquired frame should be in same positon as the old no 1
+    check(lower_get(&actual, 0, HP) == pfn1, "");
+
+
+    return success;
+}
 
 
 
@@ -262,6 +333,6 @@ int lower_tests(int* test_counter, int* fail_counter){
     run_test(get_test);
     run_test(put_test);
     run_test(is_free_test);
-
+    run_test(lower_HP_tests);
     return 0;
 }

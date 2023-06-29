@@ -1,7 +1,7 @@
 # Compiler and flags
 CC = clang
 AR = ar
-CFLAGS = -Wall -Wextra -Werror -fPIE -std=gnu11 -I $(PWD)
+CFLAGS = -Wall -Wextra -Werror -fPIE -std=gnu11 -pthread -I $(PWD)
 DEBUG ?= 1
 
 # The rust wrapper calls this with DEBUG=1 on debug and DEBUG=0 on release builds

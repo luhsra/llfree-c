@@ -62,18 +62,23 @@ void init_local(local_t *self);
 // check if it has a reserved tree
 bool has_reserved_tree(local_t *self);
 // get the reserved tree index
-pfn_rt get_reserved_tree_index(local_t *self);
-pfn_rt get_last_free_tree_index(local_t* self);
+pfn_rt get_reserved_pfn(local_t *self);
 // set the flag for searching
 int mark_as_searchig(local_t *self);
-// check if already reserving a new tree
-bool is_searching(local_t *self);
-// set last free index
-int inc_free_counter(local_t *self, pfn_rt frame, size_t order);
-int dec_free_counter(local_t *self, size_t order);
+// reset the flag for searching
+int unmark_as_searchig(local_t *self);
 
+// set last free index
+int inc_local_free_counter(local_t *const self, const pfn_rt frame, const size_t order);
+int dec_local_free_counter(local_t *const self, const size_t order);
+
+//resetzs the reserved tree and returns the old
+int steal(local_t* const self, reserved_t* const old_reservation);
 
 
 // sets last_free to tree of given frame
 // returns UPDATE_RESERVED after 4 consecutive free on the same tree
 int set_free_tree(local_t* self, pfn_rt frame);
+
+
+int update_preferred(local_t* const self, pfn_rt pfn);

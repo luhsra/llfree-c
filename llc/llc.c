@@ -8,6 +8,7 @@
 #include "utils.h"
 
 #include <assert.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -15,189 +16,206 @@
 
 #define MAGIC 0xC0FFEE
 
-/*------------------------------------------------------
-  TREE RELATED STUFF T
-  ------------------------------------------------------*/
-// reads and summs up the childs counter an set the tree counter
-// non atomic!
-static void init_trees(upper_t *self) {
+static local_t *get_local(const upper_t *self, size_t core);
+
+/**
+ * @brief searches a free tree and reserves it if found
+ * The cacheline defined by region will be searched first. if no Tree is
+ * available all  unreserved trees will be searched.
+ * @param self pointer to upper allocator
+ * @param core number of core
+ * @param has_reserved_tree  if false region will be set to a suitable starting
+ * region for the given core.
+ * @param region pfn of a tree in witch cacheline is  searched first
+ * @return int64_t
+ */
+static int64_t find_free_Tree_IDX(upper_t const *const self, const size_t core,
+                                  const bool has_reserved_tree, pfn_rt region) {
   assert(self != NULL);
 
-  uint16_t sum = self->lower.childs[0].counter;
-  size_t tree_idx = 0;
-  for (size_t child_idx = 1; child_idx < self->lower.num_of_childs;
-       ++child_idx) {
-    if (child_idx % CHILDS_PER_TREE == 0) {
-      self->trees[tree_idx] = init_tree(sum, false);
-      ++tree_idx;
-      sum = 0;
+  // if no tree was reserved previously set a region in Memory
+  if (!has_reserved_tree)
+    region = (self->lower.length / self->cores) * (core % self->cores);
+
+  const size_t tree_idx = getTreeIdx(region);
+  size_t patial_tree_idx;
+  bool found_partial_tree = false;
+
+  // search local (same cacheline as region)
+  ITERRATE(
+      tree_idx, CHILDS_PER_TREE, if (current_i >= self->num_of_trees) continue;
+
+      const saturation_level_t saturation =
+          tree_status(&self->trees[current_i]);
+      switch (saturation) {
+        case ALLOCATED:
+          // Do nothing
+          break;
+        case PARTIAL:
+          if (!found_partial_tree) {
+            found_partial_tree = true;
+            patial_tree_idx = current_i;
+          }
+          break;
+        case FREE:
+          return current_i;
+      });
+  // no free Tree was found within this cacheline -> check if a partial Tree was
+  // found
+  if (found_partial_tree)
+    return patial_tree_idx;
+
+  // no tree reserveable in this chacheline -> search all Trees
+  const size_t nextCachlinebegin =
+      tree_idx - (tree_idx % CHILDS_PER_TREE) + CHILDS_PER_TREE;
+  ITERRATE(
+      nextCachlinebegin, self->num_of_trees,
+      if (current_i >= self->num_of_trees) continue;
+      const saturation_level_t saturation =
+          tree_status(&self->trees[current_i]);
+      switch (saturation) {
+        case ALLOCATED:
+          // Do nothing
+          break;
+        case PARTIAL:
+          if (!found_partial_tree) {
+            found_partial_tree = true;
+            patial_tree_idx = current_i;
+          }
+          break;
+        case FREE:
+          return current_i;
+      });
+  // no free Tree in whole memory available -> return idx of a partial filled
+  // Tree
+  if (found_partial_tree)
+    return patial_tree_idx;
+
+  // All Tress are allocated
+  return ERR_MEMORY;
+}
+
+/**
+ * @brief syncronizes the free_counter of given local with the global counter.
+ *
+ * @param self pointer to upper allocator
+ * @param local pointer to local struct
+ * @return True if frames were added to the local tree, false otherwise
+ */
+static bool sync_with_global(upper_t const *const self, local_t *const local) {
+  assert(self != NULL);
+  assert(local != NULL);
+  // get Index of reserved Tree
+  const size_t tree_idx = getTreeIdx(get_reserved_pfn(local));
+
+  // get countervalue from reserved Tree and set available Frames to 0
+  const int64_t counter = update(steal_counter(&self->trees[tree_idx]));
+
+  if (counter == 0)
+    // no additional free frames found
+    return false;
+  reserved_t old = {load(&local->reserved.raw)};
+  do {
+    // check if treeIdx is still the reserved Tree
+    if (getTreeIdx(pfnFromAtomicIdx(old.preferred_index)) != tree_idx) {
+      // the tree we stole from is no longer the reserved tree -> writeback
+      // counter to global
+      update(writeback_tree(&self->trees[tree_idx], counter));
+      return false;
     }
-    sum += self->lower.childs[child_idx].counter;
-  }
-  // init last tree (not fully fsaturated with children)
-  if (self->lower.num_of_childs % CHILDS_PER_TREE != 0) {
+    // add found frames to local counter
+    reserved_t desire = old;
+    assert(old.free_counter + counter <= TREESIZE);
+    desire.free_counter += counter;
+    if (cas(&local->reserved, &old, desire) == ERR_OK)
+      return true;
+  } while (true);
+}
+
+/**
+ * @brief steals reserved trees from other cores local data
+ *
+ * @param self upper allocator
+ * @param core number of this core
+ * @param counter on success will be set to freecount of the new tree else
+ * untouched
+ * @return on success: Index of reserved tree; ERR_MEMORY if no tree can be
+ * stolen.
+ */
+static int64_t steal_tree(upper_t const *const self, const size_t core) {
+  reserved_t old;
+  int ret;
+  ITERRATE(
+      core, self->cores, if (current_i == core) continue;
+
+      ret = try_update(steal(&self->local[current_i], &old));
+      if (ret == ERR_OK) {
+        // merge freecounter of stolen tree
+        const size_t tree_idx =
+            getTreeIdx(pfnFromAtomicIdx(old.preferred_index));
+        update(writeback_tree(&self->trees[tree_idx], old.free_counter));
+
+        if (tree_status(&self->trees[tree_idx]) != ALLOCATED) {
+          // return idx if some space i left in tree
+          return tree_idx;
+        }
+      };);
+  // no success on stealing a reserved Tree -> No memory available
+  return ERR_MEMORY;
+}
+
+/**
+ * @brief Initializes the Treecounters by reading the child counters
+ * works non Atomicly!
+ * @param self pointer to upper allocator
+ */
+static void init_trees(upper_t const *const self) {
+  assert(self != NULL);
+
+  for (size_t tree_idx = 0; tree_idx < self->num_of_trees; ++tree_idx) {
+    uint16_t sum = 0;
+    for (size_t child_idx = CHILDS_PER_TREE * tree_idx;
+         child_idx < CHILDS_PER_TREE * (tree_idx + 1); ++child_idx) {
+      if (child_idx >= self->lower.num_of_childs)
+        break;
+      sum += self->lower.childs[child_idx].counter;
+    }
     self->trees[tree_idx] = init_tree(sum, false);
   }
 }
 
-/**
- * @brief searches for a free tree
- * starts searching local for a free or partial tree
- * if not found global
- * @param self pointer to allocator
- * @param core corenumber
- * @param region pfn of the last alloc
- * @return on success free_counter of reserved tree
- *         ERR_MEMORY if no tree was founf
- *         ERR_RETRY if reservation fails bechause of atomic operation
- */
-int64_t search_and_reserve_free_tree(upper_t *self, size_t core, pfn_rt region,
-                                     size_t *reserved_tree_idx) {
-  assert(self != NULL);
-
-  if (region == 0) {
-    // no tree was reserved jet -> calculate startig point for region
-    region = (self->lower.length / self->cores) * core;
-  }
-
-  size_t tree_idx = getTreeIdx(region);
-  size_t base =
-      tree_idx - tree_idx % 32; // start seaching at beginning of chacheline
-  size_t start = tree_idx - base;
-
-  size_t last_partial;
-  bool found_partial = false;
-  // search in this chacheline starting with given index
-  for (size_t loop = 0; loop < CHILDS_PER_TREE; ++loop, ++start) {
-    size_t current_idx = base + (start % CHILDS_PER_TREE);
-
-    // last tree is not allways totaly filled with trees
-    if (current_idx >= self->num_of_trees)
-        current_idx = base;
-
-    saturation_level_t level = tree_status(&self->trees[current_idx]);
-    p("check treeidx: %lu status = %d\n", current_idx, level);
-    switch (level) {
-      int64_t ret;
-    case FREE:
-      // Best case: Free tree in the same cacheline
-      ret = reserve_tree(&self->trees[current_idx]);
-      if (ret == ERR_ADDRESS) {
-        // tree is already reserved -> try next tree
-        continue;
-      } else {
-        *reserved_tree_idx = current_idx;
-        return ret;
-      }
-      break;
-    case PARTIAL:
-      if (!found_partial) {
-        last_partial = current_idx;
-        found_partial = true;
-      }
-    case ALLOCATED:;
-    }
-  }
-  // no free tree was found but we have a parial filled tree in this cacheline
-  if (found_partial) {
-    *reserved_tree_idx = last_partial;
-    return reserve_tree(&self->trees[last_partial]);
-  };
-
-  p("no tree found in same cacheline -> search global\n");
-  // no free or partial tree in this chacheline -> search global for a
-  // free/partial tree
-
-  base = (base + CHILDS_PER_TREE) %
-          self->num_of_trees; // start behind the searched chacheline
-
-  for (size_t i = 0; i < self->num_of_trees - CHILDS_PER_TREE; i++) {
-    size_t current_idx = (base + i) % self->num_of_trees;
-
-    saturation_level_t level = tree_status(&self->trees[current_idx]);
-    switch (level) {
-      int ret;
-    case FREE:
-      // found a free Tree someware
-      ret = update(reserve_tree(&self->trees[current_idx]));
-      if (ret == ERR_ADDRESS) {
-        // tree is already reserved -> try next tree
-        continue;
-      } else {
-        *reserved_tree_idx = current_idx;
-        return ret;
-      }
-      break;
-    case PARTIAL:
-      if (!found_partial) {
-        last_partial = current_idx;
-        found_partial = true;
-      }
-    case ALLOCATED:;
-    }
-  }
-  // no free tree existing return a partial tree
-  if (found_partial) {
-    *reserved_tree_idx = last_partial;
-    return update(reserve_tree(&self->trees[last_partial]));
-  }
-
-  assert(
-      found_partial &&
-      "special case of almost completely allocated memory not implemented jet");
-  // no free or partial trees available
-  // drain other locale data or give blocked tree???
-  return ERR_MEMORY;
-}
-/*------------------------------------------------------
-  END TREE RELATED STUFF
-  ------------------------------------------------------*/
-
-static local_t *get_local(upper_t *self, size_t core) {
+static local_t *get_local(upper_t const *const self, const size_t core) {
   size_t idx = core % self->num_of_trees;
   return &self->local[idx];
-}
-
-int write_back_tree(upper_t *self, reserved_t old_reserved) {
-  assert(self != NULL);
-
-  size_t tree_idx = getTreeIdx(pfnFromAtomicIdx(old_reserved.preferred_index));
-  return unreserve_tree(&self->trees[tree_idx], old_reserved.free_counter);
 }
 
 /**
  * @brief Set the preffered tree in local data to given tree and writes back the
  * prevoius tree;
  *
- * @param self
- * @param core
- * @param tree_idx
- * @param free_counter
- * @return int
+ * @param self pointer to Upper Allocator
+ * @param core number of the current core
+ * @param pfn pfn to set as preferred Tree
+ * @param free_counter number of free Frames in new preferred tree
+ * @return ERR_OK
  */
-int set_pref_andwb(upper_t *self, size_t core, size_t tree_idx,
-                   uint16_t free_counter) {
-  local_t *local = get_local(self, core);
+static int set_preferred_and_writeback(upper_t const *const self,
+                                       const size_t core, const pfn_rt pfn,
+                                       const uint16_t free_counter) {
+
+  assert(self != NULL);
+
+  local_t *const local = get_local(self, core);
 
   reserved_t old_reserved;
-  int ret = set_preferred(local, pfnFromTreeIdx(tree_idx), free_counter,
-                                 &old_reserved);
-  if (ret == ERR_RETRY) {
-    // change locale failed
-    // TODO try to infinity? try to write tree counter back?
-    assert(false && "set reserved in local data falied");
-  }
+  update(set_preferred(local, pfn, free_counter, &old_reserved));
   // successfully reserved a new tree && in_reservation flag is removed
 
   // writeback the old counter to trees
   if (old_reserved.has_reserved_tree) {
-    ret = write_back_tree(self, old_reserved);
-    if (ret == ERR_RETRY) {
-      // writeback counter to tree failed
-      // TODO try to infinity? just remove flag and lose some frames?
-      assert(false && "set write counter back to trees failed");
-    }
-    assert(ret == ERR_OK);
+    tree_t *const tree = &self->trees[getTreeIdx(
+        pfnFromAtomicIdx(old_reserved.preferred_index))];
+    update(writeback_tree(tree, old_reserved.free_counter));
   }
   return ERR_OK;
 }
@@ -210,60 +228,65 @@ int set_pref_andwb(upper_t *self, size_t core, size_t tree_idx,
  * @param core this core number
  * @return ERR_OK on success
  *         ERR_MEMORY if no tree was found
- *         ERR_RETRY if tree reservation was not possible
  */
-int reserve_new_tree(upper_t *self, size_t core) {
+static int reserve_new_tree(upper_t const *const self, size_t const core) {
   assert(self != NULL);
-  assert(core < self->cores);
 
-  local_t *local = get_local(self, core);
+  local_t *const local = get_local(self, core);
 
-  reserved_t mask = {0};
-  mask.reservation_in_progress = true;
-
-  uint64_t before = atomic_fetch_or(&local->reserved.raw, mask.raw);
-  if ((before | mask.raw) == before) {
+  if (mark_as_searchig(local) != ERR_OK) {
     p("reservation already in progress. start spinning\n");
     // already in reservation
     // spinwait for the other CPU to finish
-    assert(false && "spinlock not implemented yet");
-    return ERR_CORRUPTION;
+    while((reserved_t){load(&local->reserved.raw)}.reservation_in_progress){};
+    return ERR_OK;
   }
-  // in_reservation is set -> now reserve a new tree
-  size_t tree_idx;
-  int64_t counter;
-  for (size_t i = 0; i < MAX_ATOMIC_RETRY; ++i) {
-    counter = search_and_reserve_free_tree(
-        self, core, get_reserved_tree_index(local), &tree_idx);
-    if (counter == ERR_MEMORY) {
-      // no free Tree found
-      p("found no tree to reserve\n");
-      return ERR_MEMORY; // TODO drain?
-    } else if (counter >= 0) {
-      // succesfully reserved a tree
-      break;
-    }
-    // on reservation fail search a new tree and try again
-  }
-  if (counter < 0) {
-    // found reserveable tree but was never possible to reserve it
-    return ERR_RETRY;
-  }
-  // successfully marked tree as reserved
-  p("maked tree %lu with %lu free frames as reserved\n", tree_idx, counter);
 
-  // set tree as locale and write back the prevoius reserved tree.
-  return set_pref_andwb(self, core, tree_idx, counter);
+  int64_t tree_idx;
+  int counter;
+  do {
+    tree_idx = find_free_Tree_IDX(self, core, has_reserved_tree(local),
+                                  get_reserved_pfn(local));
+    if (tree_idx < 0) {
+      // found no unreserved tree with some space in it -> try steal from other
+      // cpus
+      tree_idx = steal_tree(self, core);
+      if (tree_idx < 0) {
+        // not possible to steal a tree -> no memory availabe
+
+        // reset inreservation flag
+        unmark_as_searchig(local);
+        return ERR_MEMORY;
+      }
+    }
+    // try to reserve freed tree. If no success search another one
+    counter = update(reserve_tree(&self->trees[tree_idx]));
+  } while (counter < 0);
+
+  // we successfully reserved a tree -> now set it as our local tree.
+  set_preferred_and_writeback(self, core, pfnFromTreeIdx(tree_idx), counter);
+  return ERR_OK;
 }
 
-int inc_tree_counter(upper_t *self, size_t core, int64_t tree_idx,
-                     size_t order) {
+/**
+ * @brief Increases the Free counter of given Tree
+ * It will increase the local counter if it has the right tree reserved
+ * otherwise the global counter is increased
+ *
+ * @param self pointer to upper allocator
+ * @param core number of the core
+ * @param pfn in the Tree that will be Incremented
+ * @param order size of the frame
+ * @return ERR_OK on success
+ *         ERR_RETRY if atomic operation failed
+ */
+static int inc_tree_counter(upper_t const *const self, const size_t core,
+                            const pfn_rt pfn, size_t order) {
   local_t *local = get_local(self, core);
-  int ret = inc_free_counter(local, tree_idx, order);
-  if (ret == ERR_MEMORY) {
-    // given tree was not the local tree
-    // -> increment the global tree counter
-    // TODO
+  int ret = inc_local_free_counter(local, pfn, order);
+  if (ret == ERR_ADDRESS) {
+    // given tree was not the local tree -> increase global counter
+    ret = tree_counter_inc(&self->trees[getTreeIdx(pfn)], order);
   }
   return ret;
 }
@@ -283,7 +306,6 @@ void *llc_default() {
 int64_t llc_init(void *this, size_t cores, pfn_at start_pfn, size_t len,
                  uint8_t init, uint8_t free_all) {
   assert(this != NULL);
-
   assert(init == VOLATILE && "other modes not implemented"); // TODO recover
 
   // check if given memory is enough
@@ -296,7 +318,7 @@ int64_t llc_init(void *this, size_t cores, pfn_at start_pfn, size_t len,
   upper_t *upper = (upper_t *)this;
 
   init_default(&upper->lower, start_pfn, len); // allocates memory for lower
-  init_lower(&upper->lower, start_pfn, len, free_all);
+  init_lower(&upper->lower, free_all);
 
   upper->meta->magic = MAGIC;
   upper->meta->frames = len;
@@ -333,90 +355,82 @@ int64_t llc_init(void *this, size_t cores, pfn_at start_pfn, size_t len,
 int64_t llc_get(const void *this, size_t core, size_t order) {
   assert(this != NULL);
   assert(order == 0 || order == HP);
-
-  upper_t *self = (upper_t *)this;
+  upper_t const *const self = (upper_t *)this;
   local_t *local = get_local(self, core);
 
+  // decrease local freecounter
   int64_t atomic_idx;
   do {
-    atomic_idx = dec_free_counter(local, order);
-    if(atomic_idx >= 0) break;
-    if(atomic_idx == ERR_RETRY) continue;
+    atomic_idx = dec_local_free_counter(local, order);
+    if (atomic_idx >= 0)
+      // sucessfully decreased local free counter
+      break;
+    if (atomic_idx == ERR_RETRY)
+      continue;
+    // local freecounter is not enough -> sync with global counter and try again
+    if (has_reserved_tree(local) && sync_with_global(self, local))
+      continue;
 
     // not enouth frames in local tree available
     p("local has not enogh space- reserve new tree\n");
     int ret = update(reserve_new_tree(self, core));
     if (ret == ERR_MEMORY) {
-      // no tree found to reserve
-      assert(false && "no tree to reserve found");
+      // no Tree available -> no memory available
       return ERR_MEMORY;
     }
-  } while (atomic_idx < ERR_OK);
+  } while (atomic_idx < 0);
 
-  p("local tree has now %d free frames\n", local->reserved.free_counter);
-  // reserved tree with enough space an decremented local counter
-
-  int64_t pfn = lower_get(&self->lower, atomic_idx, order);
+  // reserved tree with enough space an decremented the local counter
+  const int64_t pfn = lower_get(&self->lower, atomic_idx, order);
   p("lower reserved frame no %ld in tree %ld\n", pfn, getTreeIdx(pfn));
   if (pfn == ERR_MEMORY) {
-    // not enough memory despite local tree had enogh frames
+    // no frames available in this tree despite local tree had enogh frames
+    // (possible fragmentation)
     int ret = try_update(inc_tree_counter(self, core, atomic_idx, order));
     if (ret != ERR_OK)
       // not possible to restore correct counter value in trees
       return ERR_CORRUPTION;
+    // successfully restored local tree
 
-    // successfully restored tree
-    // TODO try get a frame in another tree?
-    assert(false && "reserve in another tree?");
+    // TODO reserve another tree? -> if that ist danger of an andless loop
+    assert(false && "lower cant find a free frame but upper count suggest there must be some");
   }
   // sucessfully reserved frame in lower
+
+  // update reserved idx for faster search
+  update(update_preferred(local, pfn - self->lower.start_pfn));
   assert(pfn >= 0);
   return pfn;
 }
 
 /// Frees a frame, returning 0 on success or a negative error code
-int64_t llc_put(const void *this, size_t core, pfn_at frame_adr, size_t order) {
+int64_t llc_put(void const *const this, const size_t core,
+                const pfn_at frame_adr, const size_t order) {
   assert(this != NULL);
   assert(order == 0 || order == HP);
 
-  upper_t *self = (upper_t *)this;
+  upper_t const *const self = (upper_t *)this;
 
   int ret = lower_put(&self->lower, frame_adr, order);
   if (ret == ERR_ADDRESS) {
-    // frame_adr was out of managed memory ore not allocated
+    // frame_adr was out of managed memory region or not allocated
     return ERR_ADDRESS;
   }
   assert(ret == ERR_OK);
   // frame is succesfully freed in lower allocator
-  local_t *local = get_local(self, core);
-  pfn_rt frame = frame_adr - self->lower.start_pfn;
+  local_t *const local = get_local(self, core);
+  const pfn_rt frame = frame_adr - self->lower.start_pfn;
+  const size_t tree_idx = getTreeIdx(frame);
 
-  ret = update(inc_free_counter(local, frame, order));
-  if (ret == ERR_OK) {
-    // frame is successfully freed in locale tree
-    return ERR_OK;
-  }
-  if (ret == ERR_RETRY) {
-    // TODO whar now?
-    assert(false && "atomic failure in local data");
-  }
+  ret = update(inc_tree_counter(self, core, frame, order));
+  assert(ret == ERR_OK);
+  // successfully incremented counter in upper allocator
 
-  // frame is not in reserved tree
-  assert(ret == ERR_ADDRESS);
-  // in counter in trees array
-  size_t tree_idx = getTreeIdx(frame);
-  ret = update(tree_counter_inc(&self->trees[tree_idx], order));
-  if (ret != ERR_OK) {
-    // reservation faliure
-    // TODO
-  }
-  // free is  now registerd in trees
-
-  // TODO
+  // set last reserved in local
   ret = update(set_free_tree(local, frame));
   if (ret == ERR_OK) {
     return ERR_OK;
-  } 
+  }
 
   assert(ret == UPDATE_RESERVED);
   // this tree was the target of multiple consecutive frees
@@ -426,17 +440,21 @@ int64_t llc_put(const void *this, size_t core, pfn_at frame_adr, size_t order) {
     return ERR_OK;
   }
 
-  if(mark_as_searchig(local) != ERR_OK){
-    // the local tree is already in reservation process -> ignore the reserve last free tree optimisation
+  if (mark_as_searchig(local) != ERR_OK) {
+    // the local tree is already in reservation process -> ignore the reserve
+    // last free tree optimisation
     return ERR_OK;
   }
 
   int counter = update(reserve_tree(&self->trees[tree_idx]));
   if (counter < 0) {
-    // reservation of tree not possible -> ignore the reserve last free tree optimisation
-    local->reserved.reservation_in_progress = false; //TODO atomicly
+    // reservation of tree not possible -> ignore the reserve last free tree
+    // optimisation
+    unmark_as_searchig(local);
+    return ERR_OK;
   }
-  ret = set_pref_andwb(self, core, tree_idx, counter);
+  ret = set_preferred_and_writeback(self, core, pfnFromTreeIdx(tree_idx),
+                                    counter);
   assert(ret == ERR_OK);
 
   return ERR_OK;
@@ -445,7 +463,7 @@ int64_t llc_put(const void *this, size_t core, pfn_at frame_adr, size_t order) {
 /// Returns the total number of frames the allocator can allocate
 pfn_at llc_frames(const void *this) {
   assert(this != NULL);
-  upper_t *self = (upper_t *)this;
+  const upper_t *self = (upper_t *)this;
 
   return self->lower.length;
 }
@@ -453,7 +471,7 @@ pfn_at llc_frames(const void *this) {
 /// Returns number of currently free frames
 pfn_at llc_free_frames(const void *this) {
   assert(this != NULL);
-  upper_t *self = (upper_t *)this;
+  const upper_t *self = (upper_t *)this;
 
   return llc_frames(self) - allocated_frames(&self->lower);
 }
@@ -477,23 +495,58 @@ void llc_drop(void *this) {
   free(self->meta);
 }
 
-void llc_print(upper_t* self){
+/**
+ * @brief Debug-function prints information over trees and local Data
+ *
+ * @param self
+ */
+void llc_print(upper_t *self) {
   (void)(self);
-  #ifdef verbose
-  p("\nNr\t\t");
-  for(size_t i = 0; i < self->cores; ++i){
-    p("Core: %lu\t", i);
+  printf("-----------------------------------------------\nUPPER "
+         "ALLOCATOR\nTrees:\t%lu\nCores:\t%lu\n allocated: %lu, free: %lu, all: %lu\n",
+         self->num_of_trees, self->cores, llc_frames(self) - llc_free_frames(self), llc_free_frames(self), llc_frames(self));
+
+  printf("\nTrees:\n-----------------------------------------------\n");
+  if (self->num_of_trees > 20)
+    printf(
+        "There are over 20 Trees. Print will only contain first and last 10\n\n");
+
+  printf("Nr:\t\t");
+  for (size_t i = 0; i < self->num_of_trees; ++i) {
+    if (i < 10 || i >= self->num_of_trees - 10)
+      printf("%lu\t", i);
   }
-  p("\nTreeIDX:\t");
-  for(size_t i = 0; i < self->cores; ++i){
-    local_t* local = get_local(self, i);
-    p("%lu\t", getTreeIdx(get_reserved_tree_index(local)));
+  printf("\nreserved:\t");
+  for (size_t i = 0; i < self->num_of_trees; ++i) {
+    if (i < 10 || i >= self->num_of_trees - 10)
+      printf("%d\t", self->trees[i].flag);
   }
-  p("\nFreeFrames:\t");
-  for(size_t i = 0; i < self->cores; ++i){
-    local_t* local = get_local(self, i);
-    p("%u\t", local->reserved.free_counter);
+  printf("\nfree:\t\t");
+  for (size_t i = 0; i < self->num_of_trees; ++i) {
+    if (i < 10 || i >= self->num_of_trees - 10)
+      printf("%d\t", self->trees[i].counter);
   }
-  p("\n");
-  #endif
+  printf("\n");
+
+  printf("-----------------------------------------------\nLocal "
+         "Data:\n-----------------------------------------------\nNr\t\t");
+  for (size_t i = 0; i < self->cores; ++i) {
+    printf("Core: %lu\t", i);
+  }
+  printf("\nhas_tree:\t");
+  for (size_t i = 0; i < self->cores; ++i) {
+    local_t *local = get_local(self, i);
+    printf("%d\t", local->reserved.has_reserved_tree);
+  }
+  printf("\nTreeIDX:\t");
+  for (size_t i = 0; i < self->cores; ++i) {
+    local_t *local = get_local(self, i);
+    printf("%lu\t", getTreeIdx(get_reserved_pfn(local)));
+  }
+  printf("\nFreeFrames:\t");
+  for (size_t i = 0; i < self->cores; ++i) {
+    local_t *local = get_local(self, i);
+    printf("%u\t", local->reserved.free_counter);
+  }
+  printf("\n");
 }

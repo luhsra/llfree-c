@@ -88,7 +88,7 @@ bool unreserve_test(){
     actual = init_tree(counter, true);
     expect = init_tree(counter + frees, false);
 
-    ret = unreserve_tree(&actual, frees);
+    ret = writeback_tree(&actual, frees);
     check_equal(ret, ERR_OK);
     equal_trees(actual, expect)
 
@@ -97,7 +97,7 @@ bool unreserve_test(){
     actual = init_tree(counter, true);
     expect = init_tree(counter + frees, false);
 
-    ret = unreserve_tree(&actual, frees);
+    ret = writeback_tree(&actual, frees);
     check_equal(ret, ERR_OK);
     equal_trees(actual, expect)
 
