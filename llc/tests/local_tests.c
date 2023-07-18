@@ -4,7 +4,6 @@
 #include "enum.h"
 #include "pfn.h"
 
-// TODO all function tests
 bool init_local_test() {
   bool success = true;
 

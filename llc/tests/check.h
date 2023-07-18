@@ -13,20 +13,20 @@
 
 #define check(x,msg)    \
     if(!(x)) {          \
-        printf("\tFILE %s:%d:\n\tCheck " #x " failed: %s\n",__FILE__, __LINE__, msg); \
+        printf("\tFILE %s:%d:\n\tCheck %s failed: %s\n",__FILE__, __LINE__, #x,  msg); \
         success = false;   \
     }
 
 #define check_equal_m(actual,expected, msg)   \
     if((actual) != (expected)) {    \
-        printf("\tFILE %s:%d: Check " #actual " == " #expected " failed: %s\n\texpected: %d, actual value: %d\n",__FILE__, __LINE__, msg, expected, actual); \
+        printf("\tFILE %s:%d: Check %s == %s failed: %s\n\texpected: %d, actual value: %d\n",__FILE__, __LINE__, #actual, #expected, msg, expected, actual); \
         success = false;   \
     }
 #define check_equal(actual, expected) check_equal_m(actual, expected, "")
 
 #define check_uequal_m(actual,expected, msg)   \
     if((actual) != (expected)) {    \
-        printf("\tFILE %s:%d: Check " #actual " == " #expected " failed: %s\n\texpected: %lu, actual value: %lu\n",__FILE__, __LINE__, msg, expected, actual); \
+        printf("\tFILE %s:%d: Check %s == %s failed: %s\n\texpected: %lu, actual value: %lu\n",__FILE__, __LINE__, #actual, #expected, msg, expected, actual); \
         success = false;   \
     }
 #define check_uequal(actual, expected) check_uequal_m(actual, expected, "")

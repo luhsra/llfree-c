@@ -9,7 +9,6 @@
 #include "llc_tests.h"
 #include "tree_tests.h"
 
-//TODO test for right alignment
 
 int main(){
     int test_counter = 0;

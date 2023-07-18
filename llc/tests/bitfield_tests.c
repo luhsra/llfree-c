@@ -31,11 +31,6 @@ bool init_field_test(){
     actual = init_field(312, false);
     check_equal_bitfield_m(actual, expect, "all allocated");
 
-    expect = (bitfield_512_t) {{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}};
-    actual = init_field(0, false);
-    check_equal_bitfield_m(actual, expect, "all allocated");
-
-
     actual = init_field(1, false);
     check_equal_bitfield_m(actual, expect, "all allocated");
 

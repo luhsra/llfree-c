@@ -5,11 +5,12 @@
 #include "enum.h"
 #include "pfn.h"
 #include <assert.h>
+#include <stdalign.h>
 #include <stdint.h>
 #include <stdlib.h>
 
 #define check_child_number(expect)  \
-    check_uequal_m(actual.num_of_childs, expect, "schould have exactly 1 Child per 512 Frames");
+    check_uequal_m(actual.num_of_childs, (expect), "schould have exactly 1 Child per 512 Frames");
 
 #define bitfield_is_free(actual)    \
     check_equal_bitfield(actual, ((bitfield_512_t) {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}))
@@ -30,59 +31,76 @@
     free(lower.childs);
 
 
-bool init_lower_test(){
+bool init_lower_test(uint8_t init){
     bool success = true;
 
-    int pfn_start = 0;
-    int frames = 512;
+    uint64_t pfn_start = 0;
+    int frames = 1024;
     lower_t actual;
-    init_default(&actual, pfn_start, frames);
+    if(init != VOLATILE){
+        pfn_start = (uint64_t) aligned_alloc(CACHESIZE, sizeof(char) * frames * PAGESIZE);
+        assert(pfn_start != 0);
+    }
+    init_default(&actual, pfn_start, frames, init);
     int ret = init_lower(&actual, true);
     check_equal(ret, ERR_OK);
-    check_child_number(1ul);
+    check_child_number(2ul);
     bitfield_is_free(actual.fields[0])
     check_uequal(allocated_frames(&actual),0ul)
-    free_lower(actual)
+    if(init == VOLATILE){free_lower(actual);}
 
-    pfn_start = 0;
-    frames = 511;
-    init_default(&actual, pfn_start, frames);
+    frames = 1023;
+    if(init != VOLATILE){
+        free((char*) pfn_start);
+        pfn_start = (uint64_t) aligned_alloc(CACHESIZE, sizeof(char) * frames * PAGESIZE);
+        assert(pfn_start != 0);
+    }else{
+        pfn_start = 0;
+    }
+    init_default(&actual, pfn_start, frames, init);
     ret = init_lower(&actual, true);
-    check_child_number(1ul);
-    check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0,0,0,0,0,0,0,0x8000000000000000}))
+    check_child_number(2ul);
+    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0,0,0,0,0,0,0,init == VOLATILE ? 0x8000000000000000 : 0xC000000000000000}))
     check_uequal(allocated_frames(&actual),0ul)
-    free_lower(actual)
+    if(init == VOLATILE){free_lower(actual);}
 
-    pfn_start = 0;
     frames = 632;
-    init_default(&actual, pfn_start, frames);
+    if(init != VOLATILE){
+        free((char*) pfn_start);
+        pfn_start = (uint64_t) aligned_alloc(CACHESIZE, sizeof(char) * frames * PAGESIZE);
+        assert(pfn_start != 0);
+    }else{
+        pfn_start = 0;
+    }
+    init_default(&actual, pfn_start, frames, init);
     ret = init_lower(&actual, false);
     check_child_number(2ul);
-    bitfield_is_blocked_n(actual.fields,2)
-    check_uequal(allocated_frames(&actual),632ul)
-    free_lower(actual)
-
-    pfn_start = 0;
-    frames = 968;
-    init_default(&actual, pfn_start, frames);
-    ret = init_lower(&actual, true);
-    check_child_number(2ul);
-    bitfield_is_free(actual.fields[0])
-    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0x0,0x0,0x0,0x0,0x0,0x0,0x0,0xffffffffffffff00}))
-    check_uequal(allocated_frames(&actual),0ul)
-    free_lower(actual)
+    check_uequal(allocated_frames(&actual),  init == VOLATILE ? 632ul : 631ul)
+    if(init == VOLATILE){free_lower(actual);}
 
 
-    pfn_start = 0;
     frames = 685161;
-    init_default(&actual, pfn_start, frames);
+    if(init != VOLATILE){
+        free((char*) pfn_start);
+        pfn_start = (uint64_t) aligned_alloc(CACHESIZE, sizeof(char) * frames * PAGESIZE);
+        assert(pfn_start != 0);
+    }else{
+        pfn_start = 0;
+    }
+    init_default(&actual, pfn_start, frames, init);
     ret = init_lower(&actual, true);
     check_child_number(1339ul);
     bitfield_is_free_n(actual.fields, 1338)
-    check_equal_bitfield(actual.fields[1338], ((bitfield_512_t) {0x0,0xfffffe0000000000,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff}))
+    check_equal_bitfield(actual.fields[1338], ((bitfield_512_t) {0x0, init == VOLATILE ? 0xfffffe0000000000 : 0xfffffffffff80000 ,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff}))
     check_uequal(allocated_frames(&actual),0ul)
-    free_lower(actual)
 
+
+    //check alignment
+
+    check_uequal_m((uint64_t)actual.childs % CACHESIZE, 0ul , "array must be aligned to cachesize");
+    check_uequal_m((uint64_t)actual.fields % CACHESIZE, 0ul , "array must be aligned to cachesize");
+
+    if(init == VOLATILE){free_lower(actual);}
 
     return success;
 }
@@ -91,7 +109,7 @@ bool get_test(){
     bool success = true;
 
     lower_t actual;
-    init_default(& actual, 0, 1360);
+    init_default(& actual, 0, 1360, VOLATILE);
     assert(init_lower(&actual, true) == ERR_OK);
 
     int ret;
@@ -119,7 +137,7 @@ bool get_test(){
 
 
     free_lower(actual)
-    init_default(&actual, 0, 2);
+    init_default(&actual, 0, 2, VOLATILE);
     assert(init_lower(&actual, true) == ERR_OK);
 
     ret = lower_get(&actual,0,order);
@@ -135,7 +153,7 @@ bool get_test(){
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
 
     free_lower(actual)
-    init_default(&actual, 0, 166120);
+    init_default(&actual, 0, 166120, VOLATILE);
     assert(init_lower(&actual, true) == ERR_OK);
 
     ret = lower_get(&actual, 0,0);
@@ -158,7 +176,7 @@ bool put_test(){
     bool success = true;
 
     lower_t actual;
-    init_default(&actual, 0, 1360);
+    init_default(&actual, 0, 1360, VOLATILE);
     assert(init_lower(&actual, true) == ERR_OK);
 
     pfn_at pfn;
@@ -213,7 +231,7 @@ bool is_free_test(){
     bool success = true;
 
     lower_t actual;
-    init_default(&actual, 0, 1360);
+    init_default(&actual, 0, 1360, VOLATILE);
     assert(init_lower(&actual, true) == ERR_OK);
 
     int ret;
@@ -229,7 +247,7 @@ bool is_free_test(){
 
     free_lower(actual);
 
-    init_default(&actual, 0, 1360);
+    init_default(&actual, 0, 1360, VOLATILE);
     assert(init_lower(&actual, false) == ERR_OK);
 
     ret = is_free(&actual, pfn, order);
@@ -256,7 +274,7 @@ int lower_HP_tests(){
     bool success = true;
 
     lower_t actual;
-    init_default(&actual, 0, FIELDSIZE * 60);
+    init_default(&actual, 0, FIELDSIZE * 60, VOLATILE);
     assert(init_lower(&actual, true) == ERR_OK);
 
     int64_t pfn1 = lower_get(&actual, 0, HP);
@@ -307,10 +325,11 @@ int lower_HP_tests(){
     int64_t pfn = lower_get(&actual, 0, HP);
     check(pfn == ERR_MEMORY,"");
 
-    // return HP as regular Frame must fail
-    check(lower_put(&actual, pfn1, 0) == ERR_ADDRESS, "");
+    // return HP as regular Frame must succseed
+    check(lower_put(&actual, pfn1, 0) == ERR_OK, "");
+    // HP ist converted into regular frames so returning the whole page must fail
+    check(lower_put(&actual, pfn1, HP) == ERR_ADDRESS, "");
 
-    check(lower_put(&actual, pfn1, HP) == ERR_OK, "");
     check(lower_put(&actual, pfn2, HP) == ERR_OK, "");
 
     //check if right amout of free reguale frames are present
@@ -323,16 +342,61 @@ int lower_HP_tests(){
     return success;
 }
 
+int init_persistent_test(){
+    return init_lower_test(OVERWRITE);
+}
+
+int init_volatile_test(){
+    return init_lower_test(VOLATILE);
+}
+
+
+int free_all_test(){
+    bool success = true;
+    const uint64_t len = (1 << 13) + 35; //16 HP + 35 regular frames
+    char* memory = aligned_alloc(CACHESIZE, PAGESIZE * len);
+    assert(memory != NULL);
+    const uint64_t start_adr = (uint64_t) memory;
+
+    lower_t lower;
+    init_default(&lower, start_adr, len, OVERWRITE);
+    int ret = init_lower(&lower, false);
+    assert(ret == ERR_OK);
+    check_uequal_m(lower.length, len -1, "one frame for management structures");
+    check_uequal_m(lower.length - allocated_frames(&lower), 0ul, "all_frames_are_allocated");
+
+    //free all HPs
+    for(int i = 0; i < 15; ++i){
+        ret = lower_put(&lower, start_adr + i*512, HP);
+        check_equal(ret, ERR_OK);
+    }
+    check_uequal_m(allocated_frames(&lower), 512ul + 34, "one allocated HF and the 34 regular frames");
+
+    // free last HP as regular frame and regular frames
+    const uint64_t start = start_adr + 15 * 512;
+    for(int i = 0; i < 512 + 34; ++i){
+        ret = lower_put(&lower, start + i, 0);
+        check_equal(ret, ERR_OK);
+    }
+
+    check_uequal_m(allocated_frames(&lower), 0ul, "lower should be completely free");
+
+    free(memory);
+    return success;
+}
+
 
 
 
 //runns all tests an returns the number of failed Tests
 int lower_tests(int* test_counter, int* fail_counter){
 
-    run_test(init_lower_test);
+    run_test(init_volatile_test);
+    run_test(init_persistent_test)
     run_test(get_test);
     run_test(put_test);
     run_test(is_free_test);
     run_test(lower_HP_tests);
+    run_test(free_all_test);
     return 0;
 }

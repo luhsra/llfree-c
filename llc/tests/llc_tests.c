@@ -101,6 +101,7 @@ bool check_init(upper_t *upper, size_t cores, pfn_at start_pfn, size_t len,
   int ret = llc_init(upper, cores, start_pfn, len, init, free_all);
   size_t num_trees = div_ceil(len, TREESIZE);
   size_t num_childs = div_ceil(len, CHILDSIZE);
+  check_uequal((uint64_t)upper->trees % CACHESIZE, 0ul)
 
   check(ret == ERR_OK, "init is success");
   check_uequal(upper->num_of_trees, num_trees);

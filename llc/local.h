@@ -7,6 +7,11 @@
 #include <stdint.h>
 
 #define UPDATE_RESERVED 1
+//metadata for llc
+struct meta {
+    uint32_t magic;
+    bool crashed;
+};
 
 
 //TODO Description

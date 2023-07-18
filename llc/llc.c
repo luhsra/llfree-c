@@ -238,7 +238,8 @@ static int reserve_new_tree(upper_t const *const self, size_t const core) {
     p("reservation already in progress. start spinning\n");
     // already in reservation
     // spinwait for the other CPU to finish
-    while((reserved_t){load(&local->reserved.raw)}.reservation_in_progress){};
+    while ((reserved_t){load(&local->reserved.raw)}.reservation_in_progress) {
+    };
     return ERR_OK;
   }
 
@@ -296,8 +297,6 @@ static int inc_tree_counter(upper_t const *const self, const size_t core,
 void *llc_default() {
   upper_t *upper = malloc(sizeof(upper_t));
   assert(upper != NULL);
-  upper->meta = malloc(sizeof(struct meta));
-  assert(upper->meta != NULL);
   return upper;
 }
 
@@ -306,7 +305,8 @@ void *llc_default() {
 int64_t llc_init(void *this, size_t cores, pfn_at start_pfn, size_t len,
                  uint8_t init, uint8_t free_all) {
   assert(this != NULL);
-  assert(init == VOLATILE && "other modes not implemented"); // TODO recover
+  assert((init == VOLATILE || init == OVERWRITE || init == RECOVER) &&
+         "recover not implemented jet");
 
   // check if given memory is enough
   if (len < MIN_PAGES || len > MAX_PAGES)
@@ -315,39 +315,53 @@ int64_t llc_init(void *this, size_t cores, pfn_at start_pfn, size_t len,
   if (start_pfn % (1 << MAX_ORDER) != 0)
     return ERR_INITIALIZATION;
 
-  upper_t *upper = (upper_t *)this;
+  upper_t *self = (upper_t *)this;
+  if (init == VOLATILE) {
+    self->meta = NULL;
+  } else {
+    const uint64_t end_managed_memory = start_pfn + len * PAGESIZE;
+    self->meta = (struct meta *)(end_managed_memory - sizeof(struct meta));
+  }
 
-  init_default(&upper->lower, start_pfn, len); // allocates memory for lower
-  init_lower(&upper->lower, free_all);
+  init_default(&self->lower, start_pfn, len, init);
+  if (init == RECOVER) {
+    if (self->meta->magic != MAGIC)
+      return ERR_INITIALIZATION;
+    if (self->meta->crashed)
+      lower_recover(&self->lower);
+  } else {
+    init_lower(&self->lower, free_all);
+  }
 
-  upper->meta->magic = MAGIC;
-  upper->meta->frames = len;
-
-  upper->num_of_trees = div_ceil(upper->lower.num_of_childs, CHILDS_PER_TREE);
-  upper->trees =
-      malloc(sizeof(child_t) * upper->num_of_trees); // TODO remove malloc
-  assert(upper->trees != NULL);
+  self->num_of_trees = div_ceil(self->lower.num_of_childs, CHILDS_PER_TREE);
+  self->trees = aligned_alloc(
+      CACHESIZE, sizeof(child_t) * self->num_of_trees); // TODO remove malloc
+  assert(self->trees != NULL);
+  if(self->trees == NULL) return ERR_INITIALIZATION;
 
   // check if more cores than trees -> if not shared locale data
   size_t len_locale;
-  if (cores > upper->num_of_trees) {
-    len_locale = upper->num_of_trees;
+  if (cores > self->num_of_trees) {
+    len_locale = self->num_of_trees;
   } else {
     len_locale = cores;
   }
-  upper->cores = len_locale;
-  upper->local = malloc(sizeof(local_t) * len_locale);
+  self->cores = len_locale;
+  self->local = malloc(sizeof(local_t) * len_locale); // TODO remove malloc
+  
+  assert(self->local != NULL);
+  if(self->trees == NULL) return ERR_INITIALIZATION;
 
-  assert(upper->local != NULL);
 
   // init local data do default 0
-  for (size_t local_idx = 0; local_idx < upper->cores; ++local_idx) {
-    init_local(&upper->local[local_idx]);
+  for (size_t local_idx = 0; local_idx < self->cores; ++local_idx) {
+    init_local(&self->local[local_idx]);
   }
 
-  init_trees(upper);
+  init_trees(self);
 
-  upper->meta->crashed = true;
+  if (init != VOLATILE)
+    self->meta->crashed = true;
   return ERR_OK;
 }
 
@@ -393,7 +407,8 @@ int64_t llc_get(const void *this, size_t core, size_t order) {
     // successfully restored local tree
 
     // TODO reserve another tree? -> if that ist danger of an andless loop
-    assert(false && "lower cant find a free frame but upper count suggest there must be some");
+    assert(false && "lower cant find a free frame but upper count suggest "
+                    "there must be some");
   }
   // sucessfully reserved frame in lower
 
@@ -487,12 +502,12 @@ void llc_drop(void *this) {
   assert(this != NULL);
   upper_t *self = (upper_t *)this;
 
-  self->meta->magic = false;
+  if (self->meta != NULL)
+    self->meta->crashed = false;
 
   lower_drop(&self->lower);
   free(self->trees);
   free(self->local);
-  free(self->meta);
 }
 
 /**
@@ -503,13 +518,16 @@ void llc_drop(void *this) {
 void llc_print(upper_t *self) {
   (void)(self);
   printf("-----------------------------------------------\nUPPER "
-         "ALLOCATOR\nTrees:\t%lu\nCores:\t%lu\n allocated: %lu, free: %lu, all: %lu\n",
-         self->num_of_trees, self->cores, llc_frames(self) - llc_free_frames(self), llc_free_frames(self), llc_frames(self));
+         "ALLOCATOR\nTrees:\t%lu\nCores:\t%lu\n allocated: %lu, free: %lu, "
+         "all: %lu\n",
+         self->num_of_trees, self->cores,
+         llc_frames(self) - llc_free_frames(self), llc_free_frames(self),
+         llc_frames(self));
 
   printf("\nTrees:\n-----------------------------------------------\n");
   if (self->num_of_trees > 20)
-    printf(
-        "There are over 20 Trees. Print will only contain first and last 10\n\n");
+    printf("There are over 20 Trees. Print will only contain first and last "
+           "10\n\n");
 
   printf("Nr:\t\t");
   for (size_t i = 0; i < self->num_of_trees; ++i) {

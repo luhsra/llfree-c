@@ -15,19 +15,19 @@ static pos_t get_pos(int index){
     return pos;
 }
 
-bitfield_512_t init_field(int number_of_free_Frames, bool start_free){
+bitfield_512_t init_field(int number_of_free_Frames, bool all_free){
     
     assert(0 <= number_of_free_Frames && number_of_free_Frames < FIELDSIZE);
     bitfield_512_t field;
 
-    if(!start_free){
+    if(!all_free && number_of_free_Frames > 0){
         for(size_t i = 0; i < N; i++){
             field.rows[i] = 0xfffffffffffffffful;
         }
         return field;
     }
     // 0 free frames mean all are free
-    // is nicer with mod syntax
+    // its nicer with mod syntax
     if(number_of_free_Frames == 0){
         for(size_t i = 0; i < N; i++){
             field.rows[i] = 0x0ul;

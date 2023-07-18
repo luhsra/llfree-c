@@ -75,10 +75,15 @@ int free_HP(child_t* self);
 
 
 /**
- * @brief atomically reads and returns the raw Value of the given flagcounter
- * @param self flagcounter to read
- * @return raw value of the flagcounter
+ * @brief atomically reads and returns the counter Value of the given child
+ * @param self pointer to child
+ * @return value of the counter
  */
 uint16_t get_counter(child_t* self);
 
-
+/**
+ * @brief atomically reads and returns the counter Value of the given child
+ * @param self pointer to child
+ * @return value of the counter
+ */
+bool is_HP(child_t* self);

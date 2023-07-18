@@ -8,6 +8,8 @@
 #include <stdint.h>
 
 #define CHILDS_PER_TREE 32
+#define PAGESIZE (1 << 12)
+
 
 typedef struct lower {
   pfn_at start_pfn;
@@ -18,12 +20,14 @@ typedef struct lower {
 } lower_t;
 
 /**
- * @brief allocates memory for the bitfields and flagcounters
+ * @brief setups the lower by initializing the pointer
+ * if volatile_mem is set it will malloc the needed space otherwise the pointer will be set into the given memory.
  * @param self pointer to the lower object
  * @param start_pfn currently ununsed
  * @param len amount of frames to be managed
- */
-void init_default(lower_t *const self, pfn_at start_pfn, size_t len);
+ * @param volatile_mem decides where space for the datastructures are allocated
+  */
+void init_default(lower_t *const self, pfn_at start_pfn, size_t len, uint8_t init);
 
 /**
  * @brief initialize the lower object and the bitfields and childs
@@ -36,6 +40,15 @@ void init_default(lower_t *const self, pfn_at start_pfn, size_t len);
  * @return ERR_OK
  */
 int init_lower(lower_t const *const self, bool free_all);
+
+
+/**
+ * @brief Recovers the state from persistend memory
+ * checks and possibly corrects the freecounter in childs
+ * @param self pointer to lower allocator
+ * @return ERR_OK
+ */
+int lower_recover(lower_t* self);
 
 /**
  * @brief allocates frames

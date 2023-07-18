@@ -15,13 +15,6 @@
 #define MIN_PAGES 1ul << 9        //TODO check amount - Min size needed for datastructure in persistend memory
 #define MAX_PAGES 1ul << 52        // 64 Bit Adresses - 12 Bit needed for offset inside the Page
 
-
-struct meta {
-    uint32_t magic;
-    size_t frames;
-    bool crashed;
-};
-
 typedef struct upper {
     struct meta* meta;
     lower_t lower;

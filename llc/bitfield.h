@@ -19,7 +19,7 @@ typedef struct bitfield_512{
 // Helping struct to store the position of a bit in a bitfield.
 typedef struct pos {
     size_t row_index;     // 0 <= row_number < N
-    size_t bit_index;     // 0 <= bit_number < CACHESIZE
+    size_t bit_index;     // 0 <= bit_number < sizeof(uint64_t)
 }pos_t;
 
 /**
@@ -29,7 +29,7 @@ typedef struct pos {
  * @param start_allocated if set, all bits will be set to 1.
  * @return The inizialized bitfield
  */
-bitfield_512_t init_field(int number_of_free_Frames, bool start_allocated);
+bitfield_512_t init_field(int number_of_free_Frames, bool all_free);
 
 /**
 * @brief Atomic search for the first unset Bit in given field and set it to 1.
