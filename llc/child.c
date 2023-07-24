@@ -59,13 +59,3 @@ int reserve_HP(child_t *self) {
     return ERR_MEMORY;
   return cas(self, &old, desire);
 }
-
-uint16_t get_counter(child_t *self) {
-  child_t child = {load(&self->raw)};
-  return child.counter;
-}
-
-bool is_HP(child_t *self) {
-  child_t child = {load(&self->raw)};
-  return child.flag;
-}

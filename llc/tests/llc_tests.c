@@ -36,8 +36,8 @@ bool general_function_test() {
 
   p("Before get\n");
 
-  ret = llc_get(upper, 0, 0);
-  check(ret >= 0, "reservation must be success");
+  int64_t frame = llc_get(upper, 0, 0);
+  check(frame >= 0, "reservation must be success");
 
   check(llc_frames(upper) == 132000, "");
   check(llc_free_frames(upper) == 131999, "right number of free frames");
@@ -55,7 +55,6 @@ bool general_function_test() {
 
   p("After get mit core 0\n");
 
-  int64_t frame = ret;
   ret = llc_put(upper, 0, frame, 0);
 
   check(ret == ERR_OK, "successfully free");

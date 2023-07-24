@@ -348,7 +348,7 @@ int64_t llc_init(void *this, size_t cores, pfn_at start_pfn, size_t len,
   }
   self->cores = len_locale;
   self->local = malloc(sizeof(local_t) * len_locale); // TODO remove malloc
-  
+
   assert(self->local != NULL);
   if(self->trees == NULL) return ERR_INITIALIZATION;
 
@@ -400,7 +400,7 @@ int64_t llc_get(const void *this, size_t core, size_t order) {
   if (pfn == ERR_MEMORY) {
     // no frames available in this tree despite local tree had enogh frames
     // (possible fragmentation)
-    int ret = try_update(inc_tree_counter(self, core, atomic_idx, order));
+    int ret = try_update(inc_tree_counter(self, core, pfnFromAtomicIdx(atomic_idx), order));
     if (ret != ERR_OK)
       // not possible to restore correct counter value in trees
       return ERR_CORRUPTION;

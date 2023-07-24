@@ -9,13 +9,16 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define u64MAX 0xffffffffffffffff
+
+
 #define check_child_number(expect)  \
     check_uequal_m(actual.num_of_childs, (expect), "schould have exactly 1 Child per 512 Frames");
 
 #define bitfield_is_free(actual)    \
     check_equal_bitfield(actual, ((bitfield_512_t) {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}))
 #define bitfield_is_blocked(actual) \
-    check_equal_bitfield(actual, ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
+    check_equal_bitfield(actual, ((bitfield_512_t) {u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}))
 
 #define bitfield_is_free_n(actual, n)    \
     for(size_t i = 0; i < n; i++){  \
@@ -91,7 +94,7 @@ bool init_lower_test(uint8_t init){
     ret = init_lower(&actual, true);
     check_child_number(1339ul);
     bitfield_is_free_n(actual.fields, 1338)
-    check_equal_bitfield(actual.fields[1338], ((bitfield_512_t) {0x0, init == VOLATILE ? 0xfffffe0000000000 : 0xfffffffffff80000 ,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff}))
+    check_equal_bitfield(actual.fields[1338], ((bitfield_512_t) {0x0, init == VOLATILE ? 0xfffffe0000000000 : 0xfffffffffff80000 ,u64MAX,u64MAX,u64MAX,u64MAX,u64MAX,u64MAX}))
     check_uequal(allocated_frames(&actual),0ul)
 
 
@@ -132,8 +135,8 @@ bool get_test(){
         ret = lower_get(&actual,0,order);
         check_equal(ret, (i + 3));
     }
-    check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
-    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
+    check_equal_bitfield(actual.fields[0], ((bitfield_512_t){u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}))
+    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, 0x1fffffffffffffff, 0x0}))
 
 
     free_lower(actual)
@@ -142,15 +145,15 @@ bool get_test(){
 
     ret = lower_get(&actual,0,order);
     check_equal(ret, 0);
-    check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0xfffffffffffffffd, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
+    check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0xfffffffffffffffd, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}))
 
     ret = lower_get(&actual,0,order);
     check_equal(ret, 1);
-    check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
+    check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}))
 
     ret = lower_get(&actual,0,order);
     check_equal(ret, ERR_MEMORY);
-    check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
+    check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}))
 
     free_lower(actual)
     init_default(&actual, 0, 166120, VOLATILE);
@@ -187,40 +190,40 @@ bool put_test(){
         ret = lower_get(&actual,0,order);
         assert(ret >= 0);
     }
-    check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
-    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
+    check_equal_bitfield(actual.fields[0], ((bitfield_512_t){u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}))
+    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, 0x1fffffffffffffff, 0x0}))
 
     pfn = 0;
     ret = lower_put(&actual, pfn, order);
     check_equal(ret, ERR_OK)
-    check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
-    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
+    check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}))
+    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, 0x1fffffffffffffff, 0x0}))
 
     // wiederholtes put auf selbe stelle
     pfn = 0;
     ret = lower_put(&actual, pfn, order);
     check_equal(ret, ERR_ADDRESS)
-    check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
-    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
+    check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}))
+    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, 0x1fffffffffffffff, 0x0}))
 
     pfn = 957;
     ret = lower_put(&actual, pfn, order);
     check_equal(ret, ERR_ADDRESS)
-    check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
-    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
+    check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}))
+    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, 0x1fffffffffffffff, 0x0}))
     
     pfn = 561;
     ret = lower_put(&actual, pfn, order);
     check_equal(ret, ERR_OK)
-    check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
-    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xfffdffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
+    check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}))
+    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xfffdffffffffffff, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, 0x1fffffffffffffff, 0x0}))
 
     //größer als die größte pfn
     pfn = 1361;
     ret = lower_put(&actual, pfn, order);
     check_equal(ret, ERR_ADDRESS)
-    check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}))
-    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xfffdffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0x1fffffffffffffff, 0x0}))
+    check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}))
+    check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {0xfffdffffffffffff, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, 0x1fffffffffffffff, 0x0}))
 
     free_lower(actual);
     return success;
@@ -326,14 +329,14 @@ int lower_HP_tests(){
     check(pfn == ERR_MEMORY,"");
 
     // return HP as regular Frame must succseed
-    check(lower_put(&actual, pfn1, 0) == ERR_OK, "");
+    check(lower_put(&actual, pfn2, 0) == ERR_OK, "");
     // HP ist converted into regular frames so returning the whole page must fail
-    check(lower_put(&actual, pfn1, HP) == ERR_ADDRESS, "");
+    check(lower_put(&actual, pfn2, HP) == ERR_ADDRESS, "");
 
-    check(lower_put(&actual, pfn2, HP) == ERR_OK, "");
+    check(lower_put(&actual, pfn1, HP) == ERR_OK, "");
 
-    //check if right amout of free reguale frames are present
-    check_uequal(actual.length - allocated_frames(&actual), 2ul * FIELDSIZE);
+    //check if right amout of free regular frames are present
+    check_uequal(actual.length - allocated_frames(&actual), FIELDSIZE + 1ul);
 
     //new aquired frame should be in same positon as the old no 1
     check(lower_get(&actual, 0, HP) == pfn1, "");

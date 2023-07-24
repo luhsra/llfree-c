@@ -80,7 +80,7 @@ int init_lower(lower_t const *const self, bool all_free) {
   if (frames_in_last_field == 0)
     frames_in_last_field = FIELDSIZE;
   self->childs[self->num_of_childs - 1] =
-      init_child(all_free ? frames_in_last_field : 0, false);
+      init_child(all_free ? frames_in_last_field : 0, !all_free && frames_in_last_field == FIELDSIZE);
   return ERR_OK;
 }
 
@@ -117,6 +117,23 @@ int64_t get_HP(lower_t const *const self, pfn_rt atomic_idx) {
   return ERR_MEMORY;
 }
 
+/**
+ * @brief searches and reserves a frame in Bitfield with with index
+ * 
+ * @param self pointer to lower
+ * @param idx index of the Bitfield that is searched
+ * @return adress of the reseved frame on success
+ *         ERR_MEMORY if no free Frame were found
+ */
+static int64_t reserve_in_Bitfield(const lower_t *self, const size_t idx) {
+  const int64_t pos = update(set_Bit(&self->fields[idx]));
+  if (pos >= 0) {
+    // found and reserved a frame
+    return pfnFromChildIdx(idx) + pos + self->start_pfn;
+  }
+  return ERR_MEMORY;
+}
+
 int64_t lower_get(lower_t const *const self, int64_t atomic_idx, size_t order) {
   assert(order == 0 || order == HP);
   pfn_rt pfn = pfnFromAtomicIdx(atomic_idx);
@@ -127,55 +144,39 @@ int64_t lower_get(lower_t const *const self, int64_t atomic_idx, size_t order) {
     return get_HP(self, atomic_idx);
 
   const size_t start_idx = getChildIdx(pfn);
-  const size_t base = start_idx - (start_idx % CHILDS_PER_TREE);
 
-  for (size_t i = 0; i < CHILDS_PER_TREE; ++i) {
-    size_t current_idx = base + ((start_idx + i) % CHILDS_PER_TREE);
+  ITERRATE(
+      start_idx, CHILDS_PER_TREE,
+      if (current_i >= self->num_of_childs) continue;
 
-    if (current_idx >= self->num_of_childs)
-      current_idx = base;
+      if (update(child_counter_dec(&self->childs[current_i])) == ERR_OK) {
+        int64_t pfn_adr = reserve_in_Bitfield(self, current_i);
 
-    if (update(child_counter_dec(&self->childs[current_idx])) == ERR_OK) {
-      int64_t pos;
-      do {
-        pos = set_Bit(&self->fields[current_idx]);
-        if (pos >= 0) {
-          // found and reserved a frame
-          return pfnFromChildIdx(current_idx) + pos + self->start_pfn;
-        }
-      } while (pos == ERR_RETRY);
+        assert(pfn_adr >= 0 && "because of the counter in child there must always be a frame left");
+        if(pfn_adr == ERR_MEMORY) return ERR_CORRUPTION;
 
-      assert(pos == ERR_MEMORY);
-      // not possible to reserve a frame even in child were enough free frames
-
-      int ret = try_update(child_counter_inc(&self->childs[current_idx]));
-      if (ret != ERR_OK) {
-        // not possible to restore childcounter to correct value
-        return ERR_CORRUPTION;
-      }
-
-      // childcounter is restored
-      assert(false); // TODO make sure caller handels this case correctly
-      return ERR_RETRY;
-    }
-  }
+        return pfn_adr;
+      });
 
   return ERR_MEMORY;
 }
 
-void converte_HP_to_regular(child_t *child, bitfield_512_t *field) {
+void convert_HP_to_regular(child_t *child, bitfield_512_t *field) {
   const uint64_t before = atomic_fetch_or(&field->rows[0], 0xFFFFFFFFFFFFFFFF);
   if (before != 0) {
-    // another thread ist trying to breakeup this HP 
+    // another thread ist trying to breakeup this HP
     // -> wait for their completion
-    while (is_HP(child)){}
+    while (is_HP(child)) {
+    }
     return;
   }
-  for(size_t i = 1; i < N; ++i){
+  for (size_t i = 1; i < N; ++i) {
     atomic_fetch_or(&field->rows[i], 0xFFFFFFFFFFFFFFFF);
   }
-  int ret = free_HP(child);
-  assert(ret == ERR_OK);
+
+  child_t mask = init_child(0, true);
+  child_t before_c = {atomic_fetch_and(&child->raw, ~mask.raw)};
+  assert(before_c.flag == true);
   return;
 }
 
@@ -196,7 +197,7 @@ int lower_put(lower_t const *const self, pfn_at frame_adr, size_t order) {
   }
 
   if (is_HP(child)) {
-    converte_HP_to_regular(child, field);
+    convert_HP_to_regular(child, field);
   }
 
   size_t field_index = (frame_number) % FIELDSIZE;
@@ -206,8 +207,7 @@ int lower_put(lower_t const *const self, pfn_at frame_adr, size_t order) {
 
   ret = update(child_counter_inc(child));
   if (ret == ERR_ADDRESS) {
-    // somehow we are not able to increase the child_counter ->try reset the
-    // bitfield
+    assert(false && "should never be possible");
   }
 
   return ERR_OK;

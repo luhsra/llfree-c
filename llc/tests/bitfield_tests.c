@@ -7,6 +7,9 @@
 #include <stdio.h>
 #include "../enum.h"
 
+#define u64MAX 0xffffffffffffffff
+
+
 bool init_field_test(){
     bool success = true;
 
@@ -15,19 +18,19 @@ bool init_field_test(){
     actual = init_field(0, true);
     check_equal_bitfield_m(actual, expect, "full init");
 
-    expect = (bitfield_512_t) {{0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}};
+    expect = (bitfield_512_t) {{0xfffffffffffffffe, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}};
     actual = init_field(1, true);
     check_equal_bitfield_m(actual, expect, "init with no free frames");
 
 
-    expect = (bitfield_512_t) {{0x0, 0x0, 0x0, 0xffc0000000000000, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}};
+    expect = (bitfield_512_t) {{0x0, 0x0, 0x0, 0xffc0000000000000, u64MAX, u64MAX, u64MAX, u64MAX}};
     actual = init_field(246, true);
     check_equal_bitfield_m(actual, expect, "init with partial frames");
 
 
     //Initial all allocated tests
 
-    expect = (bitfield_512_t) {{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}};
+    expect = (bitfield_512_t) {{u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}};
     actual = init_field(312, false);
     check_equal_bitfield_m(actual, expect, "all allocated");
 
@@ -59,7 +62,7 @@ bool find_unset_test(){
     check_uequal(pos.bit_index, 1lu);
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
-    actual = (bitfield_512_t) {{0x1fffffffff,0x0,0x0,0x1,0x0,0x0,0x0,0xffffffffffffffff}};
+    actual = (bitfield_512_t) {{0x1fffffffff,0x0,0x0,0x1,0x0,0x0,0x0,u64MAX}};
     expected = actual;
     ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
@@ -68,7 +71,7 @@ bool find_unset_test(){
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
 
-    actual = (bitfield_512_t) {{0xffffffffffffffff,0xffffffffffffffff,0x0,0x1,0x0,0xffffffffffffffff,0x0,0x0}};
+    actual = (bitfield_512_t) {{u64MAX,u64MAX,0x0,0x1,0x0,u64MAX,0x0,0x0}};
     expected = actual;
     ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
@@ -77,7 +80,7 @@ bool find_unset_test(){
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
 
-    actual = (bitfield_512_t) {{0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0x7fffffffffffffff,0x0,0x0,0xffffffffffffffff,0x0}};
+    actual = (bitfield_512_t) {{u64MAX,u64MAX,u64MAX,0x7fffffffffffffff,0x0,0x0,u64MAX,0x0}};
     expected = actual;
     ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
@@ -85,7 +88,7 @@ bool find_unset_test(){
     check_uequal(pos.bit_index, 63lu);
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
-    actual = (bitfield_512_t) {{0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0x7fffffffffffffff}};
+    actual = (bitfield_512_t) {{u64MAX,u64MAX,u64MAX,u64MAX,u64MAX,u64MAX,u64MAX,0x7fffffffffffffff}};
     expected = actual;
     ret = find_unset(&actual, &pos);
     check_equal(ret, 0);
@@ -93,7 +96,7 @@ bool find_unset_test(){
     check_uequal(pos.bit_index, 63lu);
     check_equal_bitfield_m(actual, expected, "field should not be changed");
 
-    actual = (bitfield_512_t) {{0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff}};
+    actual = (bitfield_512_t) {{u64MAX,u64MAX,u64MAX,u64MAX,u64MAX,u64MAX,u64MAX,u64MAX}};
     expected = actual;
     ret = find_unset(&actual, &pos);
     check_equal_m(ret, ERR_MEMORY, "should be no space available");
@@ -122,24 +125,24 @@ bool set_Bit_test(){
     check_equal(ret, 1);
     check_equal_bitfield(actual, expected);
 
-    actual = (bitfield_512_t)   {{0xffffffffffffffff,0xf,0x0,0x0,0x0,0x0,0x0,0x0}};
-    expected = (bitfield_512_t) {{0xffffffffffffffff,0x1f,0x0,0x0,0x0,0x0,0x0,0x0}};
+    actual = (bitfield_512_t)   {{u64MAX,0xf,0x0,0x0,0x0,0x0,0x0,0x0}};
+    expected = (bitfield_512_t) {{u64MAX,0x1f,0x0,0x0,0x0,0x0,0x0,0x0}};
 
     ret = set_Bit(&actual);
     check_equal_m(ret, 68, "call should be a success");
     check_equal_bitfield(actual, expected);
 
 
-    actual = (bitfield_512_t)   {{0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xfabdeadbeeffffff,0x0,0xdeadbeefdeadbeef,0x0,0x8000000000000000}};
-    expected = (bitfield_512_t) {{0xffffffffffffffff,0xffffffffffffffff,0xffffffffffffffff,0xfabdeadbefffffff,0x0,0xdeadbeefdeadbeef,0x0,0x8000000000000000}};
+    actual = (bitfield_512_t)   {{u64MAX,u64MAX,u64MAX,0xfabdeadbeeffffff,0x0,0xdeadbeefdeadbeef,0x0,0x8000000000000000}};
+    expected = (bitfield_512_t) {{u64MAX,u64MAX,u64MAX,0xfabdeadbefffffff,0x0,0xdeadbeefdeadbeef,0x0,0x8000000000000000}};
 
     ret = set_Bit(&actual);
     check_equal_m(ret, 216, "call should be a success");
     check_equal_bitfield_m(actual, expected, "row 3 bit 24 -> e to f");
 
 
-    actual = (bitfield_512_t)   {{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}};
-    expected = (bitfield_512_t) {{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}};
+    actual = (bitfield_512_t)   {{u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}};
+    expected = (bitfield_512_t) {{u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}};
 
     ret = set_Bit(&actual);
     check_equal_m(ret, ERR_MEMORY, "call should fail");
@@ -227,8 +230,8 @@ bool count_Set_Bits_test(){
 
 
 
-    actual = (bitfield_512_t) {{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}};
-    expect = (bitfield_512_t) {{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff}};
+    actual = (bitfield_512_t) {{u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}};
+    expect = (bitfield_512_t) {{u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}};
 
     
     ret = count_Set_Bits(&actual);
@@ -255,7 +258,7 @@ bool is_free_bit_test(){
     check_equal_bitfield_m(actual, expect, "no change!");
 
 
-    actual = (bitfield_512_t) {{0x618f66ac6dead122,0xffffffffffffffff,0x0,0x0,0x0,0x0,0x0,0x0}};
+    actual = (bitfield_512_t) {{0x618f66ac6dead122,u64MAX,0x0,0x0,0x0,0x0,0x0,0x0}};
     expect = actual;
 
     ret = is_free_bit(&actual, 43);

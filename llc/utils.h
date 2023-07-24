@@ -30,7 +30,7 @@ size_t div_ceil(uint64_t a, int b);
     const size_t _offset = (idx) % (len);                                      \
     const size_t _base_idx = (idx)-_offset;                                    \
     for (size_t _i = 0; _i < (len); ++_i) {                                    \
-      const size_t current_i = (_base_idx + _offset + _i) % (len);             \
+      const size_t current_i = _base_idx + ((_offset + _i) % (len));           \
       { code }                                                                 \
     }                                                                          \
   } while (false)
@@ -66,7 +66,7 @@ size_t div_ceil(uint64_t a, int b);
 
 /**
  * @brief Executes an endless Loop until given Function returns a value != ERR_RETRY
- * Used for atomic stores to try until the cas succseded.
+ * Used for atomic stores to try until the cas succseed.
  * @return return value of given function. (never ERR_RETRY)
  */
 #define update(func)                                                           \
