@@ -74,4 +74,8 @@ benchmark_build: $(BENCHDIR) $(OBJS) $(BENCHOBJS)
 benchmark: benchmark_build
 	./$(BUILDDIR)/$(BENCHDIR)/benchmark allHP_MC
 
+flamegraph:
+	perf record -F 99 -a -g build/bench/benchmark allHP_MC
+	perf script | ../../FlameGraph/stackcollapse-perf.pl > out.perf-folded
+	../../FlameGraph/flamegraph.pl out.perf-folded > perf.svg
 .PHONY: all clean test debug
