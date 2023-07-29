@@ -127,7 +127,7 @@ bool get_test(){
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0x3, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}))
 
 
-    ret = lower_get(&actual,getTreeIdx(320),order);
+    ret = lower_get(&actual,tree_from_pfn(320),order);
     check_equal(ret, 2);
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t) {0x7, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}))
 
@@ -182,7 +182,7 @@ bool put_test(){
     init_default(&actual, 0, 1360, VOLATILE);
     assert(init_lower(&actual, true) == ERR_OK);
 
-    pfn_at pfn;
+    uint64_t pfn;
     int ret;
     int order = 0;
 
@@ -240,7 +240,7 @@ bool is_free_test(){
     int ret;
     int order = 0;
 
-    pfn_at pfn = 0;
+    uint64_t pfn = 0;
     ret = lower_is_free(&actual, pfn, order);
     check_equal(ret, true);
 
@@ -303,7 +303,7 @@ int lower_HP_tests(){
     check(pfn3 >= 0,"");
     offset = pfn3 % FIELDSIZE;
     check_uequal(offset, 0ul);
-    check_uequal((uint64_t)pfn3, 3*FIELDSIZE + actual.start_pfn);
+    check_uequal((uint64_t)pfn3, 3*FIELDSIZE + actual.start_frame_adr);
 
     // free regular page und try get this child as complete HP
     assert(lower_put(&actual, regular, 0) == ERR_OK);
@@ -318,7 +318,7 @@ int lower_HP_tests(){
     //allocate the complete memory with HPs
     for(int i = 3; i < 60; ++i){
         // get allocates only in chunks of 32 children. if there is no free HP in given chung it returns ERR_MEMORY
-        int64_t pfn = lower_get(&actual, i < 32? 0 : getAtomicIdx(32*FIELDSIZE), HP);
+        int64_t pfn = lower_get(&actual, i < 32? 0 : atomic_from_pfn(32*FIELDSIZE), HP);
         check(pfn > 0, "");
     }
 

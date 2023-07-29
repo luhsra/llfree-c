@@ -33,24 +33,24 @@ void *llc_default();
 
 /// Initializes the allocator for the given memory region, returning 0 on
 /// success or a negative error code
-int64_t llc_init(void *self, size_t cores, pfn_at start_pfn, size_t len,
+int64_t llc_init(void *self, size_t cores, uint64_t start_frame_adr, size_t len,
                  uint8_t init, uint8_t all_free);
 
 /// Allocates a frame and returns its address, or a negative error code
 int64_t llc_get(const void *self, size_t core, size_t order);
 
 /// Frees a frame, returning 0 on success or a negative error code
-int64_t llc_put(const void *self, size_t core, pfn_at frame_adr,
+int64_t llc_put(const void *self, size_t core, uint64_t frame_adr,
                 size_t order);
 
 /// Checks if a frame is allocated, returning 0 if not
-uint8_t llc_is_free(const void *self, pfn_at frame_adr, size_t order);
+uint8_t llc_is_free(const void *self, uint64_t frame_adr, size_t order);
 
 /// Returns the total number of frames the allocator can allocate
-pfn_at llc_frames(const void *self);
+uint64_t llc_frames(const void *self);
 
 /// Returns number of currently free frames
-pfn_at llc_free_frames(const void *self);
+uint64_t llc_free_frames(const void *self);
 
 /// Destructs the allocator
 void llc_drop(void* self);

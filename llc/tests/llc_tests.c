@@ -65,7 +65,7 @@ bool general_function_test() {
                 "local counter is increased");
   check(upper->trees[0].counter == 0, "counter in tree array is not touched");
 
-  check_uequal(upper->local->last_free.last_free_idx, getAtomicIdx(frame));
+  check_uequal(upper->local->last_free.last_free_idx, atomic_from_pfn(frame));
   check_equal(upper->local->last_free.free_counter, 1);
 
   // reserve all frames in first tree
@@ -79,7 +79,7 @@ bool general_function_test() {
   // reserve first frame in new tree
   ret = llc_get(upper, 0, 0);
   check(ret >= 0, "");
-  check(upper->local[0].reserved.preferred_index = getAtomicIdx(TREESIZE),
+  check(upper->local[0].reserved.preferred_index = atomic_from_pfn(TREESIZE),
         "second tree must be allocated");
 
   size_t free_frames = llc_free_frames(upper);
@@ -94,18 +94,18 @@ bool general_function_test() {
   return success;
 }
 
-bool check_init(upper_t *upper, size_t cores, pfn_at start_pfn, size_t len,
+bool check_init(upper_t *upper, size_t cores, uint64_t start_frame_adr, size_t len,
                 uint8_t init, uint8_t free_all) {
   bool success = true;
-  int ret = llc_init(upper, cores, start_pfn, len, init, free_all);
+  int ret = llc_init(upper, cores, start_frame_adr, len, init, free_all);
   size_t num_trees = div_ceil(len, TREESIZE);
   size_t num_childs = div_ceil(len, CHILDSIZE);
   check_uequal((uint64_t)upper->trees % CACHESIZE, 0ul)
 
-  check(ret == ERR_OK, "init is success");
+      check(ret == ERR_OK, "init is success");
   check_uequal(upper->num_of_trees, num_trees);
   check_uequal(upper->lower.num_of_childs, num_childs);
-  check_uequal(upper->lower.start_pfn, start_pfn);
+  check_uequal(upper->lower.start_frame_adr, start_frame_adr);
   check_uequal(upper->cores, (cores > num_trees ? num_trees : cores));
   check_uequal(llc_frames(upper), len);
   check_uequal(llc_free_frames(upper), free_all ? len : 0);
@@ -131,7 +131,7 @@ bool init_llc_test() {
 bool test_put() {
   bool success = true;
   upper_t *upper = (upper_t *)llc_default();
-  int64_t ret = llc_init(upper, 4, 0, 132000, 0, true);
+  int64_t ret = llc_init(upper, 4, 0, 132000, VOLATILE, true);
   assert(ret == ERR_OK);
 
   int64_t reservedByCore1[TREESIZE + 5];
@@ -142,16 +142,16 @@ bool test_put() {
     check(reservedByCore1[i] >= 0, "");
   }
 
-  check_uequal(getTreeIdx(reservedByCore1[0]),
-               getTreeIdx(reservedByCore1[TREESIZE - 1]))
-      check(getTreeIdx(reservedByCore1[0]) !=
-                getTreeIdx(reservedByCore1[TREESIZE]),
-            "");
+  check_uequal(tree_from_pfn(reservedByCore1[0]),
+               tree_from_pfn(reservedByCore1[TREESIZE - 1]));
+  check(tree_from_pfn(reservedByCore1[0]) != tree_from_pfn(reservedByCore1[TREESIZE]),
+        "");
   int64_t ret2 = llc_get(upper, 2, 0);
 
-  check(getTreeIdx(ret2) > getTreeIdx(reservedByCore1[TREESIZE]),
+  check(tree_from_pfn(ret2) > tree_from_pfn(reservedByCore1[TREESIZE]),
         "second get must be in different tree");
 
+  if(!success)llc_print(upper);
   // free half the frames from old tree with core 2
   for (int i = 0; i < TREESIZE / 2; ++i) {
     ret = llc_put(upper, 2, reservedByCore1[i], 0);
@@ -159,7 +159,7 @@ bool test_put() {
   }
   // core 2 must have now this first tree reserved
   check_uequal(upper->local[2].reserved.preferred_index,
-               getAtomicIdx(reservedByCore1[0]))
+               atomic_from_pfn(reservedByCore1[0]))
 
       return success;
 }
@@ -179,6 +179,10 @@ bool llc_allocAll() {
   for (size_t i = 0; i < LENGTH; ++i) {
     int64_t ret = llc_get(upper, i % CORES, 0);
     check(ret >= 0, "must be able to alloc the whole memory");
+    if (ret < 0) {
+      llc_print(upper);
+      break;
+    }
     pfns[i] = ret;
   }
   check_uequal(llc_free_frames(upper), 0ul);
@@ -296,7 +300,7 @@ bool multithreaded_alloc() {
             success = false;
             printf("\tFound duplicate reserved Frame\n both core %lu and %lu "
                    "reserved frame %ld in tree %lu\n",
-                   core, i, frame, getTreeIdx(frame));
+                   core, i, frame, tree_from_pfn(frame));
             // leave all loops
             goto end;
           }

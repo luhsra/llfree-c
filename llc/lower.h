@@ -12,7 +12,7 @@
 
 
 typedef struct lower {
-  pfn_at start_pfn;
+  uint64_t start_frame_adr;
   size_t length;
   size_t num_of_childs; // arraylenght for fields and childs
   bitfield_512_t *fields;
@@ -27,7 +27,7 @@ typedef struct lower {
  * @param len amount of frames to be managed
  * @param volatile_mem decides where space for the datastructures are allocated
   */
-void init_default(lower_t *const self, pfn_at start_pfn, size_t len, uint8_t init);
+void init_default(lower_t *const self, uint64_t start_pfn, size_t len, uint8_t init);
 
 /**
  * @brief initialize the lower object and the bitfields and childs
@@ -70,7 +70,7 @@ int64_t lower_get(lower_t const *const self, int64_t start, size_t order);
  * @return ERR_OK in success
  *         ERR_ADDRESS if the pointed to frames were not alloced
  */
-int lower_put(lower_t const *const self, pfn_at frame, size_t order);
+int lower_put(lower_t const *const self, uint64_t frame_adr, size_t order);
 
 /**
  * @brief checks if the memory location is free
@@ -81,7 +81,7 @@ int lower_put(lower_t const *const self, pfn_at frame, size_t order);
  * @return true if the pages pointed to are free
  *         false otherwise
  */
-bool lower_is_free(lower_t const *const self, pfn_rt frame, size_t order);
+bool lower_is_free(lower_t const *const self, uint64_t frame_adr, size_t order);
 
 /**
  * @brief calculates the number of allocated Frames

@@ -23,12 +23,12 @@ int steal(local_t* const self, reserved_t* const old_reservation){
   return cas(&self->reserved, old_reservation, new);
 }
 
-int set_preferred(local_t *self, pfn_rt pfn, uint16_t free_count,
+int set_preferred(local_t *self, uint64_t pfn, uint16_t free_count,
                   reserved_t *old_reservation) {
   assert(self != NULL);
   assert(free_count <= TREESIZE);
 
-  size_t idx = getAtomicIdx(pfn);
+  size_t idx = atomic_from_pfn(pfn);
 
   reserved_t desire = {0};
   desire.free_counter = free_count;
@@ -41,25 +41,23 @@ int set_preferred(local_t *self, pfn_rt pfn, uint16_t free_count,
   return cas(&self->reserved, old_reservation, desire);
 }
 
-int update_preferred(local_t* const self, pfn_rt pfn){
+int update_preferred(local_t* const self, uint64_t pfn){
   reserved_t prev = {load(&self->reserved.raw)};
+  //no update if reservation is in progress
+  uint64_t new_reserved = atomic_from_pfn(pfn);
+  if(tree_from_atomic(prev.preferred_index) != tree_from_atomic(new_reserved) || prev.reservation_in_progress){
+    return ERR_OK;
+  }
   reserved_t desire = prev;
-  desire.preferred_index = getAtomicIdx(pfn);
+  desire.preferred_index = atomic_from_pfn(pfn);
   return cas(&self->reserved, &prev, desire);
 }
 
-pfn_rt get_reserved_pfn(local_t *self) {
+uint64_t get_reserved_pfn(local_t *self) {
   assert(self != NULL);
 
   reserved_t pref = {load(&self->reserved.raw)};
-  return pfnFromAtomicIdx(pref.preferred_index);
-}
-
-bool has_reserved_tree(local_t *self) {
-  assert(self != NULL);
-  reserved_t pref = {load(&self->reserved.raw)};
-
-  return pref.reservation_in_progress;
+  return pfn_from_atomic(pref.preferred_index);
 }
 
 int mark_as_searchig(local_t *self) {
@@ -87,9 +85,9 @@ int unmark_as_searchig(local_t *self) {
 }
 
 
-int inc_local_free_counter(local_t *const self, const pfn_rt frame, const size_t order) {
+int inc_local_free_counter(local_t *const self, const uint64_t frame, const size_t order) {
   assert(self != NULL);
-  const size_t atomic_Idx = getAtomicIdx(frame);
+  const size_t atomic_Idx = atomic_from_pfn(frame);
 
   reserved_t old = {load(&self->reserved.raw)};
   // check if reserved tree is a match for given pfn
@@ -118,9 +116,9 @@ int dec_local_free_counter(local_t *const self,const  size_t order) {
   return ERR_RETRY;
 }
 
-int set_free_tree(local_t *self, pfn_rt frame) {
+int set_free_tree(local_t *self, uint64_t frame) {
   assert(self != NULL);
-  size_t atomic_Idx = getAtomicIdx(frame);
+  size_t atomic_Idx = atomic_from_pfn(frame);
 
   last_free_t old = {load(&self->last_free.raw)};
   last_free_t desire;

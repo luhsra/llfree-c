@@ -24,12 +24,12 @@ bool set_preferred_test() {
   local_t *local = &local_o;
   init_local(local);
   mark_as_searchig(local);
-  pfn_rt pfn = 45463135;
+  uint64_t pfn = 45463135;
   unsigned counter = 1 << 13;
   reserved_t old;
   int ret = set_preferred(local, pfn, counter, &old);
   check(ret == ERR_OK, "");
-  check_uequal(local->reserved.preferred_index, getAtomicIdx(pfn));
+  check_uequal(local->reserved.preferred_index, atomic_from_pfn(pfn));
   check_equal(local->reserved.free_counter, counter);
   check(local->reserved.has_reserved_tree, "");
 
@@ -39,7 +39,7 @@ bool set_preferred_test() {
   counter = 9423;
   ret = set_preferred(local, pfn, counter, &old);
   check(ret == ERR_OK, "");
-  check_uequal(local->reserved.preferred_index, getAtomicIdx(pfn));
+  check_uequal(local->reserved.preferred_index, atomic_from_pfn(pfn));
   check_equal(local->reserved.free_counter, counter);
   check(local->reserved.has_reserved_tree, "");
   check(old.raw == copy.reserved.raw, "");

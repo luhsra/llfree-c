@@ -12,9 +12,9 @@
 
 #include <stdio.h>
 
-void init_default(lower_t *const self, pfn_at start_pfn, size_t len,
+void init_default(lower_t *const self, uint64_t start_frame_adr, size_t len,
                   uint8_t init) {
-  self->start_pfn = start_pfn;
+  self->start_frame_adr = start_frame_adr;
   self->length = len;
 
   self->num_of_childs = div_ceil(self->length, FIELDSIZE);
@@ -58,7 +58,7 @@ void init_default(lower_t *const self, pfn_at start_pfn, size_t len,
 
     self->length -= pages_needed;
 
-    char *start_data = (char *)(self->start_pfn + self->length * PAGESIZE);
+    char *start_data = (char *)(self->start_frame_adr + self->length * PAGESIZE);
 
     self->childs = (child_t *)start_data;
     self->fields = (bitfield_512_t *)(start_data + bytes_for_childs);
@@ -99,17 +99,17 @@ int lower_recover(lower_t *self) {
   return ERR_OK;
 }
 
-int64_t get_HP(lower_t const *const self, pfn_rt atomic_idx) {
+int64_t get_HP(lower_t const *const self, uint64_t atomic_idx) {
   assert(self != 0);
 
-  size_t idx = getChildIdx(pfnFromAtomicIdx(atomic_idx));
+  size_t idx = child_from_pfn(pfn_from_atomic(atomic_idx));
   size_t offset = idx % CHILDS_PER_TREE;
   size_t start_idx = idx - offset;
 
   for (size_t i = 0; i < CHILDS_PER_TREE; ++i) {
     size_t current_idx = start_idx + offset;
     if (update(reserve_HP(&self->childs[current_idx]) == ERR_OK)) {
-      return pfnFromChildIdx(current_idx) + self->start_pfn;
+      return pfn_from_child(current_idx) + self->start_frame_adr;
     }
     ++offset;
     offset %= CHILDS_PER_TREE;
@@ -129,21 +129,20 @@ static int64_t reserve_in_Bitfield(const lower_t *self, const size_t idx) {
   const int64_t pos = update(set_Bit(&self->fields[idx]));
   if (pos >= 0) {
     // found and reserved a frame
-    return pfnFromChildIdx(idx) + pos + self->start_pfn;
+    return pfn_from_child(idx) + pos + self->start_frame_adr;
   }
   return ERR_MEMORY;
 }
 
 int64_t lower_get(lower_t const *const self, int64_t atomic_idx, size_t order) {
   assert(order == 0 || order == HP);
-  pfn_rt pfn = pfnFromAtomicIdx(atomic_idx);
-  if (pfn >= self->length)
-    return ERR_ADDRESS;
+  uint64_t pfn = pfn_from_atomic(atomic_idx);
+  assert(pfn < self->length);
 
   if (order == HP)
     return get_HP(self, atomic_idx);
 
-  const size_t start_idx = getChildIdx(pfn);
+  const size_t start_idx = child_from_pfn(pfn);
 
   ITERRATE(
       start_idx, CHILDS_PER_TREE,
@@ -180,15 +179,15 @@ void convert_HP_to_regular(child_t *child, bitfield_512_t *field) {
   return;
 }
 
-int lower_put(lower_t const *const self, pfn_at frame_adr, size_t order) {
+int lower_put(lower_t const *const self, uint64_t frame_adr, size_t order) {
   assert(order == 0 || order == HP);
 
   // chek if outside of managed space
-  if (frame_adr >= self->start_pfn + self->length ||
-      frame_adr < self->start_pfn)
+  if (frame_adr >= self->start_frame_adr + self->length ||
+      frame_adr < self->start_frame_adr)
     return ERR_ADDRESS;
-  pfn_rt frame_number = frame_adr - self->start_pfn;
-  const size_t child_index = getChildIdx(frame_number);
+  uint64_t frame_number = frame_adr - self->start_frame_adr;
+  const size_t child_index = child_from_pfn(frame_number);
   child_t *child = &self->childs[child_index];
   bitfield_512_t *field = &self->fields[child_index];
 
@@ -213,14 +212,14 @@ int lower_put(lower_t const *const self, pfn_at frame_adr, size_t order) {
   return ERR_OK;
 }
 
-bool lower_is_free(lower_t const *const self, pfn_rt frame, size_t order) {
+bool lower_is_free(lower_t const *const self, uint64_t frame, size_t order) {
   assert(order == 0 || order == HP);
 
   // check if outside of managed space
-  if (frame >= self->start_pfn + self->length || frame < self->start_pfn)
+  if (frame >= self->start_frame_adr + self->length || frame < self->start_frame_adr)
     return false;
 
-  size_t child_index = getChildIdx(frame);
+  size_t child_index = child_from_pfn(frame);
 
   child_t child = {load(&self->childs[child_index].raw)};
 
