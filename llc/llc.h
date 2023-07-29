@@ -34,7 +34,7 @@ void *llc_default();
 /// Initializes the allocator for the given memory region, returning 0 on
 /// success or a negative error code
 int64_t llc_init(void *self, size_t cores, pfn_at start_pfn, size_t len,
-                 uint8_t init, uint8_t free_all);
+                 uint8_t init, uint8_t all_free);
 
 /// Allocates a frame and returns its address, or a negative error code
 int64_t llc_get(const void *self, size_t core, size_t order);
@@ -58,4 +58,4 @@ void llc_drop(void* self);
 /// Prints the allocators state for debugging
 void llc_debug(const void *self, void (*writer)(void *, char *), void *arg);
 
-void llc_print(upper_t* self);
+void llc_print(const upper_t* self);

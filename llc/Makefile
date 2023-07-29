@@ -43,11 +43,12 @@ TESTDIR = tests
 $(TESTDIR): $(BUILDDIR)
 	mkdir -p $(BUILDDIR)/$(TESTDIR)
 
+
 build/tests/%.o: tests/%.c | $(BUILDDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 
-test_build: clean $(TESTDIR) $(OBJS) $(TESTOBJS)
+test_build: $(TESTDIR) $(OBJS) $(TESTOBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(TESTOBJS) -o $(BUILDDIR)/$(TESTDIR)/run_tests
 
 test: test_build
@@ -55,5 +56,22 @@ test: test_build
 
 debug: test_build
 	gdb ./$(BUILDDIR)/$(TESTDIR)/run_tests
+
+
+BENCHSRCS = $(wildcard bench/*.c)
+BENCHOBJS = $(addprefix build/,$(BENCHSRCS:.c=.o))
+BENCHDIR = bench
+
+$(BENCHDIR): $(BUILDDIR)
+	mkdir -p $(BUILDDIR)/$(BENCHDIR)
+
+build/bench/%.o: bench/%.c | $(BENCHDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+benchmark_build: $(BENCHDIR) $(OBJS) $(BENCHOBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(BENCHOBJS) -o $(BUILDDIR)/$(BENCHDIR)/benchmark
+
+benchmark: benchmark_build
+	./$(BUILDDIR)/$(BENCHDIR)/benchmark allHP_MC
 
 .PHONY: all clean test debug

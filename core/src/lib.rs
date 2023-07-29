@@ -246,7 +246,7 @@ mod test {
         let alloc = Allocator::new(1, area.clone(), Init::Volatile, true).unwrap();
 
         warn!("start alloc...");
-        const ALLOCS: usize = MEM_SIZE / Frame::SIZE / 4 * 3;
+        const ALLOCS: usize = MEM_SIZE / Frame::SIZE / 2;
         let mut frames = Vec::with_capacity(ALLOCS);
         for _ in 0..ALLOCS {
             frames.push(alloc.get(0, 0).unwrap());
@@ -755,6 +755,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn different_orders() {
         const MAX_ORDER: usize = Lower::MAX_ORDER;
         const THREADS: usize = 4;

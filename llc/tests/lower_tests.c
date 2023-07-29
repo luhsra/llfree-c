@@ -211,7 +211,7 @@ bool put_test(){
     check_equal(ret, ERR_ADDRESS)
     check_equal_bitfield(actual.fields[0], ((bitfield_512_t){0xfffffffffffffffe, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}))
     check_equal_bitfield(actual.fields[1], ((bitfield_512_t) {u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, 0x1fffffffffffffff, 0x0}))
-    
+
     pfn = 561;
     ret = lower_put(&actual, pfn, order);
     check_equal(ret, ERR_OK)
@@ -241,11 +241,11 @@ bool is_free_test(){
     int order = 0;
 
     pfn_at pfn = 0;
-    ret = is_free(&actual, pfn, order);
+    ret = lower_is_free(&actual, pfn, order);
     check_equal(ret, true);
 
     pfn = 910;
-    ret = is_free(&actual, pfn, order);
+    ret = lower_is_free(&actual, pfn, order);
     check_equal(ret, true);
 
     free_lower(actual);
@@ -253,19 +253,19 @@ bool is_free_test(){
     init_default(&actual, 0, 1360, VOLATILE);
     assert(init_lower(&actual, false) == ERR_OK);
 
-    ret = is_free(&actual, pfn, order);
+    ret = lower_is_free(&actual, pfn, order);
     check_equal(ret, false);
 
     pfn = 910;
-    ret = is_free(&actual, pfn, order);
+    ret = lower_is_free(&actual, pfn, order);
     check_equal(ret, false);
     assert(lower_put(&actual,513, order) == ERR_OK);
     assert(lower_put(&actual,511, order) == ERR_OK);
-    ret = is_free(&actual, 513, order);
+    ret = lower_is_free(&actual, 513, order);
     check_equal(ret, true);
-    ret = is_free(&actual, 511, order);
+    ret = lower_is_free(&actual, 511, order);
     check_equal(ret, true);
-    ret = is_free(&actual, 512, order);
+    ret = lower_is_free(&actual, 512, order);
     check_equal(ret, false);
 
 
@@ -290,7 +290,7 @@ int lower_HP_tests(){
     check_uequal(offset, 0ul);
     check(pfn1 != pfn2, "");
     check_uequal(allocated_frames(&actual), 2ul * FIELDSIZE);
-    
+
     // request a regular frame
     int64_t regular = lower_get(&actual, 0, 0);
     //regular frame cannot be returned as HP

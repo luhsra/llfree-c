@@ -24,6 +24,10 @@ unsafe impl Send for LLC {}
 unsafe impl Sync for LLC {}
 
 impl Alloc for LLC {
+    fn name(&self) -> &'static str {
+        "LLC"
+    }
+
     fn init(&mut self, cores: usize, area: Range<PFN>, init: Init, free_all: bool) -> Result<()> {
         let ret = unsafe {
             llc_init(

@@ -15,7 +15,7 @@ use llfree::frame::{pfn_range, Frame, PFN, PT_LEN};
 use llfree::mmap::{self, MMap};
 use llfree::thread;
 use llfree::util::{self, WyRand};
-use llfree::{Alloc, Init, LLFree};
+use llfree::{Alloc, Init, LLFree, LLC};
 
 /// Number of allocations per block
 const RAND_BLOCK_SIZE: usize = 8;
@@ -83,7 +83,7 @@ fn main() {
 
     let mut mapping = mapping(0x1000_0000_0000, memory * PT_LEN * PT_LEN, dax);
 
-    let mut allocs: [Box<dyn Alloc>; 1] = [Box::<LLFree>::default()];
+    let mut allocs: [Box<dyn Alloc>; 2] = [Box::<LLFree>::default(), Box::<LLC>::default()];
 
     for x in x {
         let t = bench.threads(threads, x);
@@ -169,7 +169,7 @@ fn bulk(
 ) -> Perf {
     let timer = Instant::now();
     alloc
-        .init(threads, pfn_range(mapping), Init::Overwrite, true)
+        .init(threads, pfn_range(mapping), Init::Volatile, true)
         .unwrap();
     let init = timer.elapsed().as_millis();
     let allocs = alloc.frames() / max_threads / 2 / (1 << order);
@@ -231,7 +231,7 @@ fn repeat(
 ) -> Perf {
     let timer = Instant::now();
     alloc
-        .init(threads, pfn_range(mapping), Init::Overwrite, true)
+        .init(threads, pfn_range(mapping), Init::Volatile, true)
         .unwrap();
     let init = timer.elapsed().as_millis();
 
@@ -282,7 +282,7 @@ fn rand(
 ) -> Perf {
     let timer = Instant::now();
     alloc
-        .init(threads, pfn_range(mapping), Init::Overwrite, true)
+        .init(threads, pfn_range(mapping), Init::Volatile, true)
         .unwrap();
     let init = timer.elapsed().as_millis();
 

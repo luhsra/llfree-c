@@ -119,7 +119,7 @@ int64_t get_HP(lower_t const *const self, pfn_rt atomic_idx) {
 
 /**
  * @brief searches and reserves a frame in Bitfield with with index
- * 
+ *
  * @param self pointer to lower
  * @param idx index of the Bitfield that is searched
  * @return adress of the reseved frame on success
@@ -213,12 +213,12 @@ int lower_put(lower_t const *const self, pfn_at frame_adr, size_t order) {
   return ERR_OK;
 }
 
-int is_free(lower_t const *const self, pfn_rt frame, size_t order) {
+bool lower_is_free(lower_t const *const self, pfn_rt frame, size_t order) {
   assert(order == 0 || order == HP);
 
   // check if outside of managed space
   if (frame >= self->start_pfn + self->length || frame < self->start_pfn)
-    return ERR_ADDRESS;
+    return false;
 
   size_t child_index = getChildIdx(frame);
 
@@ -244,7 +244,7 @@ size_t allocated_frames(lower_t const *const self) {
   return counter;
 };
 
-void print_lower(lower_t const *const self) {
+void lower_print(lower_t const *const self) {
   printf("\n-------------------------------------\nlower allocator: with %zu "
          "childs\n%lu/%lu frames are allocated\nChilds:\n",
          self->num_of_childs, allocated_frames(self), self->length);

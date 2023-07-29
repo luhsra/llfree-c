@@ -266,6 +266,7 @@ static int reserve_new_tree(upper_t const *const self, size_t const core) {
 
   // we successfully reserved a tree -> now set it as our local tree.
   set_preferred_and_writeback(self, core, pfnFromTreeIdx(tree_idx), counter);
+  unmark_as_searchig(local);
   return ERR_OK;
 }
 
@@ -295,7 +296,7 @@ static int inc_tree_counter(upper_t const *const self, const size_t core,
 /// Creates the allocator and returns a pointer to its data that is passed into
 /// all other functions
 void *llc_default() {
-  upper_t *upper = malloc(sizeof(upper_t));
+  upper_t *upper = calloc(1, sizeof(upper_t));
   assert(upper != NULL);
   return upper;
 }
@@ -337,7 +338,8 @@ int64_t llc_init(void *this, size_t cores, pfn_at start_pfn, size_t len,
   self->trees = aligned_alloc(
       CACHESIZE, sizeof(child_t) * self->num_of_trees); // TODO remove malloc
   assert(self->trees != NULL);
-  if(self->trees == NULL) return ERR_INITIALIZATION;
+  if (self->trees == NULL)
+    return ERR_INITIALIZATION;
 
   // check if more cores than trees -> if not shared locale data
   size_t len_locale;
@@ -350,8 +352,8 @@ int64_t llc_init(void *this, size_t cores, pfn_at start_pfn, size_t len,
   self->local = malloc(sizeof(local_t) * len_locale); // TODO remove malloc
 
   assert(self->local != NULL);
-  if(self->trees == NULL) return ERR_INITIALIZATION;
-
+  if (self->trees == NULL)
+    return ERR_INITIALIZATION;
 
   // init local data do default 0
   for (size_t local_idx = 0; local_idx < self->cores; ++local_idx) {
@@ -390,6 +392,7 @@ int64_t llc_get(const void *this, size_t core, size_t order) {
     int ret = update(reserve_new_tree(self, core));
     if (ret == ERR_MEMORY) {
       // no Tree available -> no memory available
+      //llc_print(self);
       return ERR_MEMORY;
     }
   } while (atomic_idx < 0);
@@ -400,7 +403,8 @@ int64_t llc_get(const void *this, size_t core, size_t order) {
   if (pfn == ERR_MEMORY) {
     // no frames available in this tree despite local tree had enogh frames
     // (possible fragmentation)
-    int ret = try_update(inc_tree_counter(self, core, pfnFromAtomicIdx(atomic_idx), order));
+    int ret = try_update(
+        inc_tree_counter(self, core, pfnFromAtomicIdx(atomic_idx), order));
     if (ret != ERR_OK)
       // not possible to restore correct counter value in trees
       return ERR_CORRUPTION;
@@ -491,6 +495,12 @@ pfn_at llc_free_frames(const void *this) {
   return llc_frames(self) - allocated_frames(&self->lower);
 }
 
+uint8_t llc_is_free(const void *this, pfn_at frame_adr, size_t order){
+  assert(this != NULL);
+  const upper_t *self = (upper_t *)this;
+  return lower_is_free(&self->lower,frame_adr, order);
+}
+
 /// Prints the allocators state for debugging
 void llc_debug(const void *this, void (*writer)(void *, char *), void *arg) {
   (void)(this);
@@ -505,9 +515,12 @@ void llc_drop(void *this) {
   if (self->meta != NULL)
     self->meta->crashed = false;
 
-  lower_drop(&self->lower);
-  free(self->trees);
-  free(self->local);
+  if(self->local != NULL){
+    lower_drop(&self->lower);
+    free(self->trees);
+    free(self->local);
+  }
+  free(this);
 }
 
 /**
@@ -515,8 +528,7 @@ void llc_drop(void *this) {
  *
  * @param self
  */
-void llc_print(upper_t *self) {
-  (void)(self);
+void llc_print(const upper_t *self) {
   printf("-----------------------------------------------\nUPPER "
          "ALLOCATOR\nTrees:\t%lu\nCores:\t%lu\n allocated: %lu, free: %lu, "
          "all: %lu\n",
@@ -567,4 +579,7 @@ void llc_print(upper_t *self) {
     printf("%u\t", local->reserved.free_counter);
   }
   printf("\n");
+
+  lower_print(&self->lower);
+  fflush(stdout);
 }

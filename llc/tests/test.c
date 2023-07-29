@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdatomic.h>
 
 
 #include "bitfield_tests.h"
@@ -13,6 +14,12 @@
 int main(){
     int test_counter = 0;
     int fail_counter = 0;
+    printf("Running Tests\n");
+    printf("lockfree 16 Bit algotithms: %s\n", ATOMIC_SHORT_LOCK_FREE ? "True" : "False");
+    printf("lockfree 64 Bit algotithms: %s\n", ATOMIC_LLONG_LOCK_FREE ? "True" : "False");
+
+
+
     printf("Running Bitfield Tests:\n");
     bitfield_tests(&test_counter, &fail_counter);
     printf("---------------------------------------\n");
@@ -32,12 +39,12 @@ int main(){
     printf("Running local Tests:\n");
     local_tests(&test_counter, &fail_counter);
     printf("---------------------------------------\n");
-    
+
     printf("Running llc Tests:\n");
     llc_tests(&test_counter, &fail_counter);
     printf("---------------------------------------\n");
-    
-    
+
+
     if(fail_counter == 0)
         printf("----------------SUCCESS----------------\n");
     else printf("----------------FAILED----------------\n");

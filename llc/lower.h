@@ -81,7 +81,7 @@ int lower_put(lower_t const *const self, pfn_at frame, size_t order);
  * @return true if the pages pointed to are free
  *         false otherwise
  */
-int is_free(lower_t const *const self, pfn_rt frame, size_t order);
+bool lower_is_free(lower_t const *const self, pfn_rt frame, size_t order);
 
 /**
  * @brief calculates the number of allocated Frames
@@ -94,7 +94,7 @@ size_t allocated_frames(lower_t const *const self);
 /**
  * Helper to print the number of childen, allocated and managed Frames
  */
-void print_lower(lower_t const *const self);
+void lower_print(lower_t const *const self);
 
 /**
  * @brief Frees the allocated Memory
