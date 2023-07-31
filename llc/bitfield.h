@@ -12,9 +12,9 @@
 #define CACHESIZE (sizeof(uint64_t) * 8)    // Bit-Size of the Biggest Datatype for atomic operations. uint64
 #define N FIELDSIZE/CACHESIZE               // number of uint64 in the Bitfield.
 
-typedef struct bitfield_512{
+typedef struct bitfield{
     alignas(CACHESIZE) _Atomic(uint64_t) rows[N];
-} bitfield_512_t;
+} bitfield_t;
 
 // Helping struct to store the position of a bit in a bitfield.
 typedef struct pos {
@@ -29,7 +29,7 @@ typedef struct pos {
  * @param start_allocated if set, all bits will be set to 1.
  * @return The inizialized bitfield
  */
-bitfield_512_t init_field(int number_of_free_Frames, bool all_free);
+bitfield_t field_init(int number_of_free_Frames, bool all_free);
 
 /**
 * @brief Atomic search for the first unset Bit in given field and set it to 1.
@@ -38,22 +38,22 @@ bitfield_512_t init_field(int number_of_free_Frames, bool all_free);
 *         ERR_MEMORY if no free bit was found
 *         ERR_RETRY  if the atomic operation failed
 */
-int64_t set_Bit(bitfield_512_t* field);
+int64_t field_set_Bit(bitfield_t* field);
 
 /**
 * @brief Atomically resets the Bit in given field at index position
 * @param field Field to search in
-* @return ERR_OK on success 
+* @return ERR_OK on success
 *         ERR_ADRESS if the bit was already reset
 */
-int reset_Bit(bitfield_512_t* field,size_t index);
+int field_reset_Bit(bitfield_t* field,size_t index);
 
 /**
 * @brief Count the Number of bits in the Field
 * @param field Field to count bits in.
 * @return number of set Bits
 */
-int count_Set_Bits(bitfield_512_t* field);
+int field_count_Set_Bits(bitfield_t* field);
 
 /**
 * @brief Atomically checks whether the bit is set.
@@ -62,19 +62,19 @@ int count_Set_Bits(bitfield_512_t* field);
 * @return true if the Bit is set
 *         false otherwise
 */
-bool is_free_bit(bitfield_512_t* self,size_t index);
+bool field_is_free(bitfield_t* self,size_t index);
 
 /**
 * @brief Helperfunction to Print a Bitfield on the console
 */
-void print_field(bitfield_512_t* field);
+void field_print(bitfield_t* field);
 
 /**
 * @brief Helperfunction to compare two bitfields
 * @return true if both fields are equal or both pointer are NULL;
 *         false otherwise
 */
-bool equals(bitfield_512_t* field1, bitfield_512_t* field2);
+bool field_equals(bitfield_t* field1, bitfield_t* field2);
 
 /**
  * @brief finds the position of the first 0 in the bitfield
@@ -83,4 +83,4 @@ bool equals(bitfield_512_t* field1, bitfield_512_t* field2);
  * @return  ERR_OK on success
  *          ERR_MEMORY if no unset Bit was found.
  */
-int find_unset(bitfield_512_t* field,  pos_t* pos);
+int field_find_unset(bitfield_t* field,  pos_t* pos);

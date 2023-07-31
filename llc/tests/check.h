@@ -33,11 +33,11 @@
 
 
 #define check_equal_bitfield_m(actual, expected,msg) \
-    if(!equals(&actual, &expected)) { \
+    if(!field_equals(&actual, &expected)) { \
         printf("\tFILE %s:%d: Check equal bitfields failed: %s\n\tactual:\n",__FILE__, __LINE__, msg); \
-        print_field(&actual);   \
+        field_print(&actual);   \
         printf("\texpected:\n");    \
-        print_field(&expected);   \
+        field_print(&expected);   \
         success = false;   \
     }
 #define check_equal_bitfield(actual, expected) check_equal_bitfield_m(actual, expected,"")

@@ -30,7 +30,7 @@ int child_counter_dec(child_t *self) {
   return cas(self, &old, desire);
 }
 
-int free_HP(child_t *self) {
+int child_free_HP(child_t *self) {
   assert(self != NULL);
 
   child_t desire = child_init(CHILDSIZE, false);
@@ -41,7 +41,7 @@ int free_HP(child_t *self) {
   return cas(self, &old, desire);
 }
 
-int reserve_HP(child_t *self) {
+int child_reserve_HP(child_t *self) {
   assert(self != NULL);
 
   child_t desire = child_init(0, true);

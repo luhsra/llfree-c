@@ -185,7 +185,7 @@ bool llc_allocAll() {
     pfns[i] = ret;
   }
   check_uequal(llc_free_frames(upper), 0ul);
-  check_uequal(allocated_frames(&upper->lower), llc_frames(upper));
+  check_uequal(lower_allocated_frames(&upper->lower), llc_frames(upper));
 
   return success;
 }

@@ -36,7 +36,7 @@ typedef enum saturation_level{
  * @param flag initial flag value
  * @return initialized tree
  */
-tree_t init_tree(uint16_t counter, bool flag);
+tree_t tree_init(uint16_t counter, bool flag);
 
 /**
  * @brief atomically increases the counter
@@ -61,29 +61,29 @@ int tree_counter_dec(tree_t *self, size_t order);
  *          ERR_RETRY if the atomic access failed
  *          ERR_ADRESS if already reserved
  */
-int reserve_tree(tree_t *self);
+int tree_reserve(tree_t *self);
 
 
 /**
  * @brief adds the given counter to the existing counter and sets the flag to 0
- * 
+ *
  * @param self pointer to tree
  * @param free_counter counter to add
  * @return ERR_OK on success
  *         ERR_RETRY on atomic operration fail
  */
-int writeback_tree(tree_t* self, uint16_t free_counter);
+int tree_writeback(tree_t* self, uint16_t free_counter);
 
 
 
 /**
  * @brief merges the counters of both trees and returns the value. Tree stays reserved
- * 
- * @param self 
- * @param free_counter 
- * @return int 
+ *
+ * @param self
+ * @param free_counter
+ * @return int
  */
-int writeback_and_reserve_tree(tree_t *self, uint16_t free_counter);
+int tree_writeback_and_reserve(tree_t *self, uint16_t free_counter);
 
 
 
@@ -97,4 +97,4 @@ int writeback_and_reserve_tree(tree_t *self, uint16_t free_counter);
 saturation_level_t tree_status(const tree_t* self);
 
 // steals the counter of a reserved tree
-int steal_counter(tree_t *self);
+int tree_steal_counter(tree_t *self);

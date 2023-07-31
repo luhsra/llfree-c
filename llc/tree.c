@@ -5,7 +5,7 @@
 #include <assert.h>
 #include <stdint.h>
 
-tree_t init_tree(uint16_t counter, bool flag) {
+tree_t tree_init(uint16_t counter, bool flag) {
   assert(counter <= TREESIZE); // max limit for 15 bit
   tree_t ret;
   ret.flag = flag;
@@ -13,10 +13,10 @@ tree_t init_tree(uint16_t counter, bool flag) {
   return ret;
 }
 
-int reserve_tree(tree_t *self) {
+int tree_reserve(tree_t *self) {
   assert(self != NULL);
 
-  tree_t desire = init_tree(0, true);
+  tree_t desire = tree_init(0, true);
 
   tree_t before = {load(&self->raw)};
   // tree is already reserved
@@ -29,10 +29,10 @@ int reserve_tree(tree_t *self) {
   return ERR_RETRY;
 }
 
-int steal_counter(tree_t *self) {
+int tree_steal_counter(tree_t *self) {
   assert(self != NULL);
 
-  tree_t desire = init_tree(0, true);
+  tree_t desire = tree_init(0, true);
 
   tree_t before = {load(&self->raw)};
   if (cas(self, &before, desire) == ERR_OK)
@@ -40,25 +40,25 @@ int steal_counter(tree_t *self) {
   return ERR_RETRY;
 }
 
-int writeback_and_reserve_tree(tree_t *self, uint16_t free_counter) {
+int tree_writeback_and_reserve(tree_t *self, uint16_t free_counter) {
   assert(self != NULL);
   tree_t old = {load(&self->raw)};
 
   assert(free_counter + old.counter <= TREESIZE);
-  tree_t desire = init_tree(0, true);
+  tree_t desire = tree_init(0, true);
 
   int ret = cas(self, &old, desire);
   if(ret == ERR_OK) return free_counter + old.counter;
   else return ret;
 }
 
-int writeback_tree(tree_t *self, uint16_t free_counter) {
+int tree_writeback(tree_t *self, uint16_t free_counter) {
   assert(self != NULL);
   tree_t old = {load(&self->raw)};
 
   assert(free_counter + old.counter <= TREESIZE);
 
-  tree_t desire = init_tree(free_counter + old.counter, false);
+  tree_t desire = tree_init(free_counter + old.counter, false);
   return cas(self, &old, desire);
 }
 

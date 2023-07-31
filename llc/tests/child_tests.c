@@ -16,7 +16,7 @@ bool reserve_HP_test(){
     child_t actual = child_init(512,false);
     child_t expect = child_init(0,true);
 
-    int ret = reserve_HP(&actual);
+    int ret = child_reserve_HP(&actual);
     check_equal(ret, ERR_OK);
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
@@ -24,7 +24,7 @@ bool reserve_HP_test(){
     actual = child_init(0,true);
     expect = child_init(0,true);
 
-    ret = reserve_HP(&actual);
+    ret = child_reserve_HP(&actual);
     check_equal_m(ret, ERR_MEMORY, "must fail if already set");
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
@@ -33,7 +33,7 @@ bool reserve_HP_test(){
     actual = child_init(320,false);
     expect = child_init(320,false);
 
-    ret = reserve_HP(&actual);
+    ret = child_reserve_HP(&actual);
     check_equal_m(ret, ERR_MEMORY, "must fail if some frame are allocated");
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
@@ -46,7 +46,7 @@ bool free_HP_test(){
     child_t actual = child_init(0,true);
     child_t expect = child_init(FIELDSIZE,false);
 
-    int ret = free_HP(&actual);
+    int ret = child_free_HP(&actual);
     check_equal(ret, ERR_OK);
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
@@ -54,7 +54,7 @@ bool free_HP_test(){
     actual = child_init(0,false);
     expect = child_init(0,false);
 
-    ret = free_HP(&actual);
+    ret = child_free_HP(&actual);
     check_equal_m(ret, ERR_ADDRESS, "must fail if already reset");
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);
@@ -63,7 +63,7 @@ bool free_HP_test(){
     actual = child_init(320,true);
     expect = child_init(320,true);
 
-    ret = free_HP(&actual);
+    ret = child_free_HP(&actual);
     check_equal_m(ret, ERR_ADDRESS, "should not be possible to have a flag with a counter > 0");
     check_equal(actual.counter, expect.counter);
     check_equal(actual.flag, expect.flag);

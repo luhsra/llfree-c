@@ -9,13 +9,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-void init_local(local_t *self) {
+void local_init(local_t *self) {
   assert(self != NULL);
   self->last_free.raw = 0;
   self->reserved.raw = 0;
 }
 
-int steal(local_t* const self, reserved_t* const old_reservation){
+int local_steal(local_t* const self, reserved_t* const old_reservation){
   *old_reservation = (reserved_t){load(&self->reserved.raw)};
   if(!old_reservation->has_reserved_tree || old_reservation->free_counter == 0 || old_reservation->reservation_in_progress) return ERR_ADDRESS;
   reserved_t new = {0};
@@ -23,7 +23,7 @@ int steal(local_t* const self, reserved_t* const old_reservation){
   return cas(&self->reserved, old_reservation, new);
 }
 
-int set_preferred(local_t *self, uint64_t pfn, uint16_t free_count,
+int local_set_new_preferred_tree(local_t *self, uint64_t pfn, uint16_t free_count,
                   reserved_t *old_reservation) {
   assert(self != NULL);
   assert(free_count <= TREESIZE);
@@ -41,7 +41,7 @@ int set_preferred(local_t *self, uint64_t pfn, uint16_t free_count,
   return cas(&self->reserved, old_reservation, desire);
 }
 
-int update_preferred(local_t* const self, uint64_t pfn){
+int local_update_last_reserved(local_t* const self, uint64_t pfn){
   reserved_t prev = {load(&self->reserved.raw)};
   //no update if reservation is in progress
   uint64_t new_reserved = atomic_from_pfn(pfn);
@@ -54,14 +54,14 @@ int update_preferred(local_t* const self, uint64_t pfn){
   return cas(&self->reserved, &prev, desire);
 }
 
-uint64_t get_reserved_pfn(local_t *self) {
+uint64_t local_get_reserved_pfn(local_t *self) {
   assert(self != NULL);
 
   reserved_t pref = {load(&self->reserved.raw)};
   return pfn_from_atomic(pref.preferred_index);
 }
 
-int mark_as_searchig(local_t *self) {
+int local_mark_as_searchig(local_t *self) {
   assert(self != NULL);
 
   reserved_t mask = {0ul};
@@ -73,7 +73,7 @@ int mark_as_searchig(local_t *self) {
   return ERR_OK;
 }
 
-int unmark_as_searchig(local_t *self) {
+int local_unmark_as_searchig(local_t *self) {
   assert(self != NULL);
 
   reserved_t mask = {0ul};
@@ -86,7 +86,7 @@ int unmark_as_searchig(local_t *self) {
 }
 
 
-int inc_local_free_counter(local_t *const self, const uint64_t frame, const size_t order) {
+int local_inc_counter(local_t *const self, const uint64_t frame, const size_t order) {
   assert(self != NULL);
   const size_t atomic_Idx = atomic_from_pfn(frame);
 
@@ -101,7 +101,7 @@ int inc_local_free_counter(local_t *const self, const uint64_t frame, const size
   return cas(&self->reserved, &old, desire);
 }
 
-int dec_local_free_counter(local_t *const self,const  size_t order) {
+int local_dec_counter(local_t *const self,const  size_t order) {
   assert(self != NULL);
 
   reserved_t old = {load(&self->reserved.raw)};
@@ -117,7 +117,7 @@ int dec_local_free_counter(local_t *const self,const  size_t order) {
   return ERR_RETRY;
 }
 
-int set_free_tree(local_t *self, uint64_t frame) {
+int local_set_free_tree(local_t *self, uint64_t frame) {
   assert(self != NULL);
   size_t atomic_Idx = atomic_from_pfn(frame);
 

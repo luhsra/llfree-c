@@ -15,10 +15,10 @@ static pos_t get_pos(int index){
     return pos;
 }
 
-bitfield_512_t init_field(int number_of_free_Frames, bool all_free){
-    
+bitfield_t field_init(int number_of_free_Frames, bool all_free){
+
     assert(0 <= number_of_free_Frames && number_of_free_Frames < FIELDSIZE);
-    bitfield_512_t field;
+    bitfield_t field;
 
     if(!all_free && number_of_free_Frames > 0){
         for(size_t i = 0; i < N; i++){
@@ -54,7 +54,7 @@ bitfield_512_t init_field(int number_of_free_Frames, bool all_free){
 
 
 
-int find_unset(bitfield_512_t* field,  pos_t* pos){
+int field_find_unset(bitfield_t* field,  pos_t* pos){
     assert(field != NULL);
     assert(pos != NULL);
 
@@ -62,8 +62,8 @@ int find_unset(bitfield_512_t* field,  pos_t* pos){
         uint64_t row = atomic_load(&field->rows[i]);
         // ctzll(x) -> If x is 0, the result is undefined and there are no unset bits
         if(~row == 0) continue;
-        
-        int ret = __builtin_ctzll(~row);   //TODO wrapper for CTZ? 
+
+        int ret = __builtin_ctzll(~row);   //TODO wrapper for CTZ?
 
         assert(ret >= 0 && "ctzll shoud never be negative");
         assert(ret < 64 && "ctzll schould not count more zeros as there are Bits");
@@ -76,11 +76,12 @@ int find_unset(bitfield_512_t* field,  pos_t* pos){
     return ERR_MEMORY; // ERR_MEMORY ->Kein freies Bit in diesem Feld
 }
 
-int64_t set_Bit(bitfield_512_t* field){
+//TODO start at given atomic index!
+int64_t field_set_Bit(bitfield_t* field){
     assert(field != NULL);
 
     pos_t pos;
-    if(find_unset(field, &pos) < 0) return ERR_MEMORY;
+    if(field_find_unset(field, &pos) < 0) return ERR_MEMORY;
 
     uint64_t mask = 1ull << pos.bit_index; // 00...010...0 -> one at the bit-position
 
@@ -92,7 +93,7 @@ int64_t set_Bit(bitfield_512_t* field){
     return pos.row_index * CACHESIZE + pos.bit_index;
 }
 
-int reset_Bit(bitfield_512_t* field, size_t index){
+int field_reset_Bit(bitfield_t* field, size_t index){
     assert(field != NULL);
     assert(0 <= index && index < FIELDSIZE);
 
@@ -111,20 +112,20 @@ int reset_Bit(bitfield_512_t* field, size_t index){
 
 
 
-int count_Set_Bits(bitfield_512_t* field){
+int field_count_Set_Bits(bitfield_t* field){
     assert(field != NULL);
     int counter = 0;
     for(size_t i = 0; i < N; i++){
         uint64_t row = load(&field->rows[i]);
         counter += __builtin_popcountll(row); //TODO wrapper popcount ?
     }
-    
+
     assert(0 <= counter && counter <= FIELDSIZE);
     return counter;
 }
 
 
-bool is_free_bit(bitfield_512_t* self,size_t index){
+bool field_is_free(bitfield_t* self,size_t index){
     assert(self != NULL);
     assert(0 <= index && index < FIELDSIZE);
     pos_t pos = get_pos(index);
@@ -136,7 +137,7 @@ bool is_free_bit(bitfield_512_t* self,size_t index){
 }
 
 
-void print_field(bitfield_512_t* field){
+void field_print(bitfield_t* field){
     assert(field != NULL);
 
     printf("Field in HEX: MSB to LSB\n");
@@ -149,7 +150,7 @@ void print_field(bitfield_512_t* field){
 
 
 // true if both fields are equal or both pointer are NULL;
-bool equals(bitfield_512_t* f1, bitfield_512_t* f2){
+bool field_equals(bitfield_t* f1, bitfield_t* f2){
     if(f1 == NULL && f2 == NULL) return true;
     if(f1 == NULL || f2 == NULL) return false;
 

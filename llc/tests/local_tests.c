@@ -8,7 +8,7 @@ bool init_local_test() {
   bool success = true;
 
   local_t actual;
-  init_local(&actual);
+  local_init(&actual);
   check_equal(actual.last_free.free_counter, 0);
   check_uequal(actual.last_free.last_free_idx, 0ul);
   check_equal(actual.reserved.free_counter, 0);
@@ -22,22 +22,22 @@ bool set_preferred_test() {
   bool success = true;
   local_t local_o;
   local_t *local = &local_o;
-  init_local(local);
-  mark_as_searchig(local);
+  local_init(local);
+  local_mark_as_searchig(local);
   uint64_t pfn = 45463135;
   unsigned counter = 1 << 13;
   reserved_t old;
-  int ret = set_preferred(local, pfn, counter, &old);
+  int ret = local_set_new_preferred_tree(local, pfn, counter, &old);
   check(ret == ERR_OK, "");
   check_uequal(local->reserved.preferred_index, atomic_from_pfn(pfn));
   check_equal(local->reserved.free_counter, counter);
   check(local->reserved.has_reserved_tree, "");
 
-  mark_as_searchig(local);
+  local_mark_as_searchig(local);
   local_t copy = local_o;
   pfn = 454135;
   counter = 9423;
-  ret = set_preferred(local, pfn, counter, &old);
+  ret = local_set_new_preferred_tree(local, pfn, counter, &old);
   check(ret == ERR_OK, "");
   check_uequal(local->reserved.preferred_index, atomic_from_pfn(pfn));
   check_equal(local->reserved.free_counter, counter);

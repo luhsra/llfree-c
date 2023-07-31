@@ -15,7 +15,7 @@ typedef struct lower {
   uint64_t start_frame_adr;
   size_t length;
   size_t num_of_childs; // arraylenght for fields and childs
-  bitfield_512_t *fields;
+  bitfield_t *fields;
   child_t *childs;
 } lower_t;
 
@@ -27,7 +27,7 @@ typedef struct lower {
  * @param len amount of frames to be managed
  * @param volatile_mem decides where space for the datastructures are allocated
   */
-void init_default(lower_t *const self, uint64_t start_pfn, size_t len, uint8_t init);
+void lower_init_default(lower_t *const self, uint64_t start_pfn, size_t len, uint8_t init);
 
 /**
  * @brief initialize the lower object and the bitfields and childs
@@ -39,7 +39,7 @@ void init_default(lower_t *const self, uint64_t start_pfn, size_t len, uint8_t i
  * otherwise)
  * @return ERR_OK
  */
-int init_lower(lower_t const *const self, bool free_all);
+int lower_init(lower_t const *const self, bool free_all);
 
 
 /**
@@ -89,7 +89,7 @@ bool lower_is_free(lower_t const *const self, uint64_t frame_adr, size_t order);
  * @param self pointer lo lower objekt
  * @return number of allocated frames
  */
-size_t allocated_frames(lower_t const *const self);
+size_t lower_allocated_frames(lower_t const *const self);
 
 /**
  * Helper to print the number of childen, allocated and managed Frames

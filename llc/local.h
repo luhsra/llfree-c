@@ -58,29 +58,29 @@ typedef struct __attribute__((aligned(CACHESIZE))) local {
  * @return ERR_RETRY if atomic operation fails
  *         ERR_OK on success
  */
-int set_preferred(local_t *self, uint64_t pfn, uint16_t free_count,
+int local_set_new_preferred_tree(local_t *self, uint64_t pfn, uint16_t free_count,
                   reserved_t *old_reservation);
 
 // init and set preferred to magic value
-void init_local(local_t *self);
+void local_init(local_t *self);
 
 // get the reserved tree index
-uint64_t get_reserved_pfn(local_t *self);
+uint64_t local_get_reserved_pfn(local_t *self);
 // set the flag for searching
-int mark_as_searchig(local_t *self);
+int local_mark_as_searchig(local_t *self);
 // reset the flag for searching
-int unmark_as_searchig(local_t *self);
+int local_unmark_as_searchig(local_t *self);
 
 // set last free index
-int inc_local_free_counter(local_t *const self, const uint64_t frame,
+int local_inc_counter(local_t *const self, const uint64_t frame,
                            const size_t order);
-int dec_local_free_counter(local_t *const self, const size_t order);
+int local_dec_counter(local_t *const self, const size_t order);
 
 // resetzs the reserved tree and returns the old
-int steal(local_t *const self, reserved_t *const old_reservation);
+int local_steal(local_t *const self, reserved_t *const old_reservation);
 
 // sets last_free to tree of given frame
 // returns UPDATE_RESERVED after 4 consecutive free on the same tree
-int set_free_tree(local_t *self, uint64_t frame);
+int local_set_free_tree(local_t *self, uint64_t frame);
 
-int update_preferred(local_t *const self, uint64_t pfn);
+int local_update_last_reserved(local_t *const self, uint64_t pfn);

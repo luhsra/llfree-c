@@ -59,7 +59,7 @@ int child_counter_dec(child_t *self);
  * @return ERR_OK on success
  *         ERR_MEMORY if some Bits are alredy set (so no HP can be reserved)
  */
-int reserve_HP(child_t *self);
+int child_reserve_HP(child_t *self);
 
 /**
  * @brief Frees a Huge-Page by resetting the flag and setting the Counter to 512
@@ -68,14 +68,14 @@ int reserve_HP(child_t *self);
  * @return ERR_OK on success
  *         ERR_ADRESS if the flagcounter is not a reserved HP
  */
-int free_HP(child_t *self);
+int child_free_HP(child_t *self);
 
 /**
  * @brief atomically reads and returns the counter Value of the given child
  * @param self pointer to child
  * @return value of the counter
  */
-#define get_counter(child_ptr)                                                 \
+#define child_get_counter(child_ptr)                                                 \
   ({                                                                           \
     child_t _child_ = {load(&(child_ptr)->raw)};                               \
     _child_.counter;                                                           \
@@ -86,7 +86,7 @@ int free_HP(child_t *self);
  * @param self pointer to child
  * @return true if child is a huge page
  */
-#define is_HP(child_ptr)                                                       \
+#define child_is_HP(child_ptr)                                                       \
   ({                                                                           \
     child_t _child_ = {load(&(child_ptr)->raw)};                               \
     _child_.flag;                                                              \
