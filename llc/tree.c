@@ -57,9 +57,8 @@ int writeback_tree(tree_t *self, uint16_t free_counter) {
   tree_t old = {load(&self->raw)};
 
   assert(free_counter + old.counter <= TREESIZE);
-  //assert(old.flag == true && "must be reserved to release it");
-  tree_t desire = init_tree(free_counter + old.counter, false);
 
+  tree_t desire = init_tree(free_counter + old.counter, false);
   return cas(self, &old, desire);
 }
 

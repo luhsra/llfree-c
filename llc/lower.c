@@ -71,7 +71,7 @@ int init_lower(lower_t const *const self, bool all_free) {
   for (size_t i = 0; i < self->num_of_childs - 1; i++) {
     self->fields[i] = init_field(0, all_free);
     self->childs[i] =
-        init_child(all_free ? FIELDSIZE : 0, all_free ? false : true);
+        child_init(all_free ? FIELDSIZE : 0, all_free ? false : true);
   }
   size_t frames_in_last_field = self->length % FIELDSIZE;
   self->fields[self->num_of_childs - 1] =
@@ -80,7 +80,7 @@ int init_lower(lower_t const *const self, bool all_free) {
   if (frames_in_last_field == 0)
     frames_in_last_field = FIELDSIZE;
   self->childs[self->num_of_childs - 1] =
-      init_child(all_free ? frames_in_last_field : 0, !all_free && frames_in_last_field == FIELDSIZE);
+      child_init(all_free ? frames_in_last_field : 0, !all_free && frames_in_last_field == FIELDSIZE);
   return ERR_OK;
 }
 
@@ -173,7 +173,7 @@ void convert_HP_to_regular(child_t *child, bitfield_512_t *field) {
     atomic_fetch_or(&field->rows[i], 0xFFFFFFFFFFFFFFFF);
   }
 
-  child_t mask = init_child(0, true);
+  child_t mask = child_init(0, true);
   child_t before_c = {atomic_fetch_and(&child->raw, ~mask.raw)};
   assert(before_c.flag == true);
   return;
@@ -270,7 +270,10 @@ void lower_print(lower_t const *const self) {
 
 void lower_drop(lower_t const *const self) {
   assert(self != NULL);
+  child_t* start_data = (child_t*)(self->start_frame_adr + self->length * PAGESIZE);
+  if(self->childs != start_data){
+    free(self->childs);
+    free(self->fields);
+  }
 
-  free(self->childs);
-  free(self->fields);
 }

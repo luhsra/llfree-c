@@ -63,12 +63,7 @@ int set_preferred(local_t *self, uint64_t pfn, uint16_t free_count,
 
 // init and set preferred to magic value
 void init_local(local_t *self);
-// check if it has a reserved tree
-#define has_reserved_tree(_local)                                              \
-  ({                                                                           \
-    reserved_t _ = {load(&_local->reserved.raw)};                            \
-    _.has_reserved_tree;                                                     \
-  })
+
 // get the reserved tree index
 uint64_t get_reserved_pfn(local_t *self);
 // set the flag for searching

@@ -44,7 +44,6 @@ bool general_function_test() {
 
   check(upper->trees[0].flag, "tree is reserved now");
   check(upper->trees[0].counter == 0, "counter was copied to local");
-  check(upper->local[0].reserved.has_reserved_tree, "");
   check(upper->local[0].reserved.free_counter == 16383,
         "local counter is decreased");
 

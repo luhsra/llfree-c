@@ -19,25 +19,23 @@
  */
 typedef struct child {
   union {
-    alignas(2) _Atomic(uint16_t) raw;
+    _Atomic(uint16_t) raw;
     struct {
       uint16_t counter : 10;
       bool flag : 1;
-      uint16_t unused : 5;
+      uint8_t unused : 5;
     };
   };
 } child_t;
 
 /**
  * @brief initializes the counter with the given values
- * it does so non-atomicly because at the time of creation there can be no
- * second access
  * @param counter initial counter Value must be < 0x400 (fit in 10 bit)
  * @param flag initial flag value
  * @return initialized flagcounter
  */
-child_t init_child(uint16_t counter, bool flag);
-
+ #define child_init(_counter, _flag)\
+({(child_t){((_flag) << 10) | (_counter)};})
 /**
  * @brief same as atomic_counter_inc but only increments if the flag is not set
  * @param self pointer to the counter

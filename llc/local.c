@@ -17,7 +17,7 @@ void init_local(local_t *self) {
 
 int steal(local_t* const self, reserved_t* const old_reservation){
   *old_reservation = (reserved_t){load(&self->reserved.raw)};
-  if(!old_reservation->has_reserved_tree || old_reservation->reservation_in_progress) return ERR_ADDRESS;
+  if(!old_reservation->has_reserved_tree || old_reservation->free_counter == 0 || old_reservation->reservation_in_progress) return ERR_ADDRESS;
   reserved_t new = {0};
 
   return cas(&self->reserved, old_reservation, new);
@@ -45,7 +45,8 @@ int update_preferred(local_t* const self, uint64_t pfn){
   reserved_t prev = {load(&self->reserved.raw)};
   //no update if reservation is in progress
   uint64_t new_reserved = atomic_from_pfn(pfn);
-  if(tree_from_atomic(prev.preferred_index) != tree_from_atomic(new_reserved) || prev.reservation_in_progress){
+  assert(tree_from_atomic(prev.preferred_index) == tree_from_atomic(new_reserved));
+  if(prev.reservation_in_progress){
     return ERR_OK;
   }
   reserved_t desire = prev;

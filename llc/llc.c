@@ -30,13 +30,8 @@
  * @param region pfn of a tree in witch cacheline is  searched first
  * @return int64_t
  */
-static int64_t find_free_Tree_IDX(upper_t const *const self, const size_t core,
-                                  const bool has_reserved_tree, uint64_t region) {
+static int64_t find_free_Tree_IDX(upper_t const *const self, uint64_t region) {
   assert(self != NULL);
-
-  // if no tree was reserved previously set a region in Memory
-  if (!has_reserved_tree)
-    region = (self->lower.length / self->cores) * (core % self->cores);
 
   const size_t tree_idx = tree_from_pfn(region);
   size_t patial_tree_idx;
@@ -209,8 +204,8 @@ static int set_preferred_and_writeback(upper_t const *const self,
 
   // writeback the old counter to trees
   if (old_reserved.has_reserved_tree) {
-    tree_t *const tree = &self->trees[tree_from_pfn(
-        pfn_from_atomic(old_reserved.preferred_index))];
+    tree_t *const tree =
+        &self->trees[tree_from_atomic(old_reserved.preferred_index)];
     update(writeback_tree(tree, old_reserved.free_counter));
   }
   return ERR_OK;
@@ -242,8 +237,10 @@ static int reserve_new_tree(upper_t const *const self, size_t const core) {
   int64_t tree_idx;
   int counter;
   do {
-    tree_idx = find_free_Tree_IDX(self, core, has_reserved_tree(local),
-                                  get_reserved_pfn(local));
+    uint64_t region = get_reserved_pfn(local);
+    if (region == 0)
+      region = (self->lower.length / self->cores) * (core % self->cores);
+    tree_idx = find_free_Tree_IDX(self, region);
     if (tree_idx < 0) {
       // found no unreserved tree with some space in it -> try steal from other
       // cpus
@@ -370,8 +367,8 @@ int64_t llc_get(const void *this, size_t core, size_t order) {
   upper_t const *const self = (upper_t *)this;
   local_t *local = get_local(self, core);
 
-  // if no Tree is reserved search a new one
-  if (!(has_reserved_tree(local))) {
+  // if reserved tree is in its initial status
+  if (load(&local->reserved.raw) == 0) {
     int ret = update(reserve_new_tree(self, core));
     if (ret == ERR_MEMORY) {
       return ERR_MEMORY;
@@ -470,8 +467,8 @@ int64_t llc_put(void const *const this, const size_t core,
     unmark_as_searchig(local);
     return ERR_OK;
   }
-  ret = set_preferred_and_writeback(self, core, pfn_from_tree(tree_idx),
-                                    counter);
+  ret =
+      set_preferred_and_writeback(self, core, pfn_from_tree(tree_idx), counter);
   assert(ret == ERR_OK);
 
   return ERR_OK;
