@@ -1,13 +1,16 @@
 #include "enum.h"
 #include "llc.h"
+#include "lower.h"
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 int alloc_all_as_HP();
+int rand_reg();
 
 #define die(msg)                                                               \
   do {                                                                         \
@@ -16,7 +19,7 @@ int alloc_all_as_HP();
   } while (0)
 
 int main(int argc, char **argv) {
-  char *benches[] = {"allHP_MC"};
+  char *benches[] = {"allHP_MC", "rand"};
   bool correct = false;
   if (argc == 2) {
     for (unsigned i = 0; i < sizeof(benches) / sizeof(*benches); ++i) {
@@ -40,6 +43,11 @@ int main(int argc, char **argv) {
     if (ret != 0)
       printf("alloc_all_as_HP returnd a faliure\n");
   }
+  if (!strcmp(argv[1], benches[1])) {
+    int ret = rand_reg();
+    if (ret != 0)
+      printf("rand returnd a faliure\n");
+  }
   return 0;
 }
 
@@ -47,6 +55,8 @@ struct arg {
   upper_t *upper;
   unsigned core;
   unsigned allocations;
+  int64_t* list;
+  unsigned len;
 };
 struct ret {
   unsigned failed_allocations;
@@ -97,7 +107,7 @@ int alloc_all_as_HP() {
   struct arg args[cores];
   pthread_t threads[cores];
   for (int i = 0; i < cores; ++i) {
-    args[i] = (struct arg){upper, i, num_of_HPs / cores};
+    args[i] = (struct arg){upper, i, num_of_HPs / cores, NULL, 0};
     int ret = pthread_create(&threads[i], NULL, allocHPs, &args[i]);
     if (ret != 0)
       die("pthread create");

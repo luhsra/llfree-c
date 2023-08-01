@@ -34,6 +34,12 @@ bool general_function_test() {
   check(llc_frames(upper) == 132000, "");
   check(llc_free_frames(upper) == 132000, "right number of free frames");
 
+  //check allignment
+  check((uint64_t)upper->trees % CACHESIZE == 0, "Alignment of trees");
+  for(unsigned i = 0; i < upper->cores; ++i){
+    check_uequal_m((uint64_t)&upper->local[i] % CACHESIZE ,0ul, "Alignment of local");
+  }
+
   p("Before get\n");
 
   int64_t frame = llc_get(upper, 0, 0);

@@ -8,19 +8,15 @@
 /*
  * Implements The Bitfield and behaviour.
 */
-#define FIELDSIZE (1 << 9)                    // Amount of Bits in a Field
-#define CACHESIZE (sizeof(uint64_t) * 8)    // Bit-Size of the Biggest Datatype for atomic operations. uint64
-#define N FIELDSIZE/CACHESIZE               // number of uint64 in the Bitfield.
+#define FIELDSIZE (1 << 9)                  // Amount of Bits in a Field
+#define CACHESIZE (1 << 6)                  // Number of Bytes in cacheline
+#define ATOMICSIZE (sizeof(uint64_t)* 8)   // Bits in uint64_t -> biggest atomic size
+#define N (FIELDSIZE/ATOMICSIZE)               // number of uint64 in the Bitfield.
 
 typedef struct bitfield{
     alignas(CACHESIZE) _Atomic(uint64_t) rows[N];
 } bitfield_t;
 
-// Helping struct to store the position of a bit in a bitfield.
-typedef struct pos {
-    size_t row_index;     // 0 <= row_number < N
-    size_t bit_index;     // 0 <= bit_number < sizeof(uint64_t)
-}pos_t;
 
 /**
  * @brief Initializes the Bitfield of 512 Bit size.
@@ -38,7 +34,7 @@ bitfield_t field_init(int number_of_free_Frames, bool all_free);
 *         ERR_MEMORY if no free bit was found
 *         ERR_RETRY  if the atomic operation failed
 */
-int64_t field_set_Bit(bitfield_t* field);
+int64_t field_set_Bit(bitfield_t* field, const uint64_t pfn);
 
 /**
 * @brief Atomically resets the Bit in given field at index position
@@ -76,11 +72,3 @@ void field_print(bitfield_t* field);
 */
 bool field_equals(bitfield_t* field1, bitfield_t* field2);
 
-/**
- * @brief finds the position of the first 0 in the bitfield
- * @param field Pointer to the bitfield
- * @param pos Pointer to a struct the position will be Stored in
- * @return  ERR_OK on success
- *          ERR_MEMORY if no unset Bit was found.
- */
-int field_find_unset(bitfield_t* field,  pos_t* pos);

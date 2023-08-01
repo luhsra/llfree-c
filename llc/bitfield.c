@@ -4,14 +4,20 @@
 #include <stdio.h>
 #include <assert.h>
 #include "enum.h"
+#include "pfn.h"
+#include "utils.h"
 
-
+// Helping struct to store the position of a bit in a bitfield.
+typedef struct pos {
+    size_t row_index;     // 0 <= row_number < N
+    size_t bit_index;     // 0 <= bit_number < sizeof(uint64_t)
+}pos_t;
 
 //Translates the index of the bit to the position in the field.
 static pos_t get_pos(int index){
-    assert(0 <= index && index < FIELDSIZE && "max range for 512 Bits");
+    index = index & (FIELDSIZE -1);
 
-    pos_t pos = {index / CACHESIZE, index % CACHESIZE};
+    pos_t pos = {index / ATOMICSIZE, index % ATOMICSIZE};
     return pos;
 }
 
@@ -35,7 +41,7 @@ bitfield_t field_init(int number_of_free_Frames, bool all_free){
         return field;
     }
 
-    // possible to have not a fully saturated bitfield
+    // possible to have a not fully saturated bitfield
     pos_t pos = get_pos(number_of_free_Frames); //position of the last free frame
     uint64_t mask = 0xfffffffffffffffful << pos.bit_index;
     for(size_t i = 0; i < N; i++){
@@ -53,13 +59,19 @@ bitfield_t field_init(int number_of_free_Frames, bool all_free){
 }
 
 
-
-int field_find_unset(bitfield_t* field,  pos_t* pos){
+/**
+ * @brief finds the position of the first 0 in the bitfield
+ * @param field Pointer to the bitfield
+ * @param pos Pointer to a struct the position will be Stored in
+ * @return  ERR_OK on success
+ *          ERR_MEMORY if no unset Bit was found.
+ */
+static int field_find_unset(bitfield_t* field,  pos_t* pos){
     assert(field != NULL);
     assert(pos != NULL);
 
-    for(size_t i = 0; i < N; i++){
-        uint64_t row = atomic_load(&field->rows[i]);
+    ITERRATE(pos->row_index, N,
+        uint64_t row = atomic_load(&field->rows[current_i]);
         // ctzll(x) -> If x is 0, the result is undefined and there are no unset bits
         if(~row == 0) continue;
 
@@ -68,19 +80,18 @@ int field_find_unset(bitfield_t* field,  pos_t* pos){
         assert(ret >= 0 && "ctzll shoud never be negative");
         assert(ret < 64 && "ctzll schould not count more zeros as there are Bits");
 
-        pos->row_index = i;
+        pos->row_index = current_i;
         pos->bit_index = ret;
         return ERR_OK;
-    }
-
+    );
     return ERR_MEMORY; // ERR_MEMORY ->Kein freies Bit in diesem Feld
 }
 
 //TODO start at given atomic index!
-int64_t field_set_Bit(bitfield_t* field){
+int64_t field_set_Bit(bitfield_t* field, const uint64_t pfn){
     assert(field != NULL);
 
-    pos_t pos;
+    pos_t pos = get_pos(pfn & (FIELDSIZE -1));
     if(field_find_unset(field, &pos) < 0) return ERR_MEMORY;
 
     uint64_t mask = 1ull << pos.bit_index; // 00...010...0 -> one at the bit-position
@@ -90,7 +101,7 @@ int64_t field_set_Bit(bitfield_t* field){
     if((before | mask) == before){ // if no change occours the bit was already set.
         return ERR_RETRY;
     }
-    return pos.row_index * CACHESIZE + pos.bit_index;
+    return pos.row_index * ATOMICSIZE + pos.bit_index;
 }
 
 int field_reset_Bit(bitfield_t* field, size_t index){

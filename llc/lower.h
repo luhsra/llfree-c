@@ -54,13 +54,13 @@ int lower_recover(lower_t* self);
  * @brief allocates frames
  * allocation will be searched in a chunk of CHILDS_PER_TREE children.
  * @param self pointer to lower object
- * @param start defines the chunk to be searched (will start at start of the
+ * @param pfn defines the chunk to be searched (will start at start of the
  * chunk even when start points to the middle)
  * @param order determines the amount consecutive pages to be alloced (2^order)
  * @return absolute pfn on success;
  *         ERR_MEMORY if not enough space was found (ret will be undefined)
  */
-int64_t lower_get(lower_t const *const self, int64_t start, size_t order);
+int64_t lower_get(lower_t const *const self, uint64_t pfn, size_t order);
 
 /**
  * @brief deallocates given frames
@@ -90,6 +90,8 @@ bool lower_is_free(lower_t const *const self, uint64_t frame_adr, size_t order);
  * @return number of allocated frames
  */
 size_t lower_allocated_frames(lower_t const *const self);
+
+size_t lower_free_HPs(lower_t const * const self);
 
 /**
  * Helper to print the number of childen, allocated and managed Frames

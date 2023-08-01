@@ -41,71 +41,7 @@ bool init_field_test(){
     return success;
 }
 
-bool find_unset_test(){
-    bool success = true;
 
-    bitfield_t actual = (bitfield_t) {{0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
-    bitfield_t expected = actual;
-    pos_t pos;
-
-    int ret = field_find_unset(&actual, &pos);
-    check_equal(ret, 0);
-    check_uequal(pos.row_index, 0lu);
-    check_uequal(pos.bit_index, 0lu);
-    check_equal_bitfield_m(actual, expected, "field should not be changed");
-
-    actual = (bitfield_t) {{0x1,0x0,0x0,0x1,0x0,0x0,0x0,0x0}};
-    expected = actual;
-    ret = field_find_unset(&actual, &pos);
-    check_equal(ret, 0);
-    check_uequal(pos.row_index, 0lu);
-    check_uequal(pos.bit_index, 1lu);
-    check_equal_bitfield_m(actual, expected, "field should not be changed");
-
-    actual = (bitfield_t) {{0x1fffffffff,0x0,0x0,0x1,0x0,0x0,0x0,u64MAX}};
-    expected = actual;
-    ret = field_find_unset(&actual, &pos);
-    check_equal(ret, 0);
-    check_uequal(pos.row_index, 0lu);
-    check_uequal(pos.bit_index, 37lu);
-    check_equal_bitfield_m(actual, expected, "field should not be changed");
-
-
-    actual = (bitfield_t) {{u64MAX,u64MAX,0x0,0x1,0x0,u64MAX,0x0,0x0}};
-    expected = actual;
-    ret = field_find_unset(&actual, &pos);
-    check_equal(ret, 0);
-    check_uequal(pos.row_index, 2lu);
-    check_uequal(pos.bit_index, 0lu);
-    check_equal_bitfield_m(actual, expected, "field should not be changed");
-
-
-    actual = (bitfield_t) {{u64MAX,u64MAX,u64MAX,0x7fffffffffffffff,0x0,0x0,u64MAX,0x0}};
-    expected = actual;
-    ret = field_find_unset(&actual, &pos);
-    check_equal(ret, 0);
-    check_uequal(pos.row_index, 3lu);
-    check_uequal(pos.bit_index, 63lu);
-    check_equal_bitfield_m(actual, expected, "field should not be changed");
-
-    actual = (bitfield_t) {{u64MAX,u64MAX,u64MAX,u64MAX,u64MAX,u64MAX,u64MAX,0x7fffffffffffffff}};
-    expected = actual;
-    ret = field_find_unset(&actual, &pos);
-    check_equal(ret, 0);
-    check_uequal(pos.row_index, 7lu);
-    check_uequal(pos.bit_index, 63lu);
-    check_equal_bitfield_m(actual, expected, "field should not be changed");
-
-    actual = (bitfield_t) {{u64MAX,u64MAX,u64MAX,u64MAX,u64MAX,u64MAX,u64MAX,u64MAX}};
-    expected = actual;
-    ret = field_find_unset(&actual, &pos);
-    check_equal_m(ret, ERR_MEMORY, "should be no space available");
-    check_equal_bitfield_m(actual, expected, "field should not be changed");
-
-
-
-    return success;
-}
 
 bool set_Bit_test(){
     bool success = true;
@@ -113,7 +49,7 @@ bool set_Bit_test(){
     bitfield_t actual =   (bitfield_t) {{0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
     bitfield_t expected = (bitfield_t) {{0x1,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
 
-    int ret = field_set_Bit(&actual);
+    int ret = field_set_Bit(&actual, 0);
     check_equal(ret, 0);
     check_equal_bitfield_m(actual, expected, "first bit must be set");
 
@@ -121,14 +57,14 @@ bool set_Bit_test(){
     actual = (bitfield_t)   {{0x1,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
     expected = (bitfield_t) {{0x3,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
 
-    ret = field_set_Bit(&actual);
+    ret = field_set_Bit(&actual, 0);
     check_equal(ret, 1);
     check_equal_bitfield(actual, expected);
 
     actual = (bitfield_t)   {{u64MAX,0xf,0x0,0x0,0x0,0x0,0x0,0x0}};
     expected = (bitfield_t) {{u64MAX,0x1f,0x0,0x0,0x0,0x0,0x0,0x0}};
 
-    ret = field_set_Bit(&actual);
+    ret = field_set_Bit(&actual, 0);
     check_equal_m(ret, 68, "call should be a success");
     check_equal_bitfield(actual, expected);
 
@@ -136,7 +72,7 @@ bool set_Bit_test(){
     actual = (bitfield_t)   {{u64MAX,u64MAX,u64MAX,0xfabdeadbeeffffff,0x0,0xdeadbeefdeadbeef,0x0,0x8000000000000000}};
     expected = (bitfield_t) {{u64MAX,u64MAX,u64MAX,0xfabdeadbefffffff,0x0,0xdeadbeefdeadbeef,0x0,0x8000000000000000}};
 
-    ret = field_set_Bit(&actual);
+    ret = field_set_Bit(&actual, 0);
     check_equal_m(ret, 216, "call should be a success");
     check_equal_bitfield_m(actual, expected, "row 3 bit 24 -> e to f");
 
@@ -144,7 +80,7 @@ bool set_Bit_test(){
     actual = (bitfield_t)   {{u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}};
     expected = (bitfield_t) {{u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}};
 
-    ret = field_set_Bit(&actual);
+    ret = field_set_Bit(&actual, 0);
     check_equal_m(ret, ERR_MEMORY, "call should fail");
     check_equal_bitfield_m(actual, expected, "no change");
 
@@ -279,7 +215,6 @@ bool is_free_bit_test(){
 int bitfield_tests(int* test_counter, int* fail_counter){
 
     run_test(init_field_test);
-    run_test(find_unset_test);
     run_test(set_Bit_test);
     run_test(reset_Bit_test);
     run_test(count_Set_Bits_test);

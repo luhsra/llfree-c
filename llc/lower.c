@@ -99,10 +99,10 @@ int lower_recover(lower_t *self) {
   return ERR_OK;
 }
 
-int64_t get_HP(lower_t const *const self, uint64_t atomic_idx) {
+int64_t get_HP(lower_t const *const self, uint64_t pfn) {
   assert(self != 0);
 
-  size_t idx = child_from_pfn(pfn_from_atomic(atomic_idx));
+  size_t idx = child_from_pfn(pfn);
   size_t offset = idx % CHILDS_PER_TREE;
   size_t start_idx = idx - offset;
 
@@ -125,22 +125,22 @@ int64_t get_HP(lower_t const *const self, uint64_t atomic_idx) {
  * @return adress of the reseved frame on success
  *         ERR_MEMORY if no free Frame were found
  */
-static int64_t reserve_in_Bitfield(const lower_t *self, const size_t idx) {
-  const int64_t pos = update(field_set_Bit(&self->fields[idx]));
+static int64_t reserve_in_Bitfield(const lower_t *self, const uint64_t child_idx, const uint64_t pfn) {
+
+  const int64_t pos = update(field_set_Bit(&self->fields[child_idx], pfn));
   if (pos >= 0) {
     // found and reserved a frame
-    return pfn_from_child(idx) + pos + self->start_frame_adr;
+    return pfn_from_child(child_idx) + pos + self->start_frame_adr;
   }
   return ERR_MEMORY;
 }
 
-int64_t lower_get(lower_t const *const self, int64_t atomic_idx, size_t order) {
+int64_t lower_get(lower_t const *const self, const uint64_t pfn, const size_t order) {
   assert(order == 0 || order == HP);
-  uint64_t pfn = pfn_from_atomic(atomic_idx);
   assert(pfn < self->length);
 
   if (order == HP)
-    return get_HP(self, atomic_idx);
+    return get_HP(self, pfn);
 
   const size_t start_idx = child_from_pfn(pfn);
 
@@ -149,11 +149,11 @@ int64_t lower_get(lower_t const *const self, int64_t atomic_idx, size_t order) {
       if (current_i >= self->num_of_childs) continue;
 
       if (update(child_counter_dec(&self->childs[current_i])) == ERR_OK) {
-        int64_t pfn_adr = reserve_in_Bitfield(self, current_i);
+        int64_t pfn_adr = reserve_in_Bitfield(self, current_i, pfn);
 
         assert(pfn_adr >= 0 && "because of the counter in child there must always be a frame left");
         if(pfn_adr == ERR_MEMORY) return ERR_CORRUPTION;
-
+        assert(tree_from_pfn(pfn_adr - self->start_frame_adr) == tree_from_pfn(pfn));
         return pfn_adr;
       });
 
@@ -276,4 +276,13 @@ void lower_drop(lower_t const *const self) {
     free(self->fields);
   }
 
+}
+
+
+size_t lower_free_HPs(lower_t const * const self){
+  size_t count = 0;
+  for(size_t i = 0; i < self->num_of_childs; ++i){
+    if(child_get_counter(&self->childs[i]) == CHILDSIZE) ++count;
+  }
+  return count;
 }

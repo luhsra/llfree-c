@@ -72,7 +72,7 @@ benchmark_build: $(BENCHDIR) $(OBJS) $(BENCHOBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(BENCHOBJS) -o $(BUILDDIR)/$(BENCHDIR)/benchmark
 
 benchmark: benchmark_build
-	./$(BUILDDIR)/$(BENCHDIR)/benchmark allHP_MC
+	./$(BUILDDIR)/$(BENCHDIR)/benchmark rand
 
 flamegraph:
 	perf record -F 99 -a -g build/bench/benchmark allHP_MC
