@@ -57,6 +57,7 @@ struct arg {
   unsigned allocations;
   int64_t *list;
   unsigned len;
+  struct random_data *r_data;
 };
 struct ret {
   unsigned failed_allocations;
@@ -107,7 +108,7 @@ int alloc_all_as_HP() {
   struct arg args[cores];
   pthread_t threads[cores];
   for (int i = 0; i < cores; ++i) {
-    args[i] = (struct arg){upper, i, num_of_HPs / cores, NULL, 0};
+    args[i] = (struct arg){upper, i, num_of_HPs / cores, NULL, 0, NULL};
     int ret = pthread_create(&threads[i], NULL, allocHPs, &args[i]);
     if (ret != 0)
       die("pthread create");

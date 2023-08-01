@@ -244,7 +244,7 @@ size_t lower_allocated_frames(lower_t const *const self) {
 };
 
 void lower_print(lower_t const *const self) {
-  printf("\n-------------------------------------\nLOWER ALLOKATOR"
+  printf("\n-------------------------------------\nLOWER ALLOKATOR\n"
          "childs\n%lu/%lu frames are allocated\n%lu/%lu Huge Frames are free\nChilds:\n",
          lower_allocated_frames(self), self->length, lower_free_HPs(self), self->num_of_childs);
   if (self->num_of_childs > 20)
