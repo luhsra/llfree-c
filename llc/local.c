@@ -31,7 +31,7 @@ int local_set_new_preferred_tree(local_t *self, uint64_t pfn,
   assert(self != NULL);
   assert(free_count <= TREESIZE);
 
-  size_t idx = atomic_from_pfn(pfn);
+  const size_t idx = atomic_from_pfn(pfn);
 
   reserved_t desire = {0};
   desire.free_counter = free_count;
@@ -122,13 +122,12 @@ int local_dec_counter(local_t *const self, const size_t order) {
 
 int local_set_free_tree(local_t *self, uint64_t frame) {
   assert(self != NULL);
-  size_t atomic_Idx = atomic_from_pfn(frame);
 
   last_free_t old = {load(&self->last_free.raw)};
   last_free_t desire;
   // if last free was in another tree -> overwrite last reserved Index
-  if (old.last_free_idx != atomic_Idx) {
-    desire.last_free_idx = atomic_Idx;
+  if (tree_from_atomic(old.last_free_idx) != tree_from_pfn(frame)) {
+    desire.last_free_idx = atomic_from_pfn(frame);;
     desire.free_counter = 0;
 
     // if the same tree -> increase the counter for this

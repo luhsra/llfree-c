@@ -1,8 +1,11 @@
 #include "tree.h"
 #include "bitfield.h"
 #include "enum.h"
+#include "lower.h"
+#include "pfn.h"
 #include "utils.h"
 #include <assert.h>
+#include <stddef.h>
 #include <stdint.h>
 
 tree_t tree_init(uint16_t counter, bool flag) {
@@ -96,4 +99,37 @@ int tree_counter_dec(tree_t *self, size_t order) {
   tree_t desire = old;
   desire.counter -= 1 << order;
   return cas(self, &old, desire);
+}
+
+
+int64_t tree_find_reserveable(tree_t const * const trees, uint64_t len, uint64_t pfn_region, uint64_t order){
+  const uint64_t tree_idx = tree_from_pfn(pfn_region);
+  assert(tree_idx < len);
+
+  const size_t upper_limit = TREESIZE * (1 - BREAKPOINT);
+  const size_t lower_limit = TREESIZE * BREAKPOINT;
+  uint64_t free_idx = len;
+  ITERRATE(tree_idx, 32,
+    if(current_i >= len) continue; //if not the whole cacheline is used
+
+    const tree_t tree = {load(&trees[current_i].raw)};
+    //return partial tree if found
+    if(!tree.flag && tree.counter < upper_limit && tree.counter > lower_limit) return current_i;
+
+    //mark a free tree in case no partial tree is found
+    if(!tree.flag && tree.counter >= upper_limit && free_idx == len) free_idx = current_i;
+  );
+  // if found return idx of a free tree
+  if(free_idx != len) return free_idx;
+
+
+
+  //no tree found in this cacheline -> search whole tree for a tree with enough free frames
+  const uint16_t min_val = 1 << order;
+
+  for(uint64_t i = (tree_idx + 1) % len; i != tree_idx; i = (i+1) % len ){
+    const tree_t tree = {load(&trees[i].raw)};
+    if(!tree.flag && tree.counter >= min_val) return i;
+  }
+  return ERR_MEMORY;
 }

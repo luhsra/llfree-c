@@ -1,13 +1,13 @@
 #include "enum.h"
 #include "llc.h"
 #include "lower.h"
+#include <assert.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 
 int alloc_all_as_HP();
 int rand_reg();
@@ -55,7 +55,7 @@ struct arg {
   upper_t *upper;
   unsigned core;
   unsigned allocations;
-  int64_t* list;
+  int64_t *list;
   unsigned len;
 };
 struct ret {

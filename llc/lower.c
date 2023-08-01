@@ -143,7 +143,7 @@ int64_t lower_get(lower_t const *const self, const uint64_t pfn, const size_t or
     return get_HP(self, pfn);
 
   const size_t start_idx = child_from_pfn(pfn);
-
+  //TODO priorisire fast volle childs!
   ITERRATE(
       start_idx, CHILDS_PER_TREE,
       if (current_i >= self->num_of_childs) continue;
@@ -244,9 +244,9 @@ size_t lower_allocated_frames(lower_t const *const self) {
 };
 
 void lower_print(lower_t const *const self) {
-  printf("\n-------------------------------------\nlower allocator: with %zu "
-         "childs\n%lu/%lu frames are allocated\nChilds:\n",
-         self->num_of_childs, lower_allocated_frames(self), self->length);
+  printf("\n-------------------------------------\nLOWER ALLOKATOR"
+         "childs\n%lu/%lu frames are allocated\n%lu/%lu Huge Frames are free\nChilds:\n",
+         lower_allocated_frames(self), self->length, lower_free_HPs(self), self->num_of_childs);
   if (self->num_of_childs > 20)
     printf("There are over 20 Childs. Print will only contain first and last "
            "10\n\n");

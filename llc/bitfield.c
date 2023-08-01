@@ -14,7 +14,7 @@ typedef struct pos {
 }pos_t;
 
 //Translates the index of the bit to the position in the field.
-static pos_t get_pos(int index){
+static pos_t get_pos(uint64_t index){
     index = index & (FIELDSIZE -1);
 
     pos_t pos = {index / ATOMICSIZE, index % ATOMICSIZE};
@@ -91,7 +91,7 @@ static int field_find_unset(bitfield_t* field,  pos_t* pos){
 int64_t field_set_Bit(bitfield_t* field, const uint64_t pfn){
     assert(field != NULL);
 
-    pos_t pos = get_pos(pfn & (FIELDSIZE -1));
+    pos_t pos = get_pos(pfn);
     if(field_find_unset(field, &pos) < 0) return ERR_MEMORY;
 
     uint64_t mask = 1ull << pos.bit_index; // 00...010...0 -> one at the bit-position
