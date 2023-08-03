@@ -19,3 +19,4 @@ memfile
 !/results/keep/
 !/results/*.ipynb
 !/results/remote.sh
+llc/perf.svg

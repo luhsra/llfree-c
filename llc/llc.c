@@ -19,78 +19,6 @@
 #define get_local(_self, _core)                                                \
   ({ &_self->local[_core % _self->num_of_trees]; })
 
-#ifdef FALSE
-/**
- * @brief searches a free tree and reserves it if found
- * The cacheline defined by region will be searched first. if no Tree is
- * available all  unreserved trees will be searched.
- * @param self pointer to upper allocator
- * @param core number of core
- * @param has_reserved_tree  if false region will be set to a suitable starting
- * region for the given core.
- * @param region pfn of a tree in witch cacheline is  searched first
- * @return int64_t
- */
-static int64_t find_free_Tree_IDX(upper_t const *const self, uint64_t region) {
-  assert(self != NULL);
-
-  const size_t tree_idx = tree_from_pfn(region);
-  size_t free_tree_idx;
-  bool found_free_tree = false;
-
-  // search local (same cacheline as region)
-  ITERRATE(
-      tree_idx, CHILDS_PER_TREE,
-
-      if (current_i >= self->num_of_trees) continue;
-      const saturation_level_t saturation =
-          tree_status(&self->trees[current_i]);
-      switch (saturation) {
-        case ALLOCATED:
-          // Do nothing
-          break;
-        case FREE:
-          if (!found_free_tree) {
-            found_free_tree = true;
-            free_tree_idx = current_i;
-          }
-          break;
-        case PARTIAL:
-          return current_i;
-      });
-  // no free Tree was found within this cacheline -> check if a partial Tree was
-  // found
-  if (found_free_tree)
-    return free_tree_idx;
-
-  // no tree reserveable in this chacheline -> search all Trees
-  for (size_t i = tree_idx + 1; i < self->num_of_trees; ++i) {
-    const size_t current_i = i % self->num_of_trees;
-
-    const saturation_level_t saturation = tree_status(&self->trees[current_i]);
-    switch (saturation) {
-    case ALLOCATED:
-      // Do nothing
-      break;
-    case FREE:
-      if (!found_free_tree) {
-        found_free_tree = true;
-        free_tree_idx = current_i;
-      }
-      break;
-    case PARTIAL:
-      return current_i;
-    }
-    // no free Tree in whole memory available -> return idx of a partial filled
-    // Tree
-    if (found_free_tree)
-      return free_tree_idx;
-  }
-  // All Tress are allocated
-  return ERR_MEMORY;
-}
-#endif
-
 /**
  * @brief syncronizes the free_counter of given local with the global counter.
  *
@@ -245,7 +173,7 @@ static int reserve_new_tree(upper_t const *const self, size_t const core,
         tree_find_reserveable(self->trees, self->num_of_trees, region, order);
     if (tree_idx < 0) {
       // found no unreserved tree with some space in it -> try steal from
-      // other cpus
+      // other cores
       tree_idx = steal_tree(self, core);
       if (tree_idx < 0) {
         // not possible to steal a tree -> no memory availabe
@@ -261,7 +189,7 @@ static int reserve_new_tree(upper_t const *const self, size_t const core,
 
   // we successfully reserved a tree -> now set it as our local tree.
   set_preferred_and_writeback(self, core, pfn_from_tree(tree_idx), counter);
-  local_unmark_as_searchig(local);
+  //ocal_unmark_as_searchig(local); is done in wih set_preferred
   return ERR_OK;
 }
 
@@ -456,9 +384,10 @@ int64_t llc_put(void const *const this, const size_t core,
   // this tree was the target of multiple consecutive frees
   // -> reserve this tree if it is not completely allocated
 
-  //if (tree_status(&self->trees[tree_idx]) == ALLOCATED) {
-  //  return ERR_OK;
-  //}
+  tree_t * const tree = &self->trees[tree_idx];
+
+  saturation_level_t sat = tree_status(tree);
+  if(sat == ALLOCATED) return ERR_OK;
 
   if (local_mark_as_searchig(local) != ERR_OK) {
     // the local tree is already in reservation process -> ignore the reserve
@@ -466,7 +395,7 @@ int64_t llc_put(void const *const this, const size_t core,
     return ERR_OK;
   }
 
-  int counter = update(tree_reserve(&self->trees[tree_idx]));
+  int counter = update(tree_reserve(tree));
   if (counter < 0) {
     // reservation of tree not possible -> ignore the reserve last free tree
     // optimisation

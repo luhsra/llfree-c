@@ -156,16 +156,16 @@ bool test_put() {
   check(tree_from_pfn(ret2) > tree_from_pfn(reservedByCore1[TREESIZE]),
         "second get must be in different tree");
 
-  if(!success)llc_print(upper);
+  if(success)llc_print(upper);
   // free half the frames from old tree with core 2
   for (int i = 0; i < TREESIZE / 2; ++i) {
     ret = llc_put(upper, 2, reservedByCore1[i], 0);
     check_uequal(ret, 0ul);
   }
   // core 2 must have now this first tree reserved
-  check_uequal(upper->local[2].reserved.preferred_index,
-               atomic_from_pfn(reservedByCore1[0]))
-
+  check_uequal(tree_from_atomic(upper->local[2].reserved.preferred_index),
+               (uint64_t)tree_from_pfn(reservedByCore1[0]))
+  if(!success)llc_print(upper);
       return success;
 }
 
