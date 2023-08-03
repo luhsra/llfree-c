@@ -176,6 +176,7 @@ void convert_HP_to_regular(child_t *child, bitfield_t *field) {
   child_t mask = child_init(0, true);
   child_t before_c = {atomic_fetch_and(&child->raw, ~mask.raw)};
   assert(before_c.flag == true);
+  (void) (before_c);
   return;
 }
 

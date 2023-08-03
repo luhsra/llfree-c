@@ -12,10 +12,10 @@ else
 endif
 
 # Library name, sources, and build directory
+BUILDDIR ?= build
 LIBNAME = libllc.a
 SRCS = $(wildcard *.c)
-OBJS = $(addprefix build/,$(SRCS:.c=.o))
-BUILDDIR = build
+OBJS = $(addprefix $(BUILDDIR)/,$(SRCS:.c=.o))
 
 # Default target
 all: $(BUILDDIR)/$(LIBNAME)
@@ -25,7 +25,7 @@ $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
 # Rule to compile .c files into .o files
-build/%.o: %.c | $(BUILDDIR)
+$(BUILDDIR)/%.o: %.c | $(BUILDDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Rule to create the static library
@@ -37,14 +37,14 @@ clean:
 	rm -rf $(BUILDDIR)
 
 TESTSRCS = $(wildcard tests/*.c)
-TESTOBJS = $(addprefix build/,$(TESTSRCS:.c=.o))
+TESTOBJS = $(addprefix $(BUILDDIR)/,$(TESTSRCS:.c=.o))
 TESTDIR = tests
 
 $(TESTDIR): $(BUILDDIR)
 	mkdir -p $(BUILDDIR)/$(TESTDIR)
 
 
-build/tests/%.o: tests/%.c | $(BUILDDIR)
+$(BUILDDIR)/tests/%.o: tests/%.c | $(BUILDDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 
@@ -59,13 +59,13 @@ debug: test_build
 
 
 BENCHSRCS = $(wildcard bench/*.c)
-BENCHOBJS = $(addprefix build/,$(BENCHSRCS:.c=.o))
+BENCHOBJS = $(addprefix $(BUILDDIR)/,$(BENCHSRCS:.c=.o))
 BENCHDIR = bench
 
 $(BENCHDIR): $(BUILDDIR)
 	mkdir -p $(BUILDDIR)/$(BENCHDIR)
 
-build/bench/%.o: bench/%.c | $(BENCHDIR)
+$(BUILDDIR)/bench/%.o: bench/%.c | $(BENCHDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 benchmark_build: $(BENCHDIR) $(OBJS) $(BENCHOBJS)
