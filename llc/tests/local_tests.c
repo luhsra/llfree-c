@@ -2,7 +2,6 @@
 #include "../local.h"
 #include "check.h"
 #include "enum.h"
-#include "pfn.h"
 
 bool init_local_test() {
   bool success = true;

@@ -4,7 +4,6 @@
 #include "enum.h"
 #include "local.h"
 #include "lower.h"
-#include "pfn.h"
 #include "utils.h"
 
 #include <assert.h>
@@ -294,7 +293,7 @@ int64_t llc_init(void *this, size_t cores, uint64_t start_frame_adr, size_t len,
 /// Allocates a frame and returns its address, or a negative error code
 int64_t llc_get(const void *this, size_t core, size_t order) {
   assert(this != NULL);
-  assert(order == 0 || order == HP);
+  assert(order == 0 || order == HP_ORDER);
   upper_t const *const self = (upper_t *)this;
   local_t *local = get_local(self, core);
 
@@ -355,7 +354,7 @@ int64_t llc_get(const void *this, size_t core, size_t order) {
 int64_t llc_put(void const *const this, const size_t core,
                 const uint64_t frame_adr, const size_t order) {
   assert(this != NULL);
-  assert(order == 0 || order == HP);
+  assert(order == 0 || order == HP_ORDER);
 
   upper_t const *const self = (upper_t *)this;
 

@@ -3,7 +3,6 @@
 #include "child.h"
 #include "enum.h"
 #include "local.h"
-#include "pfn.h"
 #include "utils.h"
 #include <assert.h>
 #include <stddef.h>
@@ -136,10 +135,10 @@ static int64_t reserve_in_Bitfield(const lower_t *self, const uint64_t child_idx
 }
 
 int64_t lower_get(lower_t const *const self, const uint64_t pfn, const size_t order) {
-  assert(order == 0 || order == HP);
+  assert(order == 0 || order == HP_ORDER);
   assert(pfn < self->length);
 
-  if (order == HP)
+  if (order == HP_ORDER)
     return get_HP(self, pfn);
 
   const size_t start_idx = child_from_pfn(pfn);
@@ -181,7 +180,7 @@ void convert_HP_to_regular(child_t *child, bitfield_t *field) {
 }
 
 int lower_put(lower_t const *const self, uint64_t frame_adr, size_t order) {
-  assert(order == 0 || order == HP);
+  assert(order == 0 || order == HP_ORDER);
 
   // chek if outside of managed space
   if (frame_adr >= self->start_frame_adr + self->length ||
@@ -192,7 +191,7 @@ int lower_put(lower_t const *const self, uint64_t frame_adr, size_t order) {
   child_t *child = &self->childs[child_index];
   bitfield_t *field = &self->fields[child_index];
 
-  if (order == HP) {
+  if (order == HP_ORDER) {
     return update(child_free_HP(child));
   }
 
@@ -214,7 +213,7 @@ int lower_put(lower_t const *const self, uint64_t frame_adr, size_t order) {
 }
 
 bool lower_is_free(lower_t const *const self, uint64_t frame, size_t order) {
-  assert(order == 0 || order == HP);
+  assert(order == 0 || order == HP_ORDER);
 
   // check if outside of managed space
   if (frame >= self->start_frame_adr + self->length || frame < self->start_frame_adr)
@@ -224,7 +223,7 @@ bool lower_is_free(lower_t const *const self, uint64_t frame, size_t order) {
 
   child_t child = {load(&self->childs[child_index].raw)};
 
-  if (order == HP) {
+  if (order == HP_ORDER) {
     return (!child.flag && child.counter == FIELDSIZE);
   }
 

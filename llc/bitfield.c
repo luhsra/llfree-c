@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <assert.h>
 #include "enum.h"
-#include "pfn.h"
 #include "utils.h"
 
 // Helping struct to store the position of a bit in a bitfield.

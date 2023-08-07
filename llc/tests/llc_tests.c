@@ -4,7 +4,6 @@
 #include "check.h"
 
 #include "../enum.h"
-#include "../pfn.h"
 #include "../utils.h"
 #include "assert.h"
 #include "lower.h"
@@ -89,10 +88,10 @@ bool general_function_test() {
 
   size_t free_frames = llc_free_frames(upper);
   // reserve and free a HugeFrame
-  ret = llc_get(upper, 0, HP);
+  ret = llc_get(upper, 0, HP_ORDER);
   check(ret >= 0, "");
   check_uequal(llc_free_frames(upper), free_frames - FIELDSIZE)
-      check_uequal(llc_put(upper, 0, ret, HP), 0ul /*ERR_OK*/);
+      check_uequal(llc_put(upper, 0, ret, HP_ORDER), 0ul /*ERR_OK*/);
   check_uequal(llc_free_frames(upper), free_frames)
 
       llc_drop(upper);

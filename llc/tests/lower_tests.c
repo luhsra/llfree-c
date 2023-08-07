@@ -3,7 +3,6 @@
 #include "../lower.h"
 #include "check.h"
 #include "enum.h"
-#include "pfn.h"
 #include <assert.h>
 #include <stdalign.h>
 #include <stdint.h>
@@ -161,7 +160,7 @@ bool get_test(){
 
     ret = lower_get(&actual, 0,0);
     check(ret == 0, "");
-    ret = lower_get(&actual, 0,HP);
+    ret = lower_get(&actual, 0,HP_ORDER);
     check_equal(actual.childs[1].flag, true);
     check_equal(actual.childs[1].counter, 0);
     check_equal_bitfield(actual.fields[1], ((bitfield_t) {0, 0, 0, 0, 0, 0, 0, 0}))
@@ -280,11 +279,11 @@ int lower_HP_tests(){
     lower_init_default(&actual, 0, FIELDSIZE * 60, VOLATILE);
     assert(lower_init(&actual, true) == ERR_OK);
 
-    int64_t pfn1 = lower_get(&actual, 0, HP);
+    int64_t pfn1 = lower_get(&actual, 0, HP_ORDER);
     check( pfn1 >= 0, "");
     uint64_t offset = pfn1 % FIELDSIZE;
     check_uequal(offset, 0ul);
-    int64_t pfn2 = lower_get(&actual, 0, HP);
+    int64_t pfn2 = lower_get(&actual, 0, HP_ORDER);
     check( pfn2 >= 0, "");
     offset = pfn2 % FIELDSIZE;
     check_uequal(offset, 0ul);
@@ -294,12 +293,12 @@ int lower_HP_tests(){
     // request a regular frame
     int64_t regular = lower_get(&actual, 0, 0);
     //regular frame cannot be returned as HP
-    check_equal(lower_put(&actual, regular, HP), ERR_ADDRESS);
+    check_equal(lower_put(&actual, regular, HP_ORDER), ERR_ADDRESS);
 
 
     assert(regular >= 0);
     //this HF must be in another child than the regular frame.
-    int64_t pfn3 = lower_get(&actual, pfn_from_atomic(10), HP);
+    int64_t pfn3 = lower_get(&actual, pfn_from_atomic(10), HP_ORDER);
     check(pfn3 >= 0,"");
     offset = pfn3 % FIELDSIZE;
     check_uequal(offset, 0ul);
@@ -307,39 +306,39 @@ int lower_HP_tests(){
 
     // free regular page und try get this child as complete HP
     assert(lower_put(&actual, regular, 0) == ERR_OK);
-    int64_t pfn4 = lower_get(&actual, 0, HP);
+    int64_t pfn4 = lower_get(&actual, 0, HP_ORDER);
     check(pfn4 >= 0,"");
     check(pfn4 == regular, "");
 
 
-    int ret = lower_put(&actual, pfn2, HP);
+    int ret = lower_put(&actual, pfn2, HP_ORDER);
     check_equal(ret, ERR_OK);
 
     //allocate the complete memory with HPs
     for(int i = 3; i < 60; ++i){
         // get allocates only in chunks of 32 children. if there is no free HP in given chung it returns ERR_MEMORY
-        int64_t pfn = lower_get(&actual, i < 32? 0 : 32*FIELDSIZE, HP);
+        int64_t pfn = lower_get(&actual, i < 32? 0 : 32*FIELDSIZE, HP_ORDER);
         check(pfn > 0, "");
     }
 
     check_uequal_m(lower_allocated_frames(&actual), actual.length, "fully allocated with Huge Frames");
 
     //reservation at full memory must fail
-    int64_t pfn = lower_get(&actual, 0, HP);
+    int64_t pfn = lower_get(&actual, 0, HP_ORDER);
     check(pfn == ERR_MEMORY,"");
 
     // return HP as regular Frame must succseed
     check(lower_put(&actual, pfn2, 0) == ERR_OK, "");
     // HP ist converted into regular frames so returning the whole page must fail
-    check(lower_put(&actual, pfn2, HP) == ERR_ADDRESS, "");
+    check(lower_put(&actual, pfn2, HP_ORDER) == ERR_ADDRESS, "");
 
-    check(lower_put(&actual, pfn1, HP) == ERR_OK, "");
+    check(lower_put(&actual, pfn1, HP_ORDER) == ERR_OK, "");
 
     //check if right amout of free regular frames are present
     check_uequal(actual.length - lower_allocated_frames(&actual), FIELDSIZE + 1ul);
 
     //new aquired frame should be in same positon as the old no 1
-    check(lower_get(&actual, 0, HP) == pfn1, "");
+    check(lower_get(&actual, 0, HP_ORDER) == pfn1, "");
 
 
     return success;
@@ -370,7 +369,7 @@ int free_all_test(){
 
     //free all HPs
     for(int i = 0; i < 15; ++i){
-        ret = lower_put(&lower, start_adr + i*512, HP);
+        ret = lower_put(&lower, start_adr + i*512, HP_ORDER);
         check_equal(ret, ERR_OK);
     }
     check_uequal_m(lower_allocated_frames(&lower), 512ul + 34, "one allocated HF and the 34 regular frames");

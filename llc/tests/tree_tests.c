@@ -169,7 +169,7 @@ bool tree_inc_test(){
     equal_trees(actual, expect)
 
 
-    order = 9;  //HP
+    order = HP_ORDER;
     counter = 3456;
     actual = tree_init(counter, true);
     expect = tree_init(counter + (1 << order), true);
@@ -179,7 +179,7 @@ bool tree_inc_test(){
     equal_trees(actual, expect)
 
 
-    order = 9;  //HP
+    order = HP_ORDER;
     counter = (1 << 14) - (1 << 9); // max counter
     actual = tree_init(counter, true);
     expect = tree_init(counter + (1 << order), true);
@@ -229,7 +229,7 @@ bool tree_dec_test(){
     equal_trees(actual, expect)
 
 
-    order = 9;  //HP
+    order = HP_ORDER;
     counter = 13370;
     actual = tree_init(counter, true);
     expect = tree_init(counter - (1 << order), true);
@@ -239,7 +239,7 @@ bool tree_dec_test(){
     equal_trees(actual, expect)
 
 
-    order = 9;  //HP
+    order = HP_ORDER;
     counter = (1 << 9); // min counter
     actual = tree_init(counter, true);
     expect = tree_init(counter - (1 << order), true);
