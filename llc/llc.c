@@ -370,8 +370,16 @@ int64_t llc_put(void const *const this, const size_t core,
   const uint64_t frame = frame_adr - self->lower.start_frame_adr;
   const size_t tree_idx = tree_from_pfn(frame);
 
-  ret = update(inc_tree_counter(self, core, frame, order));
+  //increment local tree
+  ret = update(local_inc_counter(local, frame, order));
+  bool isLocal = true;
+  if(ret == ERR_ADDRESS){
+    //increment global tree
+    ret = update(tree_counter_inc(&self->trees[tree_idx], order));
+    isLocal = false;
+  }
   assert(ret == ERR_OK);
+
   // successfully incremented counter in upper allocator
 
   // set last reserved in local
@@ -379,11 +387,12 @@ int64_t llc_put(void const *const this, const size_t core,
   if (ret == ERR_OK) {
     return ERR_OK;
   }
-
   assert(ret == UPDATE_RESERVED);
+  // tree is already the reserved one
+  if(isLocal) return ERR_OK;
+
   // this tree was the target of multiple consecutive frees
   // -> reserve this tree if it is not completely allocated
-
   tree_t * const tree = &self->trees[tree_idx];
 
   saturation_level_t sat = tree_status(tree);
