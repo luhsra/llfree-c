@@ -1,5 +1,6 @@
 use crate::{Error, PFNRange, Result, PFN};
 use core::ops::Range;
+use core::ptr::{addr_of_mut};
 use core::{
     ffi::{c_char, CStr},
     fmt,
@@ -66,6 +67,18 @@ impl Alloc for LLC {
     }
 
     // Optional functions ...
+    fn for_each_huge_frame(&self, ctx: *mut c_void, f: fn(*mut c_void, PFN, usize)) {
+        struct Context {
+            f: fn(*mut c_void, PFN, usize),
+            ctx: *mut c_void,
+        }
+        extern "C" fn wrapper(context: *mut c_void, pfn: u64, free: u64) {
+            let context: &Context = unsafe { &*context.cast() };
+            (context.f)(context.ctx, PFN(pfn as usize), free as usize)
+        }
+        let mut context = Context { f, ctx };
+        unsafe { llc_for_each_HP(self.raw, addr_of_mut!(context).cast(), wrapper) }
+    }
 }
 
 impl Drop for LLC {
@@ -151,6 +164,12 @@ extern "C" {
         this: *const c_void,
         writer: extern "C" fn(*mut c_void, *const c_char),
         arg: *mut c_void,
+    );
+
+    fn llc_for_each_HP(
+        this: *const c_void,
+        context: *mut c_void,
+        f: extern "C" fn(*mut c_void, u64, u64),
     );
 }
 

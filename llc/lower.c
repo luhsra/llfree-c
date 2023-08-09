@@ -142,7 +142,6 @@ int64_t lower_get(lower_t const *const self, const uint64_t pfn, const size_t or
     return get_HP(self, pfn);
 
   const size_t start_idx = child_from_pfn(pfn);
-  //TODO priorisire fast volle childs!
   ITERRATE(
       start_idx, CHILDS_PER_TREE,
       if (current_i >= self->num_of_childs) continue;
@@ -285,4 +284,12 @@ size_t lower_free_HPs(lower_t const * const self){
     if(child_get_counter(&self->childs[i]) == CHILDSIZE) ++count;
   }
   return count;
+}
+
+void lower_for_each_child(const lower_t *self, void* context, void f(void*, uint64_t, uint64_t)){
+  uint64_t pfn = self->start_frame_adr;
+  for(uint64_t i = 0; i < self->num_of_childs; ++i){
+    pfn += 512;
+    f(context, pfn, self->childs[i].counter);
+  }
 }

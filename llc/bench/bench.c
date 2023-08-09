@@ -1,3 +1,4 @@
+#include "bitfield.h"
 #include "enum.h"
 #include "llc.h"
 #include "lower.h"
@@ -97,10 +98,13 @@ void *allocHPs(void *a) {
 }
 
 int alloc_all_as_HP() {
-  int64_t len = 1ul << 30;
+  int64_t len = 1ul << 22;
   int cores = 4;
   upper_t *upper = llc_default();
-  int64_t ret = llc_init(upper, cores, 0, len, VOLATILE, true);
+  char* memory = aligned_alloc(PAGESIZE, len * PAGESIZE);
+  if(memory == NULL) die("malloc memory");
+
+  int64_t ret = llc_init(upper, cores, (uint64_t) memory, len, OVERWRITE, true);
   if (ret != ERR_OK)
     return 1;
 
@@ -136,6 +140,8 @@ int alloc_all_as_HP() {
            rets[i]->failed_allocations);
     free(rets[i]);
   }
+
+  free(memory);
   return 0;
 }
 

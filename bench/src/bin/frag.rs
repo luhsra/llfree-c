@@ -13,7 +13,7 @@ use log::warn;
 use llfree::frame::{PFN, PT_LEN};
 use llfree::thread;
 use llfree::util::{self, WyRand};
-use llfree::{Alloc, AllocExt, Init, LLFree};
+use llfree::{Alloc, AllocExt, Init, LLFree, LLC};
 
 /// Benchmarking the allocators against each other.
 #[derive(Parser, Debug)]
@@ -42,7 +42,7 @@ struct Args {
     stride: usize,
 }
 
-type Allocator = LLFree;
+type Allocator = LLC;
 
 fn main() {
     let Args {

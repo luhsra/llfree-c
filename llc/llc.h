@@ -55,7 +55,11 @@ uint64_t llc_free_frames(const void *self);
 /// Destructs the allocator
 void llc_drop(void* self);
 
-/// Prints the allocators state for debugging
+/// Prints the allocators state for debugging with given Rust printer
 void llc_debug(const void *self, void (*writer)(void *, char *), void *arg);
 
+/// Prints detailed stats about the allokator state
 void llc_print(const upper_t* self);
+
+/// Calls f for each Huge Frame. f will recieve the context the currend pfn andt the freecounter as arguments
+void llc_for_each_HP(const void *this, void* context, void f(void*, uint64_t, uint64_t));

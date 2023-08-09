@@ -439,12 +439,6 @@ uint8_t llc_is_free(const void *this, uint64_t frame_adr, size_t order) {
   return lower_is_free(&self->lower, frame_adr, order);
 }
 
-/// Prints the allocators state for debugging
-void llc_debug(const void *this, void (*writer)(void *, char *), void *arg) {
-  (void)(this);
-  writer(arg, "Hello from LLC!\n");
-  writer(arg, "Can be called multiple times...");
-}
 
 void llc_drop(void *this) {
   assert(this != NULL);
@@ -459,6 +453,29 @@ void llc_drop(void *this) {
     free(self->local);
   }
   free(this);
+}
+
+void llc_for_each_HP(const void *this, void* context, void f(void*, uint64_t, uint64_t)){
+  assert(this != NULL);
+  const upper_t *self = (upper_t *)this;
+  //llc_print(self);
+  lower_for_each_child(&self->lower, context, f);
+}
+
+
+/// Prints the allocators state for debugging
+void llc_debug(const void *this, void (*writer)(void *, char *), void *arg) {
+  assert(this != NULL);
+  const upper_t *self = (upper_t *)this;
+
+  writer(arg, "\nLLC stats:\n");
+  char* msg = malloc(200 * sizeof(char));
+  snprintf(msg, 200, "frames:\t%7lu\tfree: %7lu\tallocated: %7lu\n", self->lower.length, llc_free_frames(this), self->lower.length - llc_free_frames(this));
+  writer(arg, msg);
+
+  snprintf(msg, 200, "HPs:\t%7lu\tfree: %7lu\tallocated: %7lu\n", self->lower.num_of_childs, lower_free_HPs(&self->lower), self->lower.num_of_childs - lower_free_HPs(&self->lower));
+  writer(arg, msg);
+
 }
 
 /**

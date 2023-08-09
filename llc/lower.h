@@ -103,3 +103,6 @@ void lower_print(lower_t const *const self);
  * @param self pointer to lower
  */
 void lower_drop(lower_t const *const self);
+
+/// Calls f for each child. f will recieve the context the currend pfn andt the freecounter as arguments
+void lower_for_each_child(const lower_t *self, void* context, void f(void*, uint64_t, uint64_t));
