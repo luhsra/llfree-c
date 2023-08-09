@@ -74,7 +74,7 @@ static int field_find_unset(bitfield_t* field,  pos_t* pos){
         // ctzll(x) -> If x is 0, the result is undefined and there are no unset bits
         if(~row == 0) continue;
 
-        int ret = __builtin_ctzll(~row);   //TODO wrapper for CTZ?
+        int ret = __builtin_ctzll(~row);
 
         assert(ret >= 0 && "ctzll shoud never be negative");
         assert(ret < 64 && "ctzll schould not count more zeros as there are Bits");

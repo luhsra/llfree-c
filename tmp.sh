@@ -1,0 +1,1 @@
+cargo perf frag -- -t 4 -i 100 -s0 -m 16 --stride 1 -o results/bench.csv

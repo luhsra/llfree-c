@@ -24,7 +24,7 @@ int tree_reserve(tree_t *self) {
   // tree is already reserved
   if (before.flag)
     return ERR_ADDRESS;
-  if (cas(self, &before, desire) == ERR_OK){
+  if (cas(self, &before, desire) == ERR_OK) {
     assert(before.counter <= TREESIZE);
     return before.counter;
   }
@@ -50,8 +50,10 @@ int tree_writeback_and_reserve(tree_t *self, uint16_t free_counter) {
   tree_t desire = tree_init(0, true);
 
   int ret = cas(self, &old, desire);
-  if(ret == ERR_OK) return free_counter + old.counter;
-  else return ret;
+  if (ret == ERR_OK)
+    return free_counter + old.counter;
+  else
+    return ret;
 }
 
 int tree_writeback(tree_t *self, uint16_t free_counter) {
@@ -68,8 +70,8 @@ saturation_level_t tree_status(const tree_t *self) {
   assert(self != NULL);
 
   tree_t tree = {load(&self->raw)};
-  size_t upper_limit = TREESIZE * (1 - BREAKPOINT);
-  size_t lower_limit = TREESIZE * BREAKPOINT;
+  const size_t lower_limit = 1 << HP_ORDER;
+  const size_t upper_limit = TREESIZE - lower_limit;
 
   if (tree.counter < lower_limit || tree.flag)
     return ALLOCATED; // reserved trees will be counted as allocated
@@ -100,35 +102,52 @@ int tree_counter_dec(tree_t *self, size_t order) {
   return cas(self, &old, desire);
 }
 
-
-int64_t tree_find_reserveable(tree_t const * const trees, uint64_t len, uint64_t pfn_region, uint64_t order){
+int64_t tree_find_reserveable(tree_t const *const trees, const uint64_t len,
+                              const uint64_t pfn_region, const uint64_t order, const uint64_t start) {
   const uint64_t tree_idx = tree_from_pfn(pfn_region);
   assert(tree_idx < len);
 
-  const size_t upper_limit = TREESIZE * (1 - BREAKPOINT);
-  const size_t lower_limit = TREESIZE * BREAKPOINT;
   uint64_t free_idx = len;
   ITERRATE(tree_idx, 32,
-    if(current_i >= len) continue; //if not the whole cacheline is used
+           if (current_i >= len) continue; // if not the whole cacheline is used
 
-    const tree_t tree = {load(&trees[current_i].raw)};
-    //return partial tree if found
-    if(!tree.flag && tree.counter < upper_limit && tree.counter > lower_limit) return current_i;
-
-    //mark a free tree in case no partial tree is found
-    if(!tree.flag && tree.counter >= upper_limit && free_idx == len) free_idx = current_i;
+           // return partial tree if found
+           saturation_level_t sat = tree_status(&trees[current_i]);
+           switch (sat) {
+            case ALLOCATED:
+              continue;
+              break;
+            case FREE:
+              free_idx = current_i;
+              break;
+            case PARTIAL:
+              return current_i;
+              break;
+           }
   );
   // if found return idx of a free tree
-  if(free_idx != len) return free_idx;
+  if (free_idx != len)
+    return free_idx;
 
+  // search globaly for a partial reserved tree
+  ITERRATE(tree_idx, len,
+    saturation_level_t sat = tree_status(&trees[current_i]);
+           switch (sat) {
+            case PARTIAL:
+              return current_i;
+              break;
+            default:
+              continue;
+           }
+  );
 
-
-  //no tree found in this cacheline -> search whole tree for a tree with enough free frames
+  // search whole tree for a tree with enough free frames
   const uint16_t min_val = 1 << order;
+  ITERRATE(tree_idx, len,
+    const tree_t tree = {load(&trees[current_i].raw)};
+    if (!tree.flag && tree.counter >= min_val) return current_i;
 
-  for(uint64_t i = (tree_idx + 1) % len; i != tree_idx; i = (i+1) % len ){
-    const tree_t tree = {load(&trees[i].raw)};
-    if(!tree.flag && tree.counter >= min_val) return i;
-  }
+  );
+  (void) start;
   return ERR_MEMORY;
 }

@@ -100,4 +100,4 @@ saturation_level_t tree_status(const tree_t* self);
 int tree_steal_counter(tree_t *self);
 
 //first searches in cacheline of region pfn for a partial / free frame, if none is found returns first tree with enough free frames in it.
-int64_t tree_find_reserveable(tree_t const * const trees, uint64_t len, uint64_t pfn_region, uint64_t order);
+int64_t tree_find_reserveable(tree_t const * const trees, const uint64_t len, const uint64_t pfn_region, const uint64_t order, const uint64_t start);

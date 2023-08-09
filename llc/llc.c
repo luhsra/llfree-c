@@ -50,8 +50,9 @@ static bool sync_with_global(upper_t const *const self, local_t *const local) {
     reserved_t desire = old;
     assert(old.free_counter + counter <= TREESIZE);
     desire.free_counter += counter;
-    if (cas(&local->reserved, &old, desire) == ERR_OK)
+    if (cas(&local->reserved, &old, desire) == ERR_OK){
       return true;
+    }
   } while (true);
 }
 
@@ -169,7 +170,7 @@ static int reserve_new_tree(upper_t const *const self, size_t const core,
     if (region == 0)
       region = (self->lower.length / self->cores) * (core % self->cores);
     tree_idx =
-        tree_find_reserveable(self->trees, self->num_of_trees, region, order);
+        tree_find_reserveable(self->trees, self->num_of_trees, region, order, self->num_of_trees / self->cores * core);
     if (tree_idx < 0) {
       // found no unreserved tree with some space in it -> try steal from
       // other cores
