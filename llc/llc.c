@@ -372,11 +372,9 @@ int64_t llc_put(void const *const this, const size_t core,
 
   //increment local tree
   ret = update(local_inc_counter(local, frame, order));
-  bool isLocal = true;
   if(ret == ERR_ADDRESS){
     //increment global tree
     ret = update(tree_counter_inc(&self->trees[tree_idx], order));
-    isLocal = false;
   }
   assert(ret == ERR_OK);
 
@@ -389,7 +387,6 @@ int64_t llc_put(void const *const this, const size_t core,
   }
   assert(ret == UPDATE_RESERVED);
   // tree is already the reserved one
-  if(isLocal) return ERR_OK;
 
   // this tree was the target of multiple consecutive frees
   // -> reserve this tree if it is not completely allocated

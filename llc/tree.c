@@ -103,51 +103,52 @@ int tree_counter_dec(tree_t *self, size_t order) {
 }
 
 int64_t tree_find_reserveable(tree_t const *const trees, const uint64_t len,
-                              const uint64_t pfn_region, const uint64_t order, const uint64_t start) {
+                              const uint64_t pfn_region, const uint64_t order,
+                              const uint64_t start) {
   const uint64_t tree_idx = tree_from_pfn(pfn_region);
   assert(tree_idx < len);
 
   uint64_t free_idx = len;
-  ITERRATE(tree_idx, 32,
-           if (current_i >= len) continue; // if not the whole cacheline is used
+  ITERRATE_TOGGLE(
+      tree_idx, 32,
+      if (current_i >= len) continue; // if not the whole cacheline is used
 
-           // return partial tree if found
-           saturation_level_t sat = tree_status(&trees[current_i]);
-           switch (sat) {
-            case ALLOCATED:
-              continue;
-              break;
-            case FREE:
-              free_idx = current_i;
-              break;
-            case PARTIAL:
-              return current_i;
-              break;
-           }
-  );
+      // return partial tree if found
+      saturation_level_t sat = tree_status(&trees[current_i]);
+      switch (sat) {
+        case ALLOCATED:
+          continue;
+          break;
+        case FREE:
+          free_idx = current_i;
+          break;
+        case PARTIAL:
+          return current_i;
+          break;
+      });
   // if found return idx of a free tree
   if (free_idx != len)
     return free_idx;
 
   // search globaly for a partial reserved tree
-  ITERRATE(tree_idx, len,
-    saturation_level_t sat = tree_status(&trees[current_i]);
-           switch (sat) {
-            case PARTIAL:
-              return current_i;
-              break;
-            default:
-              continue;
-           }
-  );
+  ITERRATE_TOGGLE(
+      tree_idx, len, (void)current_i;
+      const size_t i = _base_idx + ((toggle) % (len));
+      saturation_level_t sat = tree_status(&trees[i]); switch (sat) {
+        case PARTIAL:
+          return i;
+          break;
+        default:
+          continue;
+      });
 
   // search whole tree for a tree with enough free frames
   const uint16_t min_val = 1 << order;
-  ITERRATE(tree_idx, len,
-    const tree_t tree = {load(&trees[current_i].raw)};
-    if (!tree.flag && tree.counter >= min_val) return current_i;
+  ITERRATE_TOGGLE(tree_idx, len,
+                  const tree_t tree = {load(&trees[current_i].raw)};
+                  if (!tree.flag && tree.counter >= min_val) return current_i;
 
   );
-  (void) start;
+  (void)start;
   return ERR_MEMORY;
 }

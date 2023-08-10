@@ -47,6 +47,16 @@ size_t div_ceil(uint64_t a, int b);
   do {                                                                         \
     const size_t _offset = (idx) % (len);                                      \
     const size_t _base_idx = (idx)-_offset;                                    \
+    for (size_t _i = 0; _i < (len); ++_i) {                                   \
+      const size_t current_i = _base_idx + ((_i + _offset) % (len));           \
+      { code }                                                                 \
+    }                                                                          \
+  } while (false)
+
+#define ITERRATE_TOGGLE(idx, len, code)                                        \
+  do {                                                                         \
+    const size_t _offset = (idx) % (len);                                      \
+    const size_t _base_idx = (idx)-_offset;                                    \
     for (size_t _i = 1; _i <= (len); ++_i) {                                   \
       int64_t toggle = _i & 1 ? _i / 2 : -_i / 2;                              \
       const size_t current_i = _base_idx + ((toggle + _offset) % (len));       \

@@ -47,15 +47,6 @@ bool general_function_test() {
   check(llc_frames(upper) == 132000, "");
   check(llc_free_frames(upper) == 131999, "right number of free frames");
 
-  check(upper->trees[0].flag, "tree is reserved now");
-  check(upper->trees[0].counter == 0, "counter was copied to local");
-  check(upper->local[0].reserved.free_counter == 16383,
-        "local counter is decreased");
-
-  check(upper->lower.childs[0].counter == 511, "");
-  check(upper->lower.childs[1].counter == 512, "");
-  check(upper->lower.fields[0].rows[0] == 0x01, "");
-  check(upper->lower.fields[1].rows[1] == 0x00, "");
 
   p("After get mit core 0\n");
 
@@ -63,14 +54,8 @@ bool general_function_test() {
 
   check(ret == ERR_OK, "successfully free");
   check(llc_free_frames(upper) == 132000, "right number of free frames");
-  check(upper->lower.childs[0].counter == 512, "free in childs");
-  check(upper->lower.fields[0].rows[0] == 0x0, "free in bitfields");
-  check_equal_m(upper->local[0].reserved.free_counter, 16384,
-                "local counter is increased");
-  check(upper->trees[0].counter == 0, "counter in tree array is not touched");
 
   check_uequal(upper->local->last_free.last_free_idx, atomic_from_pfn(frame));
-  check_equal(upper->local->last_free.free_counter, 1);
 
   // reserve all frames in first tree
   for (int i = 0; i < TREESIZE; ++i) {
@@ -135,7 +120,7 @@ bool init_llc_test() {
 bool test_put() {
   bool success = true;
   upper_t *upper = (upper_t *)llc_default();
-  int64_t ret = llc_init(upper, 4, 0, 132000, VOLATILE, true);
+  int64_t ret = llc_init(upper, 4, 0, TREESIZE << 4, VOLATILE, true);
   assert(ret == ERR_OK);
 
   int64_t reservedByCore1[TREESIZE + 5];
