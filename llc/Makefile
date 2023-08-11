@@ -26,7 +26,7 @@ $(BUILDDIR):
 
 # Rule to compile .c files into .o files
 $(BUILDDIR)/%.o: %.c | $(BUILDDIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
 # Rule to create the static library
 $(BUILDDIR)/$(LIBNAME): $(OBJS)
@@ -45,7 +45,7 @@ $(TESTDIR): $(BUILDDIR)
 
 
 $(BUILDDIR)/tests/%.o: tests/%.c | $(BUILDDIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
 
 test_build: $(TESTDIR) $(OBJS) $(TESTOBJS)
@@ -66,7 +66,7 @@ $(BENCHDIR): $(BUILDDIR)
 	mkdir -p $(BUILDDIR)/$(BENCHDIR)
 
 $(BUILDDIR)/bench/%.o: bench/%.c | $(BENCHDIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
 benchmark_build: $(BENCHDIR) $(OBJS) $(BENCHOBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(BENCHOBJS) -o $(BUILDDIR)/$(BENCHDIR)/benchmark
@@ -79,3 +79,8 @@ flamegraph:
 	perf script | ../../FlameGraph/stackcollapse-perf.pl > out.perf-folded
 	../../FlameGraph/flamegraph.pl out.perf-folded > perf.svg
 .PHONY: all clean test debug
+
+ALL_OBJS = $(OBJS) $(TESTOBJS) $(BENCHOBJS)
+ALL_DEPS = $(ALL_OBJS:.o=.d)
+
+-include $(ALL_DEPS)
