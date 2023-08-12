@@ -69,7 +69,7 @@ static bool sync_with_global(upper_t const *const self, local_t *const local) {
 static int64_t steal_tree(upper_t const *const self, const size_t core) {
   reserved_t old;
   int ret;
-  ITERRATE(
+  ITERATE(
       core, self->cores, if (current_i == core) continue;
 
       ret = try_update(local_steal(&self->local[current_i], &old));
@@ -163,6 +163,9 @@ static int reserve_new_tree(upper_t const *const self, size_t const core,
     return ERR_OK;
   }
 
+  uint64_t vercinity = CHILDS_PER_TREE / 3;
+  if(vercinity == 0) vercinity = 1;
+
   int64_t tree_idx;
   int counter;
   do {
@@ -170,7 +173,7 @@ static int reserve_new_tree(upper_t const *const self, size_t const core,
     if (region == 0)
       region = (self->lower.length / self->cores) * (core % self->cores);
     tree_idx =
-        tree_find_reserveable(self->trees, self->num_of_trees, region, order, 32, core);
+        tree_find_reserveable(self->trees, self->num_of_trees, region, order, vercinity, core);
     if (tree_idx < 0) {
       // found no unreserved tree with some space in it -> try steal from
       // other cores
@@ -386,7 +389,6 @@ int64_t llc_put(void const *const this, const size_t core,
     return ERR_OK;
   }
   assert(ret == UPDATE_RESERVED);
-  // tree is already the reserved one
 
   // this tree was the target of multiple consecutive frees
   // -> reserve this tree if it is not completely allocated

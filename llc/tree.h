@@ -20,7 +20,6 @@ typedef struct tree {
 
 
 // TODO description
-#define BREAKPOINT 0.125
 typedef enum saturation_level{
   ALLOCATED,
   FREE,

@@ -1,5 +1,6 @@
 #include "tree.h"
 #include "bitfield.h"
+#include "child.h"
 #include "enum.h"
 #include "lower.h"
 #include "utils.h"
@@ -107,47 +108,57 @@ int64_t tree_find_reserveable(tree_t const *const trees, const uint64_t len,
                               const uint64_t vercinity, const uint64_t core) {
   const uint64_t tree_idx = tree_from_pfn(pfn_region);
   assert(tree_idx < len);
+  (void)core;
+  (void)vercinity;
+  (void)order;
 
+
+
+  const uint64_t start_idx = tree_idx - (tree_idx % CHILDS_PER_TREE);
   uint64_t free_idx = len;
-  ITERRATE_TOGGLE(
-      tree_idx, vercinity,
-      if (current_i >= len) continue; // if not the whole cacheline is used
 
-      // return partial tree if found
-      saturation_level_t sat = tree_status(&trees[current_i]);
-      switch (sat) {
-        case ALLOCATED:
-          continue;
-          break;
-        case FREE:
-          free_idx = current_i;
-          break;
-        case PARTIAL:
-          return current_i;
-          break;
-      });
-  // if found return idx of a free tree
+  //search inside of currend cacheline
+  for (size_t i = 1; i <= (vercinity < CHILDS_PER_TREE ? vercinity : CHILDS_PER_TREE); ++i) {
+    uint64_t idx = start_idx + (i & 1 ? i / 2 : CHILDS_PER_TREE - i / 2);
+    if (idx >= len) continue;
+
+    const saturation_level_t sat = tree_status(&trees[idx]);
+    switch (sat) {
+    case ALLOCATED:
+      continue;
+      break;
+    case FREE:
+      free_idx = idx;
+      break;
+    case PARTIAL:
+      return idx;
+      break;
+    }
+  }
+  // if found, return idx of a free tree
   if (free_idx != len)
     return free_idx;
 
-  // search globaly for a partial reserved tree
-  ITERRATE(
-      len / vercinity * core, len,
-      saturation_level_t sat = tree_status(&trees[current_i]);
-      switch (sat) {
-        case PARTIAL:
-          return current_i;
-          break;
-        default:
-          continue;
-      });
+
+  // search outside of currend cacheline for a partial tree
+  for(size_t i = 1; i <= len - CHILDS_PER_TREE; ++i){
+    uint64_t idx = (start_idx + (i & 1 ? CHILDS_PER_TREE + i / 2 : -i / 2)) % len;
+
+    saturation_level_t sat = tree_status(&trees[idx]);
+    switch (sat) {
+      case PARTIAL:
+        return idx;
+        break;
+      default:
+        continue;
+    }
+  }
 
   // search whole tree for a tree with enough free frames
   const uint16_t min_val = 1 << order;
-  ITERRATE(len / vercinity * core, len,
-           const tree_t tree = {load(&trees[current_i].raw)};
-           if (!tree.flag && tree.counter >= min_val) return current_i;
-
+  ITERATE_TOGGLE(tree_idx, len,
+          const tree_t tree = {load(&trees[current_i].raw)};
+          if (!tree.flag && tree.counter >= min_val) return current_i;
   );
   return ERR_MEMORY;
 }

@@ -142,7 +142,7 @@ int64_t lower_get(lower_t const *const self, const uint64_t pfn, const size_t or
     return get_HP(self, pfn);
 
   const size_t start_idx = child_from_pfn(pfn);
-  ITERRATE(
+  ITERATE(
       start_idx, CHILDS_PER_TREE,
       if (current_i >= self->num_of_childs) continue;
 

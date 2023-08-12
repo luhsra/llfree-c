@@ -69,7 +69,7 @@ static int field_find_unset(bitfield_t* field,  pos_t* pos){
     assert(field != NULL);
     assert(pos != NULL);
 
-    ITERRATE(pos->row_index, N,
+    ITERATE(pos->row_index, N,
         uint64_t row = atomic_load(&field->rows[current_i]);
         // ctzll(x) -> If x is 0, the result is undefined and there are no unset bits
         if(~row == 0) continue;

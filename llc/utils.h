@@ -6,6 +6,7 @@
 
 // TODO function descriptions
 // order of a Hugepage
+# define MAX(a,b) ((a) > (b) ? (a) : (b)) 
 
 #define HP_ORDER 9
 #define FRAME_SIZE (1ul << 12) // 4 KiB == 2^12
@@ -43,7 +44,7 @@ size_t div_ceil(uint64_t a, int b);
  * The currend loop value can accesed by current_i
  *
  */
-#define ITERRATE(idx, len, code)                                               \
+#define ITERATE(idx, len, code)                                               \
   do {                                                                         \
     const size_t _offset = (idx) % (len);                                      \
     const size_t _base_idx = (idx)-_offset;                                    \
@@ -53,13 +54,11 @@ size_t div_ceil(uint64_t a, int b);
     }                                                                          \
   } while (false)
 
-#define ITERRATE_TOGGLE(idx, len, code)                                        \
+#define ITERATE_TOGGLE(idx, len, code)                                        \
   do {                                                                         \
-    const size_t _offset = (idx) % (len);                                      \
-    const size_t _base_idx = (idx)-_offset;                                    \
     for (size_t _i = 1; _i <= (len); ++_i) {                                   \
       int64_t toggle = _i & 1 ? _i / 2 : -_i / 2;                              \
-      const size_t current_i = _base_idx + ((toggle + _offset) % (len));       \
+      const size_t current_i = ((idx) + toggle) % (len);       \
       { code }                                                                 \
     }                                                                          \
   } while (false)

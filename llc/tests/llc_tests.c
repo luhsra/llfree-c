@@ -1,6 +1,5 @@
 #include "llc_tests.h"
 #include "../llc.h"
-#include "bitfield.h"
 #include "check.h"
 
 #include "../enum.h"
@@ -137,10 +136,10 @@ bool test_put() {
         "");
   int64_t ret2 = llc_get(upper, 2, 0);
 
-  check(tree_from_pfn(ret2) > tree_from_pfn(reservedByCore1[TREESIZE]),
+  check(tree_from_pfn(ret2) != tree_from_pfn(reservedByCore1[TREESIZE]),
         "second get must be in different tree");
 
-  if(success)llc_print(upper);
+  if(!success)llc_print(upper);
   // free half the frames from old tree with core 2
   for (int i = 0; i < TREESIZE / 2; ++i) {
     ret = llc_put(upper, 2, reservedByCore1[i], 0);
