@@ -250,11 +250,13 @@ static void *allocFrames(void *arg) {
 bool multithreaded_alloc() {
   int success = true;
 
-  const int CORES = 8;
-  const uint64_t LENGTH = TREESIZE * (CORES);
+  const int CORES = 4;
+  const uint64_t LENGTH = 16 << 18;
+  char* memory = aligned_alloc(1<<HP_ORDER, LENGTH << 12);
+  assert(memory != NULL);
 
   upper = llc_default();
-  assert(llc_init(upper, CORES, 0, LENGTH, 0, true) == ERR_OK);
+  assert(llc_init(upper, CORES, (uint64_t) memory, LENGTH, OVERWRITE, true) == ERR_OK);
   pthread_t threads[CORES];
   struct arg args[CORES];
   for (int i = 0; i < CORES; ++i) {
@@ -307,6 +309,7 @@ end:
     free(rets[i]);
   }
   llc_drop(upper);
+  free(memory);
   return success;
 }
 

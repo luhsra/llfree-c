@@ -19,13 +19,11 @@ typedef struct bitfield{
 
 
 /**
- * @brief Initializes the Bitfield of 512 Bit size.
+ * @brief Initializes the Bitfield of 512 Bit size with all 0.
  * uses non-atomic functions because it should run only once at start and not in parallel.
- * @param number_of_free_Frames is the number of bits starting with the Value 0.
- * @param start_allocated if set, all bits will be set to 1.
- * @return The inizialized bitfield
+ * @param self pointer to field
  */
-bitfield_t field_init(int number_of_free_Frames, bool all_free);
+void field_init(bitfield_t* self);
 
 /**
 * @brief Atomic search for the first unset Bit in given field and set it to 1.

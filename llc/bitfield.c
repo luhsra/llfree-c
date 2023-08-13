@@ -20,42 +20,14 @@ static pos_t get_pos(uint64_t index){
     return pos;
 }
 
-bitfield_t field_init(int number_of_free_Frames, bool all_free){
 
-    assert(0 <= number_of_free_Frames && number_of_free_Frames < FIELDSIZE);
-    bitfield_t field;
-
-    if(!all_free && number_of_free_Frames > 0){
-        for(size_t i = 0; i < N; i++){
-            field.rows[i] = 0xfffffffffffffffful;
-        }
-        return field;
+void field_init(bitfield_t* self){
+    assert(self != NULL);
+    for(uint64_t i = 0; i < N; ++i){
+        self->rows[i] = 0;
     }
-    // 0 free frames mean all are free
-    // its nicer with mod syntax
-    if(number_of_free_Frames == 0){
-        for(size_t i = 0; i < N; i++){
-            field.rows[i] = 0x0ul;
-        }
-        return field;
-    }
-
-    // possible to have a not fully saturated bitfield
-    pos_t pos = get_pos(number_of_free_Frames); //position of the last free frame
-    uint64_t mask = 0xfffffffffffffffful << pos.bit_index;
-    for(size_t i = 0; i < N; i++){
-        if(i < pos.row_index){
-            field.rows[i] = 0x0ul;
-        }else if (i > pos.row_index){
-            field.rows[i] = 0xfffffffffffffffful;
-        }else{
-            field.rows[i] = mask;
-        }
-    }
-
-
-    return field;
 }
+
 
 
 /**

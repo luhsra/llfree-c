@@ -91,6 +91,7 @@ bool init_lower_test(uint8_t init){
     }
     lower_init_default(&actual, pfn_start, frames, init);
     ret = lower_init(&actual, true);
+    check(((uint64_t)&actual.fields[actual.num_of_childs] - (uint64_t)&actual.fields[0]) / CACHESIZE == actual.num_of_childs, "no padding");
     check_child_number(1339ul);
     bitfield_is_free_n(actual.fields, 1338)
     check_equal_bitfield(actual.fields[1338], ((bitfield_t) {0x0, init == VOLATILE ? 0xfffffe0000000000 : 0xfffffffffff80000 ,u64MAX,u64MAX,u64MAX,u64MAX,u64MAX,u64MAX}))
@@ -392,6 +393,13 @@ int free_all_test(){
 
 //runns all tests an returns the number of failed Tests
 int lower_tests(int* test_counter, int* fail_counter){
+
+    bitfield_t field[3] = {0};
+    uint64_t * words = (uint64_t*)&field[0]; 
+    for(int i = 0; i < 18; ++i){
+        words[i] = i;
+    }
+
 
     run_test(init_volatile_test);
     run_test(init_persistent_test)

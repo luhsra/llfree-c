@@ -246,8 +246,7 @@ void *llc_default() {
 int64_t llc_init(void *this, size_t cores, uint64_t start_frame_adr, size_t len,
                  uint8_t init, uint8_t free_all) {
   assert(this != NULL);
-  assert((init == VOLATILE || init == OVERWRITE || init == RECOVER) &&
-         "recover not implemented jet");
+  if(init != VOLATILE && init != OVERWRITE && init != RECOVER) return ERR_INITIALIZATION;
 
   // check if given memory is enough
   if (len < MIN_PAGES || len > MAX_PAGES)

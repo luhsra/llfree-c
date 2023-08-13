@@ -169,7 +169,7 @@ fn bulk(
 ) -> Perf {
     let timer = Instant::now();
     alloc
-        .init(threads, pfn_range(mapping), Init::Volatile, true)
+        .init(threads, pfn_range(mapping), Init::Overwrite, true)
         .unwrap();
     let init = timer.elapsed().as_millis();
     let allocs = alloc.frames() / max_threads / 2 / (1 << order);
@@ -357,7 +357,7 @@ fn rand_block(
 ) -> Perf {
     let timer = Instant::now();
     alloc
-        .init(threads, pfn_range(mapping), Init::Overwrite, true)
+        .init(threads, pfn_range(mapping), Init::Volatile, true)
         .unwrap();
     let init = timer.elapsed().as_millis();
 

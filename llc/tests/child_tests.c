@@ -12,6 +12,7 @@
 
 bool reserve_HP_test(){
     bool success = true;
+    check(sizeof(child_t) == 2, "right child size");
 
     child_t actual = child_init(512,false);
     child_t expect = child_init(0,true);

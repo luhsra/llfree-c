@@ -10,39 +10,6 @@
 #define u64MAX 0xffffffffffffffff
 
 
-bool init_field_test(){
-    bool success = true;
-
-    bitfield_t expect = {{0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0}};
-    bitfield_t actual;
-    actual = field_init(0, true);
-    check_equal_bitfield_m(actual, expect, "full init");
-
-    expect = (bitfield_t) {{0xfffffffffffffffe, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}};
-    actual = field_init(1, true);
-    check_equal_bitfield_m(actual, expect, "init with no free frames");
-
-
-    expect = (bitfield_t) {{0x0, 0x0, 0x0, 0xffc0000000000000, u64MAX, u64MAX, u64MAX, u64MAX}};
-    actual = field_init(246, true);
-    check_equal_bitfield_m(actual, expect, "init with partial frames");
-
-
-    //Initial all allocated tests
-
-    expect = (bitfield_t) {{u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX, u64MAX}};
-    actual = field_init(312, false);
-    check_equal_bitfield_m(actual, expect, "all allocated");
-
-    actual = field_init(1, false);
-    check_equal_bitfield_m(actual, expect, "all allocated");
-
-
-    return success;
-}
-
-
-
 bool set_Bit_test(){
     bool success = true;
 
@@ -214,7 +181,6 @@ bool is_free_bit_test(){
 
 int bitfield_tests(int* test_counter, int* fail_counter){
 
-    run_test(init_field_test);
     run_test(set_Bit_test);
     run_test(reset_Bit_test);
     run_test(count_Set_Bits_test);
