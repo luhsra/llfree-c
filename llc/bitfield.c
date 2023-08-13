@@ -65,42 +65,47 @@ bitfield_t field_init(int number_of_free_Frames, bool all_free){
  * @return  ERR_OK on success
  *          ERR_MEMORY if no unset Bit was found.
  */
-static int field_find_unset(bitfield_t* field,  pos_t* pos){
-    assert(field != NULL);
-    assert(pos != NULL);
+static int find_unset(uint64_t val){
 
-    ITERATE(pos->row_index, N,
-        uint64_t row = atomic_load(&field->rows[current_i]);
-        // ctzll(x) -> If x is 0, the result is undefined and there are no unset bits
-        if(~row == 0) continue;
+    // ctzll(x) -> If x is 0, the result is undefined and there are no unset bits
+    if(~val == 0) return ERR_MEMORY;
 
-        int ret = __builtin_ctzll(~row);
+    int ret = __builtin_ctzll(~val);
 
-        assert(ret >= 0 && "ctzll shoud never be negative");
-        assert(ret < 64 && "ctzll schould not count more zeros as there are Bits");
+    assert(ret >= 0 && "ctzll shoud never be negative");
+    assert(ret < 64 && "ctzll schould not count more zeros as there are Bits");
 
-        pos->row_index = current_i;
-        pos->bit_index = ret;
-        return ERR_OK;
-    );
-    return ERR_MEMORY; // ERR_MEMORY ->Kein freies Bit in diesem Feld
+    return ret;
 }
 
-//TODO start at given atomic index!
 int64_t field_set_Bit(bitfield_t* field, const uint64_t pfn){
     assert(field != NULL);
 
-    pos_t pos = get_pos(pfn);
-    if(field_find_unset(field, &pos) < 0) return ERR_MEMORY;
+    uint64_t row = atomic_from_pfn(pfn) % N;
 
-    uint64_t mask = 1ull << pos.bit_index; // 00...010...0 -> one at the bit-position
-
-    uint64_t before = atomic_fetch_or(&field->rows[pos.row_index], mask);
-
-    if((before | mask) == before){ // if no change occours the bit was already set.
-        return ERR_RETRY;
-    }
-    return pos.row_index * ATOMICSIZE + pos.bit_index;
+    do {
+        const size_t _offset = (row) % (((1 << 9) / (sizeof(uint64_t) * 8)));
+        const size_t _base_idx = (row)-_offset;
+        for (size_t _i = 0; _i < (((1 << 9) / (sizeof(uint64_t) * 8))); ++_i) {
+            const size_t current_i =
+                _base_idx +
+                ((_i + _offset) % (((1 << 9) / (sizeof(uint64_t) * 8))));
+            {
+              int pos;
+              while ((pos = find_unset(__c11_atomic_load(
+                          &field->rows[current_i], memory_order_acquire))) >=
+                     0) {
+                uint64_t mask = 1ul << pos;
+                uint64_t before =
+                    __c11_atomic_fetch_or(&field->rows[current_i], mask, 5);
+                if ((before | mask) != before) {
+                  return current_i * (sizeof(uint64_t) * 8) + pos;
+                }
+              };
+            }
+        }
+    } while (0);
+    return ERR_MEMORY;
 }
 
 int field_reset_Bit(bitfield_t* field, size_t index){

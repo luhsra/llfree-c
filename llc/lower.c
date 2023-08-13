@@ -102,17 +102,13 @@ int64_t get_HP(lower_t const *const self, uint64_t pfn) {
   assert(self != 0);
 
   size_t idx = child_from_pfn(pfn);
-  size_t offset = idx % CHILDS_PER_TREE;
-  size_t start_idx = idx - offset;
 
-  for (size_t i = 0; i < CHILDS_PER_TREE; ++i) {
-    size_t current_idx = start_idx + offset;
-    if (update(child_reserve_HP(&self->childs[current_idx]) == ERR_OK)) {
-      return pfn_from_child(current_idx) + self->start_frame_adr;
+  ITERATE(idx, CHILDS_PER_TREE, 
+    if(current_i >= self->num_of_childs) continue;
+    if (update(child_reserve_HP(&self->childs[current_i]) == ERR_OK)) {
+      return pfn_from_child(current_i) + self->start_frame_adr;
     }
-    ++offset;
-    offset %= CHILDS_PER_TREE;
-  }
+  );
   return ERR_MEMORY;
 }
 
@@ -126,7 +122,7 @@ int64_t get_HP(lower_t const *const self, uint64_t pfn) {
  */
 static int64_t reserve_in_Bitfield(const lower_t *self, const uint64_t child_idx, const uint64_t pfn) {
 
-  const int64_t pos = update(field_set_Bit(&self->fields[child_idx], pfn));
+  const int64_t pos = field_set_Bit(&self->fields[child_idx], pfn);
   if (pos >= 0) {
     // found and reserved a frame
     return pfn_from_child(child_idx) + pos + self->start_frame_adr;

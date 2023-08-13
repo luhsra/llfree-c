@@ -137,7 +137,7 @@ int64_t search_and_reserve_tree(const upper_t* const self, const uint64_t core, 
   const uint64_t base_idx = start_idx - (start_idx % CHILDS_PER_TREE); 
 
 
-  uint64_t vercinity = self->num_of_trees / self->cores / 4;
+  uint64_t vercinity = 21;//self->num_of_trees / self->cores / 2;
   if (vercinity > CHILDS_PER_TREE) vercinity = CHILDS_PER_TREE;
 
 
@@ -164,11 +164,13 @@ int64_t search_and_reserve_tree(const upper_t* const self, const uint64_t core, 
   if (free_tree_idx != self->num_of_trees)
     if(set_preferred_and_writeback(self, local, free_tree_idx) == ERR_OK) return ERR_OK;
 
-
+  bool even_cacheline = (base_idx >> 5) & 1;
   uint64_t amount_of_trees_outside_cacheline = self->num_of_trees < CHILDS_PER_TREE ? 0 : self->num_of_trees - CHILDS_PER_TREE;
   // search outside of currend cacheline for a partial tree
   for(size_t i = 1; i <= amount_of_trees_outside_cacheline; ++i){
-    uint64_t idx = (base_idx + (i & 1 ? CHILDS_PER_TREE + i / 2 : -i / 2)) % self->num_of_trees;
+    int64_t toggle = i & 1 ? i / 2 + CHILDS_PER_TREE : -i / 2;
+    if(even_cacheline) toggle = -toggle + CHILDS_PER_TREE -1;
+    uint64_t idx = (base_idx + toggle) % self->num_of_trees;
 
     saturation_level_t sat = tree_status(&trees[idx]);
     if(sat == PARTIAL){
@@ -180,7 +182,7 @@ int64_t search_and_reserve_tree(const upper_t* const self, const uint64_t core, 
   const uint16_t min_val = 1 << order;
   for(uint64_t i = 0; i < self->num_of_trees; ++i){
     int64_t toggle = i & 1 ? i / 2 : -i / 2;
-    uint64_t idx = ((self->num_of_trees / self->cores * (core % self->cores)) + toggle) % self->num_of_trees;
+    uint64_t idx = (start_idx + toggle) % self->num_of_trees;
 
     const tree_t tree = {load(&trees[idx].raw)};
     if (!tree.flag && tree.counter >= min_val){
@@ -330,15 +332,15 @@ int64_t llc_get(const void *this, size_t core, size_t order) {
       if (sync_with_global(self, local)) {
         atomic_idx = update(local_dec_counter(local, order));
       }
-    }
-    // while local has not enouth frames reserve a new tree
-    while (atomic_idx < 0) {
-      int ret = search_and_reserve_tree(self, core, order);
-      if (ret == ERR_MEMORY) {
-        // all memory is allocated
-        return ERR_MEMORY;
+      // while local has not enouth frames reserve a new tree
+      while (atomic_idx < 0) {
+        int ret = search_and_reserve_tree(self, core, order);
+        if (ret == ERR_MEMORY) {
+          // all memory is allocated
+          return ERR_MEMORY;
+        }
+        atomic_idx = update(local_dec_counter(local, order));
       }
-      atomic_idx = update(local_dec_counter(local, order));
     }
     const int64_t old_pfn = pfn_from_atomic(atomic_idx);
     // reserved tree with enough space and decremented the local counter
@@ -352,8 +354,8 @@ int64_t llc_get(const void *this, size_t core, size_t order) {
       }
     } else {
       assert(tree_from_pfn(old_pfn) ==
-             tree_from_pfn(pfn_adr - (int64_t)self->lower.start_frame_adr));
       // successfully reserved a new frame
+             tree_from_pfn(pfn_adr - (int64_t)self->lower.start_frame_adr));
       break;
     }
   } while (1);

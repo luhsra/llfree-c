@@ -47,12 +47,12 @@ int local_update_last_reserved(local_t *const self, uint64_t pfn) {
   reserved_t prev = {load(&self->reserved.raw)};
   // no update if reservation is in progress
   uint64_t new_reserved = atomic_from_pfn(pfn);
-  if (prev.reservation_in_progress || !prev.has_reserved_tree || tree_from_atomic(prev.preferred_index) !=
+  if (prev.reservation_in_progress || tree_from_atomic(prev.preferred_index) !=
                                           tree_from_atomic(new_reserved)) {
     return ERR_OK;
   }
   reserved_t desire = prev;
-  desire.preferred_index = atomic_from_pfn(pfn);
+  desire.preferred_index = new_reserved;
   return cas(&self->reserved, &prev, desire);
 }
 
