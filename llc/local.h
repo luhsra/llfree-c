@@ -68,8 +68,8 @@ void local_init(local_t *self);
 
 // get the reserved tree index
 uint64_t local_get_reserved_pfn(local_t *self);
-// set the flag for searching
-int local_mark_as_searchig(local_t *self);
+// set the flag for searching and returns old status
+reserved_t local_mark_as_searchig(local_t *self);
 // reset the flag for searching
 int local_unmark_as_searchig(local_t *self);
 

@@ -63,16 +63,13 @@ uint64_t local_get_reserved_pfn(local_t *self) {
   return pfn_from_atomic(pref.preferred_index);
 }
 
-int local_mark_as_searchig(local_t *self) {
+reserved_t local_mark_as_searchig(local_t *self) {
   assert(self != NULL);
 
   reserved_t mask = {0ul};
   mask.reservation_in_progress = true;
 
-  uint64_t before = atomic_fetch_or(&self->reserved.raw, mask.raw);
-  if ((before | mask.raw) == before)
-    return ERR_RETRY; // no change means flag was already set
-  return ERR_OK;
+  return (reserved_t){atomic_fetch_or(&self->reserved.raw, mask.raw)};
 }
 
 int local_unmark_as_searchig(local_t *self) {
