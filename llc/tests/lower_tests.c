@@ -389,6 +389,26 @@ int free_all_test(){
 }
 
 
+bool persistent_init() {
+  bool success = true;
+  char* mem = aligned_alloc(1 << HP_ORDER, 16ul << 30); //16 GiB
+  uint64_t len = (16ul << 30) / PAGESIZE;
+  assert(mem != NULL);
+  lower_t lower;
+  lower_init_default(&lower, (uint64_t)mem, len, OVERWRITE);
+  check_uequal((uint64_t)&lower.childs[0] % CACHESIZE , 0ul);
+  check_uequal((uint64_t)&lower.fields[0] % CACHESIZE , 0ul);
+  check((uint64_t)&lower.childs[lower.num_of_childs] < lower.start_frame_adr + len * PAGESIZE, "");
+  check((uint64_t)&lower.childs[lower.num_of_childs] > lower.start_frame_adr, "");
+  check((uint64_t)&lower.fields[lower.num_of_childs] < lower.start_frame_adr + len * PAGESIZE, "");
+  check((uint64_t)&lower.fields[lower.num_of_childs] > lower.start_frame_adr, "");
+
+  int ret = lower_init(&lower, true);
+  check_equal(ret, ERR_OK);
+  return success;
+}
+
+
 
 
 //runns all tests an returns the number of failed Tests
@@ -408,5 +428,6 @@ int lower_tests(int* test_counter, int* fail_counter){
     run_test(is_free_test);
     run_test(lower_HP_tests);
     run_test(free_all_test);
+    run_test(persistent_init);
     return 0;
 }

@@ -60,6 +60,7 @@ void lower_init_default(lower_t *const self, uint64_t start_frame_adr,
 
     self->childs = (child_t *)start_data;
     self->fields = (bitfield_t *)(start_data + bytes_for_childs);
+
     assert((uint64_t)&self->childs[0] % CACHESIZE == 0);
     assert((uint64_t)&self->fields[0] % CACHESIZE == 0);
     assert((uint64_t)&self->childs[self->num_of_childs] < self->start_frame_adr + len * PAGESIZE);
@@ -67,6 +68,10 @@ void lower_init_default(lower_t *const self, uint64_t start_frame_adr,
     assert((uint64_t)&self->fields[self->num_of_childs] < self->start_frame_adr + len * PAGESIZE);
     assert((uint64_t)&self->fields[self->num_of_childs] > self->start_frame_adr);
 
+    //printf("region\tstart\tend\n");
+    //printf("memory\t%lX\t%lX\n", self->start_frame_adr, self->start_frame_adr + len * PAGESIZE);
+    //printf("childs\t%lX\t%lX\n", (uint64_t)&self->childs[0], (uint64_t)&self->childs[self->num_of_childs] + sizeof(child_t));
+    //printf("fields\t%lX\t%lX\n", (uint64_t)&self->fields[0], (uint64_t)&self->fields[self->num_of_childs] + sizeof(bitfield_t));
 
 
 

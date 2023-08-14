@@ -82,6 +82,11 @@ fn main() {
     warn!("Allocating order {order}");
 
     let mut mapping = mapping(0x1000_0000_0000, memory * PT_LEN * PT_LEN, dax);
+    let area = pfn_range(&mapping);
+    let len = area.end.0 - area.start.0;
+    warn!("len = {len}");
+    warn!("start = {:#X}", area.start.0);
+    warn!("end = {:#X}", area.end.0);
 
     let mut allocs: [Box<dyn Alloc>; 2] = [Box::<LLFree>::default(), Box::<LLC>::default()];
 
@@ -357,7 +362,7 @@ fn rand_block(
 ) -> Perf {
     let timer = Instant::now();
     alloc
-        .init(threads, pfn_range(mapping), Init::Volatile, true)
+        .init(threads, pfn_range(mapping), Init::Overwrite, true)
         .unwrap();
     let init = timer.elapsed().as_millis();
 
