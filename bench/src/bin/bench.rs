@@ -236,7 +236,7 @@ fn repeat(
 ) -> Perf {
     let timer = Instant::now();
     alloc
-        .init(threads, pfn_range(mapping), Init::Volatile, true)
+        .init(threads, pfn_range(mapping), Init::Overwrite, true)
         .unwrap();
     let init = timer.elapsed().as_millis();
 
@@ -287,7 +287,7 @@ fn rand(
 ) -> Perf {
     let timer = Instant::now();
     alloc
-        .init(threads, pfn_range(mapping), Init::Volatile, true)
+        .init(threads, pfn_range(mapping), Init::Overwrite, true)
         .unwrap();
     let init = timer.elapsed().as_millis();
 

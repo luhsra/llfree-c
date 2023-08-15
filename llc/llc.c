@@ -236,8 +236,11 @@ static int inc_tree_counter(upper_t const *const self, const size_t core,
 /// Creates the allocator and returns a pointer to its data that is passed
 /// into all other functions
 void *llc_default() {
-  upper_t *upper = calloc(1, sizeof(upper_t));
+  upper_t *upper = aligned_alloc(CACHESIZE, sizeof(upper_t));
   assert(upper != NULL);
+  upper->local = NULL;
+  upper->meta = NULL;
+  upper->trees = NULL;
   return upper;
 }
 

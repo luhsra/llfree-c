@@ -1,10 +1,9 @@
-use crate::{Error, PFNRange, Result, PFN};
+use crate::frame::PFNRange;
+use crate::{Error, Result, PFN};
+use core::ffi::{c_char, CStr};
+use core::fmt;
 use core::ops::Range;
-use core::ptr::{addr_of_mut};
-use core::{
-    ffi::{c_char, CStr},
-    fmt,
-};
+use core::ptr::addr_of_mut;
 
 use super::{Alloc, Init};
 
@@ -34,7 +33,7 @@ impl Alloc for LLC {
             llc_init(
                 self.raw,
                 cores as _,
-                area.start.0 as _,
+                area.start.as_ptr() as _,
                 area.len() as _,
                 init as usize as _,
                 free_all as _,
