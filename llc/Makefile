@@ -8,7 +8,7 @@ DEBUG ?= 1
 ifeq ($(DEBUG), 1)
 	CFLAGS += -g
 else
-	CFLAGS += -O3 -D NDEBUG -march=native -fomit-rame-pointer
+	CFLAGS += -O3 -D NDEBUG -march=native -fomit-frame-pointer
 endif
 
 # Library name, sources, and build directory

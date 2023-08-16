@@ -422,39 +422,27 @@ int64_t llc_put(void const *const this, const size_t core,
   const uint64_t frame = frame_adr - self->lower.start_frame_adr;
   const size_t tree_idx = tree_from_pfn(frame);
 
-  // increment local tree
-  ret = update(local_inc_counter(local, frame, order));
-  if (ret == ERR_ADDRESS) {
-    // increment global tree
-    ret = update(tree_counter_inc(&self->trees[tree_idx], order));
-  }
-  assert(ret == ERR_OK);
 
-  // successfully incremented counter in upper allocator
 
   // set last reserved in local
   ret = update(local_set_free_tree(local, frame));
-  if (ret == ERR_OK) {
-    return ERR_OK;
+  if(ret == UPDATE_RESERVED){
+    // this tree was the target of multiple consecutive frees
+    // -> reserve this tree if it is not completely allocated
+    tree_t *const tree = &self->trees[tree_idx];
+
+    saturation_level_t sat = tree_status(tree);
+    if (sat != ALLOCATED){
+      reserved_t old_reserved = local_mark_as_searchig(local);
+      if (!old_reserved.reservation_in_progress) {
+        set_preferred_and_writeback(self, local, tree_idx);
+      }
+    }
   }
-  assert(ret == UPDATE_RESERVED);
-
-  // this tree was the target of multiple consecutive frees
-  // -> reserve this tree if it is not completely allocated
-  tree_t *const tree = &self->trees[tree_idx];
-
-  saturation_level_t sat = tree_status(tree);
-  if (sat == ALLOCATED)
-    return ERR_OK;
-
-  reserved_t old_reserved = local_mark_as_searchig(local);
-  if (old_reserved.reservation_in_progress) {
-    // the local tree is already in reservation process -> ignore the reserve
-    // last free tree optimisation
-    return ERR_OK;
-  }
-
-  set_preferred_and_writeback(self, local, tree_idx);
+  if(update(local_inc_counter(local, frame, order)) == ERR_OK) return ERR_OK;
+  // increment global tree
+  ret = update(tree_counter_inc(&self->trees[tree_idx], order));
+  assert(ret == ERR_OK);
   return ERR_OK;
 }
 
