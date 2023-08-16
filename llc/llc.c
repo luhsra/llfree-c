@@ -158,7 +158,6 @@ static int64_t search_and_reserve_tree(const upper_t *const self,
     start_idx = self->num_of_trees / self->cores * (core % self->cores);
   }
   assert(start_idx < self->num_of_trees);
-  // const uint64_t base_idx = start_idx - (start_idx % CHILDS_PER_TREE);
 
   uint64_t vercinity = self->num_of_trees / self->cores / 4;
   if (vercinity > CHILDS_PER_TREE)
@@ -168,7 +167,7 @@ static int64_t search_and_reserve_tree(const upper_t *const self,
   // search inside of currend cacheline
   for (size_t i = 0; i < vercinity; ++i) {
     int64_t toggle = i & 1 ? i / 2 : -i / 2;
-    uint64_t idx = start_idx + toggle;
+    uint64_t idx = start_idx + (toggle % CHILDS_PER_TREE);
     idx = idx % self->num_of_trees;
 
     const saturation_level_t sat = tree_status(&trees[idx]);
@@ -190,6 +189,7 @@ static int64_t search_and_reserve_tree(const upper_t *const self,
     if (set_preferred_and_writeback(self, local, free_tree_idx) == ERR_OK)
       return ERR_OK;
   }
+  start_idx = start_idx - (start_idx % CHILDS_PER_TREE) + CHILDS_PER_TREE / 2;
   int64_t ret = search_global(self, local, start_idx, vercinity,
                               fragmented ? FREE : PARTIAL);
   if (ret == ERR_OK) return ERR_OK;
