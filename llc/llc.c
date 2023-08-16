@@ -50,7 +50,7 @@ static bool sync_with_global(upper_t const *const self, local_t *const local) {
     reserved_t desire = old;
     assert(old.free_counter + counter <= TREESIZE);
     desire.free_counter += counter;
-    if (cas(&local->reserved, &old, desire) == ERR_OK){
+    if (cas(&local->reserved, &old, desire) == ERR_OK) {
       return true;
     }
   } while (true);
@@ -86,18 +86,21 @@ static void init_trees(upper_t const *const self) {
  * @return ERR_OK on success
  *         ERR_ADDRESS if tree could not be reserved
  */
-static int set_preferred_and_writeback(upper_t const *const self, local_t* const local, const uint64_t tree_idx) {
+static int set_preferred_and_writeback(upper_t const *const self,
+                                       local_t *const local,
+                                       const uint64_t tree_idx) {
 
   assert(self != NULL);
   assert(local != NULL);
   assert(tree_idx < self->num_of_trees);
 
   int64_t counter = update(tree_reserve(&self->trees[tree_idx]));
-  if(counter <= 0) return ERR_ADDRESS;
-
+  if (counter <= 0)
+    return ERR_ADDRESS;
 
   reserved_t old_reserved;
-  update(local_set_new_preferred_tree(local, pfn_from_tree(tree_idx), counter, &old_reserved));
+  update(local_set_new_preferred_tree(local, pfn_from_tree(tree_idx), counter,
+                                      &old_reserved));
   // successfully reserved a new tree && in_reservation flag is removed
 
   // writeback the old counter to trees
@@ -109,43 +112,64 @@ static int set_preferred_and_writeback(upper_t const *const self, local_t* const
   return ERR_OK;
 }
 
+static int64_t search_global(const upper_t *const self, local_t *const local,
+                             uint64_t base_idx, uint64_t vercinity,
+                             saturation_level_t saturration) {
+
+  // search outside of currend cacheline for a partial tree
+  for (size_t i = vercinity; i < self->num_of_trees; ++i) {
+    int64_t toggle = i & 1 ? i / 2 : -i / 2;
+    uint64_t idx = (base_idx + toggle) % self->num_of_trees;
+
+    saturation_level_t sat = tree_status(&self->trees[idx]);
+    if (sat == saturration) {
+      if (set_preferred_and_writeback(self, local, idx) == ERR_OK)
+        return ERR_OK;
+    }
+  }
+  return ERR_MEMORY;
+}
 
 /* Search and reserves a new tree for local data of given core.
-  if a reservation is alrady in progress by another core this function returns after waiting for completion.
-  returns ERR_OK on success, ERR_MEMORY if no tree ist available
+  if a reservation is alrady in progress by another core this function returns
+  after waiting for completion. returns ERR_OK on success, ERR_MEMORY if no tree
+  ist available
  */
-int64_t search_and_reserve_tree(const upper_t* const self, const uint64_t core, const uint64_t order) {
+static int64_t search_and_reserve_tree(const upper_t *const self,
+                                       const uint64_t core,
+                                       const uint64_t order, bool fragmented) {
   tree_t *trees = self->trees;
 
   local_t *local = get_local(self, core);
   reserved_t old_reserved = local_mark_as_searchig(local);
-  if(old_reserved.reservation_in_progress){
+  if (old_reserved.reservation_in_progress) {
     // wait until reservation is finished and return
     while (true) {
       reserved_t status = {load(&local->reserved.raw)};
-      if(!status.reservation_in_progress) return ERR_OK;
+      if (!status.reservation_in_progress)
+        return ERR_OK;
     }
   }
 
   uint64_t start_idx;
-  if(old_reserved.has_reserved_tree){
-    start_idx =  tree_from_atomic(old_reserved.preferred_index);
-  }else{
+  if (old_reserved.has_reserved_tree) {
+    start_idx = tree_from_atomic(old_reserved.preferred_index);
+  } else {
     start_idx = self->num_of_trees / self->cores * (core % self->cores);
   }
   assert(start_idx < self->num_of_trees);
-  const uint64_t base_idx = start_idx - (start_idx % CHILDS_PER_TREE); 
+  // const uint64_t base_idx = start_idx - (start_idx % CHILDS_PER_TREE);
 
-
-  uint64_t vercinity = 21;//self->num_of_trees / self->cores / 2;
-  if (vercinity > CHILDS_PER_TREE) vercinity = CHILDS_PER_TREE;
-
+  uint64_t vercinity = self->num_of_trees / self->cores / 4;
+  if (vercinity > CHILDS_PER_TREE)
+    vercinity = CHILDS_PER_TREE;
 
   uint64_t free_tree_idx = self->num_of_trees;
-  //search inside of currend cacheline
-  for (size_t i = 1; i <= vercinity; ++i) {
-    uint64_t idx = base_idx + (i & 1 ? i / 2 : CHILDS_PER_TREE - i / 2);
-    if (idx >= self->num_of_trees) continue;
+  // search inside of currend cacheline
+  for (size_t i = 0; i < vercinity; ++i) {
+    int64_t toggle = i & 1 ? i / 2 : -i / 2;
+    uint64_t idx = start_idx + toggle;
+    idx = idx % self->num_of_trees;
 
     const saturation_level_t sat = tree_status(&trees[idx]);
     switch (sat) {
@@ -156,53 +180,55 @@ int64_t search_and_reserve_tree(const upper_t* const self, const uint64_t core, 
       free_tree_idx = idx;
       break;
     case PARTIAL:
-      if(set_preferred_and_writeback(self, local, idx) == ERR_OK) return ERR_OK;
+      if (set_preferred_and_writeback(self, local, idx) == ERR_OK)
+        return ERR_OK;
       break;
     }
   }
   // if found, return idx of a free tree
-  if (free_tree_idx != self->num_of_trees)
-    if(set_preferred_and_writeback(self, local, free_tree_idx) == ERR_OK) return ERR_OK;
-
-  bool even_cacheline = (base_idx >> 5) & 1;
-  uint64_t amount_of_trees_outside_cacheline = self->num_of_trees < CHILDS_PER_TREE ? 0 : self->num_of_trees - CHILDS_PER_TREE;
-  // search outside of currend cacheline for a partial tree
-  for(size_t i = 1; i <= amount_of_trees_outside_cacheline; ++i){
-    int64_t toggle = i & 1 ? i / 2 + CHILDS_PER_TREE : -i / 2;
-    if(even_cacheline) toggle = -toggle + CHILDS_PER_TREE -1;
-    uint64_t idx = (base_idx + toggle) % self->num_of_trees;
-
-    saturation_level_t sat = tree_status(&trees[idx]);
-    if(sat == PARTIAL){
-        if(set_preferred_and_writeback(self, local, idx) == ERR_OK) return ERR_OK;
-    }
+  if (free_tree_idx != self->num_of_trees) {
+    if (set_preferred_and_writeback(self, local, free_tree_idx) == ERR_OK)
+      return ERR_OK;
   }
+  int64_t ret = search_global(self, local, start_idx, vercinity,
+                              fragmented ? FREE : PARTIAL);
+  if (ret == ERR_OK) return ERR_OK;
+
+  ret = search_global(self, local, start_idx, vercinity,
+                              !fragmented ? FREE : PARTIAL);
+  if (ret == ERR_OK) return ERR_OK;
 
   // search whole tree for a tree with enough free frames
   const uint16_t min_val = 1 << order;
-  for(uint64_t i = 0; i < self->num_of_trees; ++i){
+  for (uint64_t i = 0; i < self->num_of_trees; ++i) {
     int64_t toggle = i & 1 ? i / 2 : -i / 2;
     uint64_t idx = (start_idx + toggle) % self->num_of_trees;
 
     const tree_t tree = {load(&trees[idx].raw)};
-    if (!tree.flag && tree.counter >= min_val){
-      if(set_preferred_and_writeback(self, local, idx) == ERR_OK) return ERR_OK; 
+    if (!tree.flag && tree.counter >= min_val) {
+      if (set_preferred_and_writeback(self, local, idx) == ERR_OK)
+        return ERR_OK;
     }
   }
-  
+
   // if no frames in unreserved trees are available steal trees from other cores
 
   uint64_t local_idx = core % self->cores;
 
-  for(uint64_t i = 1; i < self->cores; ++i){
+  for (uint64_t i = 1; i < self->cores; ++i) {
     const uint64_t idx = (local_idx + i) % self->cores;
     int64_t ret = try_update(local_steal(&self->local[idx], &old_reserved));
-    if(ret != ERR_OK) continue;
+    if (ret != ERR_OK)
+      continue;
     uint64_t tree_idx = tree_from_atomic(old_reserved.preferred_index);
-    ret = update(tree_writeback_and_reserve(&self->trees[tree_idx], old_reserved.free_counter));
+    ret = update(tree_writeback_and_reserve(&self->trees[tree_idx],
+                                            old_reserved.free_counter));
     assert(ret >= 0);
-    ret = update(local_set_new_preferred_tree(local, pfn_from_tree(tree_idx), ret, &old_reserved));
-    update(tree_writeback(&self->trees[tree_from_atomic(old_reserved.preferred_index)], old_reserved.free_counter));
+    ret = update(local_set_new_preferred_tree(local, pfn_from_tree(tree_idx),
+                                              ret, &old_reserved));
+    update(tree_writeback(
+        &self->trees[tree_from_atomic(old_reserved.preferred_index)],
+        old_reserved.free_counter));
     return ERR_OK;
   }
 
@@ -249,7 +275,8 @@ void *llc_default() {
 int64_t llc_init(void *this, size_t cores, uint64_t start_frame_adr, size_t len,
                  uint8_t init, uint8_t free_all) {
   assert(this != NULL);
-  if(init != VOLATILE && init != OVERWRITE && init != RECOVER) return ERR_INITIALIZATION;
+  if (init != VOLATILE && init != OVERWRITE && init != RECOVER)
+    return ERR_INITIALIZATION;
 
   // check if given memory is enough
   if (len < MIN_PAGES || len > MAX_PAGES)
@@ -319,32 +346,32 @@ int64_t llc_get(const void *this, size_t core, size_t order) {
 
   // if reserved tree is in its initial status
   if (!local_has_reserved_tree(local)) {
-    int ret = search_and_reserve_tree(self, core, order);
+    int ret = search_and_reserve_tree(self, core, order, false);
     if (ret == ERR_MEMORY) {
       return ERR_MEMORY;
     }
   }
 
+  // decrease local freecounter
+  int64_t atomic_idx = update(local_dec_counter(local, order));
+  if (atomic_idx == ERR_MEMORY) {
+    // check if the global counter has some Frames left
+    if (sync_with_global(self, local)) {
+      atomic_idx = update(local_dec_counter(local, order));
+    }
+    // while local has not enouth frames reserve a new tree
+    while (atomic_idx < 0) {
+      int ret = search_and_reserve_tree(self, core, order, false);
+      if (ret == ERR_MEMORY) {
+        // all memory is allocated
+        return ERR_MEMORY;
+      }
+      atomic_idx = update(local_dec_counter(local, order));
+    }
+  }
+  const int64_t old_pfn = pfn_from_atomic(atomic_idx);
   int64_t pfn_adr;
   do {
-    // decrease local freecounter
-    int64_t atomic_idx = update(local_dec_counter(local, order));
-    if (atomic_idx == ERR_MEMORY) {
-      // check if the global counter has some Frames left
-      if (sync_with_global(self, local)) {
-        atomic_idx = update(local_dec_counter(local, order));
-      }
-      // while local has not enouth frames reserve a new tree
-      while (atomic_idx < 0) {
-        int ret = search_and_reserve_tree(self, core, order);
-        if (ret == ERR_MEMORY) {
-          // all memory is allocated
-          return ERR_MEMORY;
-        }
-        atomic_idx = update(local_dec_counter(local, order));
-      }
-    }
-    const int64_t old_pfn = pfn_from_atomic(atomic_idx);
     // reserved tree with enough space and decremented the local counter
     pfn_adr = lower_get(&self->lower, old_pfn, order);
     if (pfn_adr < 0) {
@@ -354,9 +381,15 @@ int64_t llc_get(const void *this, size_t core, size_t order) {
         // lower is corrupted or the update of local counter caused corruption
         return ERR_CORRUPTION;
       }
+      do {
+        ret = search_and_reserve_tree(self, core, order, true);
+        if (ret == ERR_MEMORY)
+          return ERR_MEMORY;
+        atomic_idx = update(local_dec_counter(local, order));
+      } while (atomic_idx < 0);
     } else {
       assert(tree_from_pfn(old_pfn) ==
-      // successfully reserved a new frame
+             // successfully reserved a new frame
              tree_from_pfn(pfn_adr - (int64_t)self->lower.start_frame_adr));
       break;
     }
@@ -389,10 +422,10 @@ int64_t llc_put(void const *const this, const size_t core,
   const uint64_t frame = frame_adr - self->lower.start_frame_adr;
   const size_t tree_idx = tree_from_pfn(frame);
 
-  //increment local tree
+  // increment local tree
   ret = update(local_inc_counter(local, frame, order));
-  if(ret == ERR_ADDRESS){
-    //increment global tree
+  if (ret == ERR_ADDRESS) {
+    // increment global tree
     ret = update(tree_counter_inc(&self->trees[tree_idx], order));
   }
   assert(ret == ERR_OK);
@@ -408,10 +441,11 @@ int64_t llc_put(void const *const this, const size_t core,
 
   // this tree was the target of multiple consecutive frees
   // -> reserve this tree if it is not completely allocated
-  tree_t * const tree = &self->trees[tree_idx];
+  tree_t *const tree = &self->trees[tree_idx];
 
   saturation_level_t sat = tree_status(tree);
-  if(sat == ALLOCATED) return ERR_OK;
+  if (sat == ALLOCATED)
+    return ERR_OK;
 
   reserved_t old_reserved = local_mark_as_searchig(local);
   if (old_reserved.reservation_in_progress) {
@@ -446,7 +480,6 @@ uint8_t llc_is_free(const void *this, uint64_t frame_adr, size_t order) {
   return lower_is_free(&self->lower, frame_adr, order);
 }
 
-
 void llc_drop(void *this) {
   assert(this != NULL);
   upper_t *self = (upper_t *)this;
@@ -462,13 +495,13 @@ void llc_drop(void *this) {
   free(this);
 }
 
-void llc_for_each_HP(const void *this, void* context, void f(void*, uint64_t, uint64_t)){
+void llc_for_each_HP(const void *this, void *context,
+                     void f(void *, uint64_t, uint64_t)) {
   assert(this != NULL);
   const upper_t *self = (upper_t *)this;
-  //llc_print(self);
+  // llc_print(self);
   lower_for_each_child(&self->lower, context, f);
 }
-
 
 /// Prints the allocators state for debugging
 void llc_debug(const void *this, void (*writer)(void *, char *), void *arg) {
@@ -476,13 +509,16 @@ void llc_debug(const void *this, void (*writer)(void *, char *), void *arg) {
   const upper_t *self = (upper_t *)this;
 
   writer(arg, "\nLLC stats:\n");
-  char* msg = malloc(200 * sizeof(char));
-  snprintf(msg, 200, "frames:\t%7lu\tfree: %7lu\tallocated: %7lu\n", self->lower.length, llc_free_frames(this), self->lower.length - llc_free_frames(this));
+  char *msg = malloc(200 * sizeof(char));
+  snprintf(msg, 200, "frames:\t%7lu\tfree: %7lu\tallocated: %7lu\n",
+           self->lower.length, llc_free_frames(this),
+           self->lower.length - llc_free_frames(this));
   writer(arg, msg);
 
-  snprintf(msg, 200, "HPs:\t%7lu\tfree: %7lu\tallocated: %7lu\n", self->lower.num_of_childs, lower_free_HPs(&self->lower), self->lower.num_of_childs - lower_free_HPs(&self->lower));
+  snprintf(msg, 200, "HPs:\t%7lu\tfree: %7lu\tallocated: %7lu\n",
+           self->lower.num_of_childs, lower_free_HPs(&self->lower),
+           self->lower.num_of_childs - lower_free_HPs(&self->lower));
   writer(arg, msg);
-
 }
 
 /**
