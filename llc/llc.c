@@ -117,7 +117,7 @@ static int64_t search_global(const upper_t *const self, local_t *const local,
                              saturation_level_t saturration) {
 
   // search outside of currend cacheline for a partial tree
-  for (size_t i = vercinity; i < self->num_of_trees; ++i) {
+  for (size_t i = vercinity +1; i <= self->num_of_trees; ++i) {
     int64_t toggle = i & 1 ? i / 2 : -i / 2;
     uint64_t idx = (base_idx + toggle) % self->num_of_trees;
 
@@ -165,7 +165,7 @@ static int64_t search_and_reserve_tree(const upper_t *const self,
 
   uint64_t free_tree_idx = self->num_of_trees;
   // search inside of currend cacheline
-  for (size_t i = 0; i < vercinity; ++i) {
+  for (size_t i = 1; i <= vercinity; ++i) {
     int64_t toggle = i & 1 ? i / 2 : -i / 2;
     uint64_t idx = start_idx + (toggle % CHILDS_PER_TREE);
     idx = idx % self->num_of_trees;
@@ -189,8 +189,8 @@ static int64_t search_and_reserve_tree(const upper_t *const self,
     if (set_preferred_and_writeback(self, local, free_tree_idx) == ERR_OK)
       return ERR_OK;
   }
-  start_idx = start_idx - (start_idx % CHILDS_PER_TREE) + CHILDS_PER_TREE / 2;
-  int64_t ret = search_global(self, local, start_idx, vercinity,
+  start_idx = start_idx - (start_idx % CHILDS_PER_TREE);
+  int64_t ret = search_global(self, local, start_idx,0,
                               fragmented ? FREE : PARTIAL);
   if (ret == ERR_OK) return ERR_OK;
 

@@ -71,8 +71,8 @@ saturation_level_t tree_status(const tree_t *self) {
   assert(self != NULL);
 
   tree_t tree = {load(&self->raw)};
-  const size_t lower_limit = 8 << HP_ORDER;
-  const size_t upper_limit = TREESIZE - lower_limit;
+  const size_t lower_limit = 2 << HP_ORDER;
+  const size_t upper_limit = TREESIZE - (8 << HP_ORDER);
 
   if (tree.counter < lower_limit || tree.flag)
     return ALLOCATED; // reserved trees will be counted as allocated
