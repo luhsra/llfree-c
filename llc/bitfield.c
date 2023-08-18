@@ -104,7 +104,7 @@ int field_count_Set_Bits(bitfield_t* field){
     int counter = 0;
     for(size_t i = 0; i < N; i++){
         uint64_t row = load(&field->rows[i]);
-        counter += __builtin_popcountll(row); //TODO wrapper popcount ?
+        counter += __builtin_popcountll(row);
     }
 
     assert(0 <= counter && counter <= FIELDSIZE);

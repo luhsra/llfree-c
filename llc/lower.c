@@ -43,9 +43,8 @@ void lower_init_default(lower_t *const self, uint64_t start_frame_adr,
          // round up to get complete cachelines
     bytes_for_childs = div_ceil(bytes_for_childs, CACHESIZE) * CACHESIZE;
 
-    uint64_t bytes_for_meta = sizeof(struct meta);
+    uint64_t bytes_for_meta = CACHESIZE;
      // round up to get complete cachelines
-    bytes_for_meta = div_ceil(bytes_for_meta, CACHESIZE) * CACHESIZE;
 
     uint64_t memory_for_controlstructures =
         bytes_for_Bitfields + bytes_for_childs + bytes_for_meta;

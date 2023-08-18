@@ -91,7 +91,7 @@ int local_inc_counter(local_t *const self, const uint64_t frame,
 
   reserved_t old = {load(&self->reserved.raw)};
   // check if reserved tree is a match for given pfn
-  if (old.preferred_index != atomic_Idx)
+  if (tree_from_atomic(old.preferred_index) != tree_from_atomic(atomic_Idx))
     return ERR_ADDRESS;
   // check if counter has enough space
   assert(old.free_counter <= TREESIZE - (1 << order));

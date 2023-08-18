@@ -4,18 +4,13 @@
 #include <stdalign.h>
 #include <stdbool.h>
 #include <stdint.h>
-/**
- * This Flagcounter combines a Flag with a 15-Bit counter in 2 Bytes of Space.
- * It Provides Functions to check and set these atomically.
- *
- */
 
 // child has 512 Eintrage
 #define CHILDSIZE FIELDSIZE
 
 /**
- * the raw value is for atomic access purpose and for allignment
- * the counter and flag tags allow easy access to the components.
+ * the raw value is for atomic access purpose
+ * the counter and flag tags allow easy access to the fields.
  */
 typedef struct child {
   union {

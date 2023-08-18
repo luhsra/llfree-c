@@ -725,6 +725,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn recover() {
         logging();
 

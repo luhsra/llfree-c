@@ -12,13 +12,13 @@
 // nocapture für anzeige welche assertion fehlschlägt
 
 #define MAX_ORDER 9
-#define MIN_PAGES 1ul << 9        //TODO check amount - Min size needed for datastructure in persistend memory
+#define MIN_PAGES 1ul << 9         // minimum one HP
 #define MAX_PAGES 1ul << 52        // 64 Bit Adresses - 12 Bit needed for offset inside the Page
 
 typedef struct upper {
     struct meta* meta;
     lower_t lower;
-    size_t cores;   //array_size of local
+    size_t cores;           //array_size of local
     struct local* local;
     size_t num_of_trees;    //array_size of trees
     tree_t* trees;
@@ -33,6 +33,21 @@ void *llc_default();
 
 /// Initializes the allocator for the given memory region, returning 0 on
 /// success or a negative error code
+//
+
+/**
+ * @brief Initializes the Allocator
+ *
+ * @param self pointer to allocator created by llc_default()
+ * @param cores number of cores
+ * @param start_frame_adr pointer to start of managed memory region
+ * @param len length of managed memory region in number of 4k-Pages
+ * @param init Init mode: VOLATILE:  allocator uses malloc for its own control structures
+ *                        OVERWRITE: allocator uses parts of the managed memory for its own control struktures
+ *                        RECOVER:   allocator assumes a initializes allocator an will recover its state. if no old state is found it will return ERR_INITIALIZATION
+ * @param all_free boolean value- if true all frames are free otherwise all frames will be initialy allocated
+ * @return int64_t
+ */
 int64_t llc_init(void *self, size_t cores, uint64_t start_frame_adr, size_t len,
                  uint8_t init, uint8_t all_free);
 
@@ -61,5 +76,5 @@ void llc_debug(const void *self, void (*writer)(void *, char *), void *arg);
 /// Prints detailed stats about the allokator state
 void llc_print(const upper_t* self);
 
-/// Calls f for each Huge Frame. f will recieve the context the currend pfn andt the freecounter as arguments
+/// Calls f for each Huge Frame. f will recieve the context the currend pfn andt the freecounter as arguments - useb by some rust benchmarks like frag.rs
 void llc_for_each_HP(const void *this, void* context, void f(void*, uint64_t, uint64_t));

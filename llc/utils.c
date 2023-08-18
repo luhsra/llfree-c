@@ -5,7 +5,6 @@
 #include <stdatomic.h>
 #include <stdint.h>
 
-//TODO testcases
 
 size_t div_ceil(uint64_t a, int b){
     //wenn es einen Rest gibt muss aufgerundet werden

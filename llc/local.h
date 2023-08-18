@@ -5,34 +5,29 @@
 #include <stdalign.h>
 #include <stdint.h>
 
-#define UPDATE_RESERVED 1
-// metadata for llc
-struct meta {
-  uint32_t magic;
-  bool crashed;
-};
+#define UPDATE_RESERVED -7
 
-// TODO Description
+/// this struct strores data for the reserved tree
 typedef struct reserved {
   union {
-    _Atomic(uint64_t) raw;
+    _Atomic(uint64_t) raw;              //used for atomic access
     struct {
-      uint16_t free_counter : 15;
-      uint64_t preferred_index : 46;
-      bool has_reserved_tree : 1;
-      bool reservation_in_progress : 1;
+      uint16_t free_counter : 15;       // free frames counter of reserved tree
+      uint64_t preferred_index : 46;    // atomic intex of reserved tree
+      bool has_reserved_tree : 1;       // true if there is a reserved tree
+      bool reservation_in_progress : 1; // used for spinlock if reservation is in progress
       uint8_t unused : 1;
     };
   };
 } reserved_t;
 
-// TODO Description
+// stores information about the last free
 typedef struct last_free {
   union {
-    _Atomic(uint64_t) raw;
+    _Atomic(uint64_t) raw;          // used for atomic access
     struct {
-      uint16_t free_counter : 2;
-      uint64_t last_free_idx : 46;
+      uint16_t free_counter : 2;   // counter of concurrend free in same tree
+      uint64_t last_free_idx : 46; // atomic index of last tree where a frame was freed
       uint16_t unused : 16;
     };
   };
@@ -45,7 +40,6 @@ typedef struct last_free {
 typedef struct __attribute__((aligned(CACHESIZE))) local {
   reserved_t reserved;
   last_free_t last_free;
-
 } local_t;
 
 /**
@@ -57,32 +51,56 @@ typedef struct __attribute__((aligned(CACHESIZE))) local {
  * @return ERR_RETRY if atomic operation fails
  *         ERR_OK on success
  */
-int local_set_new_preferred_tree(local_t *self, uint64_t pfn, uint16_t free_count,
-                  reserved_t *old_reservation);
+int local_set_new_preferred_tree(local_t *self, uint64_t pfn,
+                                 uint16_t free_count,
+                                 reserved_t *old_reservation);
 
-// init and set preferred to magic value
+// init with no tree reserved
 void local_init(local_t *self);
 
-#define local_has_reserved_tree(_local) \
-({(reserved_t){load(&_local->reserved.raw)}.has_reserved_tree;})
+// returns true if there is a reserved Tree
+#define local_has_reserved_tree(_local)                                        \
+  ({ (reserved_t){load(&_local->reserved.raw)}.has_reserved_tree; })
 
-// get the reserved tree index
+// get the pfn of the reserved tree
 uint64_t local_get_reserved_pfn(local_t *self);
-// set the flag for searching and returns old status
+
+// set the flag for searching and returns previous status to check if the reservation_in_progress-flag was already set
 reserved_t local_mark_as_searchig(local_t *self);
 // reset the flag for searching
 int local_unmark_as_searchig(local_t *self);
 
-// set last free index
+/**
+ * @brief increases the free counter if tree of frame matches the reserved tree
+ *
+ * @param self pointer to local data
+ * @param frame to determine the tree
+ * @param order order of returned frame to calculate the amount of returned regular frames
+ * @return int ERR_OK in success
+ *         ERR_ADRESS if trees not match
+ *         ERR_RETRY on atomic operation fail
+ */
 int local_inc_counter(local_t *const self, const uint64_t frame,
-                           const size_t order);
+                      const size_t order);
+
+/**
+ * @brief decrements the free counter by 2^order
+ * returns ERR_OK on success
+ * ERR_RETRY on atomic operation fail
+ * ERR_MEMORY if counter value was not high enough
+ */
 int local_dec_counter(local_t *const self, const size_t order);
 
-// resetzs the reserved tree and returns the old
+// resets the reserved tree and returns the old reservation
 int local_steal(local_t *const self, reserved_t *const old_reservation);
 
 // sets last_free to tree of given frame
-// returns UPDATE_RESERVED after 4 consecutive free on the same tree
+// returns ERR_OK on success
+// ERR_Retry on atomic operation fail
+// UPDATE_RESERVED after 4 consecutive free on the same tree
 int local_set_free_tree(local_t *self, uint64_t frame);
 
+/// updates the atomic index of last reserved tree
+// returns ERR_OK on success
+// ERR_RETRY on atomic operation fail
 int local_update_last_reserved(local_t *const self, uint64_t pfn);

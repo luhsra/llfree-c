@@ -13,10 +13,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// magic number to determine on recover if a allocator was previously initialized
 #define MAGIC 0xC0FFEE
 
+struct meta {
+  uint32_t magic; // used to check if the allocator was previously initializes
+  bool crashed;   // used to check if last shutdown was a chrash
+};
+
+
+//returns pointer to local data of given core
 #define get_local(_self, _core)                                                \
-  ({ &_self->local[_core % _self->num_of_trees]; })
+  ({ &_self->local[_core % _self->cores]; })
 
 /**
  * @brief syncronizes the free_counter of given local with the global counter.
@@ -57,7 +65,7 @@ static bool sync_with_global(upper_t const *const self, local_t *const local) {
 }
 
 /**
- * @brief Initializes the Treecounters by reading the child counters
+ * @brief Initializes the Treearray by reading the child counters
  * works non Atomicly!
  * @param self pointer to upper allocator
  */
@@ -78,7 +86,7 @@ static void init_trees(upper_t const *const self) {
 
 /**
  * @brief Set the preffered tree in local data to given tree and writes back
- * the prevoius tree;
+ * the previous tree;
  *
  * @param self pointer to Upper Allocator
  * @param local pointer to the local data of the reserving core
@@ -112,17 +120,18 @@ static int set_preferred_and_writeback(upper_t const *const self,
   return ERR_OK;
 }
 
+/// searches the whole tree array starting at base_idx for a tree with saturation status and reserves it for local
 static int64_t search_global(const upper_t *const self, local_t *const local,
-                             uint64_t base_idx, uint64_t vercinity,
-                             saturation_level_t saturration) {
+                             uint64_t base_idx,
+                             saturation_level_t saturation) {
 
   // search outside of currend cacheline for a partial tree
-  for (size_t i = vercinity +1; i <= self->num_of_trees; ++i) {
+  for (size_t i = 1; i <= self->num_of_trees; ++i) {
     int64_t toggle = i & 1 ? i / 2 : -i / 2;
     uint64_t idx = (base_idx + toggle) % self->num_of_trees;
 
     saturation_level_t sat = tree_status(&self->trees[idx]);
-    if (sat == saturration) {
+    if (sat == saturation) {
       if (set_preferred_and_writeback(self, local, idx) == ERR_OK)
         return ERR_OK;
     }
@@ -190,13 +199,15 @@ static int64_t search_and_reserve_tree(const upper_t *const self,
       return ERR_OK;
   }
   start_idx = start_idx - (start_idx % CHILDS_PER_TREE);
-  int64_t ret = search_global(self, local, start_idx,0,
-                              fragmented ? FREE : PARTIAL);
-  if (ret == ERR_OK) return ERR_OK;
+  int64_t ret =
+      search_global(self, local, start_idx, fragmented ? FREE : PARTIAL);
+  if (ret == ERR_OK)
+    return ERR_OK;
 
-  ret = search_global(self, local, start_idx, vercinity,
-                              !fragmented ? FREE : PARTIAL);
-  if (ret == ERR_OK) return ERR_OK;
+  ret = search_global(self, local, start_idx,
+                      !fragmented ? FREE : PARTIAL);
+  if (ret == ERR_OK)
+    return ERR_OK;
 
   // search whole tree for a tree with enough free frames
   const uint16_t min_val = 1 << order;
@@ -305,7 +316,7 @@ int64_t llc_init(void *this, size_t cores, uint64_t start_frame_adr, size_t len,
 
   self->num_of_trees = div_ceil(self->lower.num_of_childs, CHILDS_PER_TREE);
   self->trees = aligned_alloc(
-      CACHESIZE, sizeof(child_t) * self->num_of_trees); // TODO remove malloc
+      CACHESIZE, sizeof(child_t) * self->num_of_trees);
   assert(self->trees != NULL);
   if (self->trees == NULL)
     return ERR_INITIALIZATION;
@@ -319,7 +330,7 @@ int64_t llc_init(void *this, size_t cores, uint64_t start_frame_adr, size_t len,
   }
   self->cores = len_locale;
   self->local = aligned_alloc(CACHESIZE, sizeof(local_t) *
-                                             len_locale); // TODO remove malloc
+                                             len_locale);
 
   assert(self->local != NULL);
   if (self->trees == NULL)
@@ -369,30 +380,30 @@ int64_t llc_get(const void *this, size_t core, size_t order) {
       atomic_idx = update(local_dec_counter(local, order));
     }
   }
-  const int64_t old_pfn = pfn_from_atomic(atomic_idx);
   int64_t pfn_adr;
   do {
+    const int64_t old_pfn = pfn_from_atomic(atomic_idx);
     // reserved tree with enough space and decremented the local counter
     pfn_adr = lower_get(&self->lower, old_pfn, order);
-    if (pfn_adr < 0) {
-      // faliure to reserve a frame in lower allocator -> restore local counter
-      int ret = try_update(inc_tree_counter(self, core, old_pfn, order));
-      if (ret != ERR_OK || pfn_adr == ERR_CORRUPTION) {
-        // lower is corrupted or the update of local counter caused corruption
-        return ERR_CORRUPTION;
-      }
-      do {
-        ret = search_and_reserve_tree(self, core, order, true);
-        if (ret == ERR_MEMORY)
-          return ERR_MEMORY;
-        atomic_idx = update(local_dec_counter(local, order));
-      } while (atomic_idx < 0);
-    } else {
+    if (pfn_adr >= 0) {
+      // successfully reserved a new frame
       assert(tree_from_pfn(old_pfn) ==
-             // successfully reserved a new frame
              tree_from_pfn(pfn_adr - (int64_t)self->lower.start_frame_adr));
       break;
     }
+
+    // faliure to reserve a frame in lower allocator -> restore local counter
+    int ret = try_update(inc_tree_counter(self, core, old_pfn, order));
+    if (ret != ERR_OK || pfn_adr == ERR_CORRUPTION) {
+      // lower is corrupted or the update of local counter caused corruption
+      return ERR_CORRUPTION;
+    }
+    do {
+      ret = search_and_reserve_tree(self, core, order, true);
+      if (ret == ERR_MEMORY)
+        return ERR_MEMORY;
+      atomic_idx = update(local_dec_counter(local, order));
+    } while (atomic_idx < 0);
   } while (1);
 
   assert(pfn_adr >= 0);
@@ -422,24 +433,23 @@ int64_t llc_put(void const *const this, const size_t core,
   const uint64_t frame = frame_adr - self->lower.start_frame_adr;
   const size_t tree_idx = tree_from_pfn(frame);
 
-
-
   // set last reserved in local
   ret = update(local_set_free_tree(local, frame));
-  if(ret == UPDATE_RESERVED){
+  if (ret == UPDATE_RESERVED) {
     // this tree was the target of multiple consecutive frees
     // -> reserve this tree if it is not completely allocated
     tree_t *const tree = &self->trees[tree_idx];
 
     saturation_level_t sat = tree_status(tree);
-    if (sat != ALLOCATED){
+    if (sat != ALLOCATED) {
       reserved_t old_reserved = local_mark_as_searchig(local);
       if (!old_reserved.reservation_in_progress) {
         set_preferred_and_writeback(self, local, tree_idx);
       }
     }
   }
-  if(update(local_inc_counter(local, frame, order)) == ERR_OK) return ERR_OK;
+  if (update(local_inc_counter(local, frame, order)) == ERR_OK)
+    return ERR_OK;
   // increment global tree
   ret = update(tree_counter_inc(&self->trees[tree_idx], order));
   assert(ret == ERR_OK);

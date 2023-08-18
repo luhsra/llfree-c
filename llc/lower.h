@@ -11,8 +11,8 @@
 
 
 typedef struct lower {
-  uint64_t start_frame_adr;
-  size_t length;
+  uint64_t start_frame_adr; // first adress of managed space
+  size_t length;  // number of managed frames
   size_t num_of_childs; // arraylenght for fields and childs
   bitfield_t *fields;
   child_t *childs;
@@ -22,20 +22,19 @@ typedef struct lower {
  * @brief setups the lower by initializing the pointer
  * if volatile_mem is set it will malloc the needed space otherwise the pointer will be set into the given memory.
  * @param self pointer to the lower object
- * @param start_pfn currently ununsed
+ * @param start_pfn first adress of managed space
  * @param len amount of frames to be managed
- * @param volatile_mem decides where space for the datastructures are allocated
+ * @param init Init mode: VOLATILE:  allocator uses malloc for its own control structures
+ *                        OVERWRITE: allocator uses parts of the managed memory for its own control struktures
+ *                        RECOVER:   allocator assumes a initializes allocator an will recover its state.
   */
-void lower_init_default(lower_t *const self, uint64_t start_pfn, size_t len, uint8_t init);
+void lower_init_default(lower_t *const self, uint64_t start_adr, size_t len, uint8_t init);
 
 /**
  * @brief initialize the lower object and the bitfields and childs
- * works non-atomically because is expectet not to run paralell
+ * works non-atomically
  * @param self pointer to lower objekt
- * @param start_pfn number of the first managed Page-Frame
- * @param len amount of consecutive frames to be managed
- * @param free_all if set all the space will be marked allocated at start. (free
- * otherwise)
+ * @param free_all if set all the space will be marked free at start. (allocated otherwise)
  * @return ERR_OK
  */
 int lower_init(lower_t const *const self, bool free_all);
@@ -56,15 +55,15 @@ int lower_recover(lower_t* self);
  * @param pfn defines the chunk to be searched (will start at start of the
  * chunk even when start points to the middle)
  * @param order determines the amount consecutive pages to be alloced (2^order)
- * @return absolute pfn on success;
+ * @return frame adress of reserved frame on success;
  *         ERR_MEMORY if not enough space was found (ret will be undefined)
  */
 int64_t lower_get(lower_t const *const self, uint64_t pfn, size_t order);
 
 /**
- * @brief deallocates given frames
+ * @brief deallocates given frame
  * @param self pointer to lower object
- * @param frame Number of the first PageFrame to be freed
+ * @param frame_adr Number of the PageFrame to be freed
  * @param order determines the amount consecutive pages to be freed (2^order)
  * @return ERR_OK in success
  *         ERR_ADDRESS if the pointed to frames were not alloced
@@ -90,6 +89,7 @@ bool lower_is_free(lower_t const *const self, uint64_t frame_adr, size_t order);
  */
 size_t lower_allocated_frames(lower_t const *const self);
 
+//returns the number of free huge frames
 size_t lower_free_HPs(lower_t const * const self);
 
 /**
@@ -105,4 +105,5 @@ void lower_print(lower_t const *const self);
 void lower_drop(lower_t const *const self);
 
 /// Calls f for each child. f will recieve the context the currend pfn andt the freecounter as arguments
+// used by frag.rs benchmark
 void lower_for_each_child(const lower_t *self, void* context, void f(void*, uint64_t, uint64_t));

@@ -4,7 +4,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// TODO function descriptions
 // order of a Hugepage
 # define MAX(a,b) ((a) > (b) ? (a) : (b)) 
 
