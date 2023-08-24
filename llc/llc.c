@@ -146,11 +146,15 @@ static int64_t reserve_frame(const upper_t *self, local_t *local,
     return ERR_MEMORY;
   const int64_t frame_adr =
       lower_get(&self->lower, pfn_from_atomic(atomic_idx), order);
-  if (frame_adr != ERR_MEMORY) return frame_adr;
+  if(frame_adr >= 0){
+    //sucess on reserveing tree
+    update(local_update_last_reserved(local, frame_adr - self->lower.start_frame_adr));
+    return frame_adr;
+  }
   if (try_update(inc_tree_counter(self, local, pfn_from_atomic(atomic_idx),
                                   order)) != ERR_OK)
     return ERR_CORRUPTION;
-  return ERR_MEMORY;
+  return frame_adr; //ERR value from lower_get
 }
 
 
@@ -368,7 +372,6 @@ int64_t llc_get(const void *this, size_t core, size_t order) {
   local_t *const local = get_local(self, core);
 
   int64_t frame_adr = reserve_frame(self, local, order);
-
   if (frame_adr < 0 && local_has_reserved_tree(local)) {
     if (sync_with_global(self, local)) {
       frame_adr = reserve_frame(self, local, order);
