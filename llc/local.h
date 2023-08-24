@@ -89,7 +89,7 @@ int local_inc_counter(local_t *const self, const uint64_t frame,
  * ERR_RETRY on atomic operation fail
  * ERR_MEMORY if counter value was not high enough
  */
-int local_dec_counter(local_t *const self, const size_t order);
+int64_t local_dec_counter(local_t *const self, const size_t order);
 
 // resets the reserved tree and returns the old reservation
 int local_steal(local_t *const self, reserved_t *const old_reservation);
@@ -104,3 +104,7 @@ int local_set_free_tree(local_t *self, uint64_t frame);
 // returns ERR_OK on success
 // ERR_RETRY on atomic operation fail
 int local_update_last_reserved(local_t *const self, uint64_t pfn);
+
+
+/// spin-wait until in-reservation flag becomes false
+void local_wait_for_completion(const local_t* const self);

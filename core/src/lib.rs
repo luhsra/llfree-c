@@ -462,7 +462,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn less_mem() {
         logging();
 
@@ -725,7 +724,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn recover() {
         logging();
 

@@ -43,20 +43,6 @@ int tree_steal_counter(tree_t *self) {
   return ERR_RETRY;
 }
 
-int tree_writeback_and_reserve(tree_t *self, uint16_t free_counter) {
-  assert(self != NULL);
-  tree_t old = {load(&self->raw)};
-
-  assert(free_counter + old.counter <= TREESIZE);
-  tree_t desire = tree_init(0, true);
-
-  int ret = cas(self, &old, desire);
-  if (ret == ERR_OK)
-    return free_counter + old.counter;
-  else
-    return ret;
-}
-
 int tree_writeback(tree_t *self, uint16_t free_counter) {
   assert(self != NULL);
   tree_t old = {load(&self->raw)};

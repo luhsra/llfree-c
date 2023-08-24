@@ -17,11 +17,15 @@ make all
 # In folder llc
 make test
 
-# Running LLFree tests with LLC
-cargo test -- --test-threads 1
 
 # Running a benchmark
 cargo perf <benchmark> -- <args>
 # For example print help for the `bench` benchmark
 cargo perf bench -- -h
+
+# Running LLFree tests with LLC
+cargo test -- --test-threads 1
+# only tests starting with "test::" are using the LLC allocator
+# - different orders are ignored, because they are not implemented jet
+# - test::parallel_malloc and test::parallel_mmap also dont use LLC, so they are ignored
 ```

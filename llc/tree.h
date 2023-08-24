@@ -71,16 +71,6 @@ int tree_reserve(tree_t *self);
 int tree_writeback(tree_t *self, uint16_t free_counter);
 
 /**
- * @brief merges the counters of both trees and returns the value. Tree stays
- * reserved
- *
- * @param self
- * @param free_counter
- * @return int
- */
-int tree_writeback_and_reserve(tree_t *self, uint16_t free_counter);
-
-/**
  * @brief evaluatex how many frames are allocates in given tree
  * @param self pointer to the tree
  * @return  ALLOCATED if most of the Frames are allocated or the tree is

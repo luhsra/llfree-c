@@ -36,7 +36,7 @@ int local_set_new_preferred_tree(local_t *self, uint64_t pfn,
   desire.free_counter = free_count;
   desire.preferred_index = idx;
   desire.has_reserved_tree = true;
-  desire.reservation_in_progress = false;
+  desire.reservation_in_progress = true;
 
   old_reservation->raw = load(&self->reserved.raw);
   assert(old_reservation->reservation_in_progress);
@@ -91,7 +91,7 @@ int local_inc_counter(local_t *const self, const uint64_t frame,
 
   reserved_t old = {load(&self->reserved.raw)};
   // check if reserved tree is a match for given pfn
-  if (tree_from_atomic(old.preferred_index) != tree_from_atomic(atomic_Idx))
+  if (!old.has_reserved_tree || tree_from_atomic(old.preferred_index) != tree_from_atomic(atomic_Idx))
     return ERR_ADDRESS;
   // check if counter has enough space
   assert(old.free_counter <= TREESIZE - (1 << order));
@@ -100,7 +100,7 @@ int local_inc_counter(local_t *const self, const uint64_t frame,
   return cas(&self->reserved, &old, desire);
 }
 
-int local_dec_counter(local_t *const self, const size_t order) {
+int64_t local_dec_counter(local_t *const self, const size_t order) {
   assert(self != NULL);
 
   reserved_t old = {load(&self->reserved.raw)};
@@ -138,4 +138,12 @@ int local_set_free_tree(local_t *self, uint64_t frame) {
   }
 
   return cas(&self->last_free, &old, desire);
+}
+
+
+void local_wait_for_completion(const local_t* const self){
+  reserved_t res;
+  do{
+    res = (reserved_t){load(&self->reserved.raw)};
+  }while(res.reservation_in_progress);
 }
