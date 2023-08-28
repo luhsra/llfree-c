@@ -44,8 +44,8 @@ static int find_unset(uint64_t val){
 
     int ret = __builtin_ctzll(~val);
 
-    assert(ret >= 0 && "ctzll shoud never be negative");
-    assert(ret < 64 && "ctzll schould not count more zeros as there are Bits");
+    assert(ret >= 0 && "ctzll should never be negative");
+    assert(ret < 64 && "ctzll should not count more zeros as there are Bits");
 
     return ret;
 }

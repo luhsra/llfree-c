@@ -1,6 +1,6 @@
 # LLFree: Lock- and Log-free Allocator
 
-Dieses Ropo enthält die ReImplementierung des LLFree allokators in C.
+Dieses Repo enthält die ReImplementierung des LLFree Allokators in C.
 
 **Related Projects**
 - LLFree:     https://github.com/luhsra/llfree-rs
@@ -27,5 +27,5 @@ cargo perf bench -- -h
 cargo test -- --test-threads 1
 # only tests starting with "test::" are using the LLC allocator
 # - different orders are ignored, because they are not implemented jet
-# - test::parallel_malloc and test::parallel_mmap also dont use LLC, so they are ignored
+# - test::parallel_malloc and test::parallel_mmap also don't use LLC, so they are ignored
 ```

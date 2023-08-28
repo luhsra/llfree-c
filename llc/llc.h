@@ -4,16 +4,10 @@
 #include "child.h"
 #include "local.h"
 #include "tree.h"
-//Compilen und ausführen:
-//cargo test -r -p nvalloc -- llc::test --nocapture
-
-//cargo test upper::test::[testname] -- --nocapture
-// testnamen siehe mod.rs
-// nocapture für anzeige welche assertion fehlschlägt
 
 #define MAX_ORDER 9
 #define MIN_PAGES 1ul << 9         // minimum one HP
-#define MAX_PAGES 1ul << 52        // 64 Bit Adresses - 12 Bit needed for offset inside the Page
+#define MAX_PAGES 1ul << 52        // 64 Bit Addresses - 12 Bit needed for offset inside the Page
 
 typedef struct upper {
     struct meta* meta;
@@ -43,9 +37,9 @@ void *llc_default();
  * @param start_frame_adr pointer to start of managed memory region
  * @param len length of managed memory region in number of 4k-Pages
  * @param init Init mode: VOLATILE:  allocator uses malloc for its own control structures
- *                        OVERWRITE: allocator uses parts of the managed memory for its own control struktures
+ *                        OVERWRITE: allocator uses parts of the managed memory for its own control structures
  *                        RECOVER:   allocator assumes a initializes allocator an will recover its state. if no old state is found it will return ERR_INITIALIZATION
- * @param all_free boolean value- if true all frames are free otherwise all frames will be initialy allocated
+ * @param all_free boolean value- if true all frames are free otherwise all frames will be initially allocated
  * @return int64_t
  */
 int64_t llc_init(void *self, size_t cores, uint64_t start_frame_adr, size_t len,
@@ -73,8 +67,8 @@ void llc_drop(void* self);
 /// Prints the allocators state for debugging with given Rust printer
 void llc_debug(const void *self, void (*writer)(void *, char *), void *arg);
 
-/// Prints detailed stats about the allokator state
+/// Prints detailed stats about the allocator state
 void llc_print(const upper_t* self);
 
-/// Calls f for each Huge Frame. f will recieve the context the currend pfn andt the freecounter as arguments - useb by some rust benchmarks like frag.rs
+/// Calls f for each Huge Frame. f will receive the context the current pfn and the free counter as arguments - used by some rust benchmarks like frag.rs
 void llc_for_each_HP(const void *this, void* context, void f(void*, uint64_t, uint64_t));

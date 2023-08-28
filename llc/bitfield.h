@@ -38,7 +38,7 @@ int64_t field_set_Bit(bitfield_t* field, const uint64_t pfn);
 * @brief Atomically resets the Bit in given field at index position
 * @param field Field to search in
 * @return ERR_OK on success
-*         ERR_ADRESS if the bit was already reset
+*         ERR_ADDRESS if the bit was already reset
 */
 int field_reset_Bit(bitfield_t* field,size_t index);
 
@@ -59,12 +59,12 @@ int field_count_Set_Bits(bitfield_t* field);
 bool field_is_free(bitfield_t* self,size_t index);
 
 /**
-* @brief Helperfunction to Print a Bitfield on the console
+* @brief Helper function to Print a Bitfield on the console
 */
 void field_print(bitfield_t* field);
 
 /**
-* @brief Helperfunction to compare two bitfields
+* @brief Helper function to compare two bitfields
 * @return true if both fields are equal or both pointer are NULL;
 *         false otherwise
 */

@@ -1,6 +1,6 @@
 #pragma once
 
-//failcodes
+//failure codes
 enum {
   /// Success
   ERR_OK = 0,

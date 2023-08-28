@@ -33,23 +33,23 @@ void lower_init_default(lower_t *const self, uint64_t start_frame_adr,
       |         Managed Frames       | childs |  bitfields  |(void)| metadata |
       |-----------------------------------------------------------------------|
 
-      void is unused memory of a size smaler than a Frame.
+      void is unused memory of a size smaller than a Frame.
       its clippings, because we can not hand out less than a full frame.
 
      */
     uint64_t bytes_for_Bitfields = self->num_of_childs * sizeof(bitfield_t);
 
     uint64_t bytes_for_childs = self->num_of_childs * sizeof(child_t);
-         // round up to get complete cachelines
+         // round up to get complete cacheline
     bytes_for_childs = div_ceil(bytes_for_childs, CACHESIZE) * CACHESIZE;
 
     uint64_t bytes_for_meta = CACHESIZE;
-     // round up to get complete cachelines
+     // round up to get complete cacheline
 
-    uint64_t memory_for_controlstructures =
+    uint64_t memory_for_control_structures =
         bytes_for_Bitfields + bytes_for_childs + bytes_for_meta;
 
-    uint64_t pages_needed = div_ceil(memory_for_controlstructures, PAGESIZE);
+    uint64_t pages_needed = div_ceil(memory_for_control_structures, PAGESIZE);
     assert(pages_needed < self->length);
     self->length -= pages_needed;
     self->num_of_childs = div_ceil(self->length, FIELDSIZE);
@@ -150,7 +150,7 @@ int64_t get_HP(lower_t const *const self, uint64_t pfn) {
  *
  * @param self pointer to lower
  * @param idx index of the Bitfield that is searched
- * @return adress of the reseved frame on success
+ * @return address of the reserved frame on success
  *         ERR_MEMORY if no free Frame were found
  */
 static int64_t reserve_in_Bitfield(const lower_t *self,
@@ -196,7 +196,7 @@ int64_t lower_get(lower_t const *const self, const uint64_t pfn,
 void convert_HP_to_regular(child_t *child, bitfield_t *field) {
   const uint64_t before = atomic_fetch_or(&field->rows[0], 0xFFFFFFFFFFFFFFFF);
   if (before != 0) {
-    // another thread ist trying to breakeup this HP
+    // another thread ist trying to breakup this HP
     // -> wait for their completion
     while (child_is_HP(child)) {
     }
@@ -216,7 +216,7 @@ void convert_HP_to_regular(child_t *child, bitfield_t *field) {
 int lower_put(lower_t const *const self, uint64_t frame_adr, size_t order) {
   assert(order == 0 || order == HP_ORDER);
 
-  // chek if outside of managed space
+  // check if outside of managed space
   if (frame_adr >= self->start_frame_adr + self->length ||
       frame_adr < self->start_frame_adr)
     return ERR_ADDRESS;
@@ -279,7 +279,7 @@ size_t lower_allocated_frames(lower_t const *const self) {
 };
 
 void lower_print(lower_t const *const self) {
-  printf("\n-------------------------------------\nLOWER ALLOKATOR\n"
+  printf("\n-------------------------------------\nLOWER ALLOCATOR\n"
          "childs\n%lu/%lu frames are allocated\n%lu/%lu Huge Frames are "
          "free\nChilds:\n",
          lower_allocated_frames(self), self->length, lower_free_HPs(self),

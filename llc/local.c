@@ -63,7 +63,7 @@ uint64_t local_get_reserved_pfn(local_t *self) {
   return pfn_from_atomic(pref.preferred_index);
 }
 
-reserved_t local_mark_as_searchig(local_t *self) {
+reserved_t local_mark_as_searching(local_t *self) {
   assert(self != NULL);
 
   reserved_t mask = {0ul};
@@ -72,7 +72,7 @@ reserved_t local_mark_as_searchig(local_t *self) {
   return (reserved_t){atomic_fetch_or(&self->reserved.raw, mask.raw)};
 }
 
-int local_unmark_as_searchig(local_t *self) {
+int local_unmark_as_searching(local_t *self) {
   assert(self != NULL);
 
   reserved_t mask = {0ul};

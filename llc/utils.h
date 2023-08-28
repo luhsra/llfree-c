@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// order of a Hugepage
+// order of a Huge frame
 # define MAX(a,b) ((a) > (b) ? (a) : (b)) 
 
 #define HP_ORDER 9
@@ -25,22 +25,22 @@
 
 #define tree_from_atomic(_N) ({ (_N) >> (TREE_SHIFT - ATOMIC_SHIFT); })
 
-// Maximum retrys if a atomic operation has failed
+// Maximum amount of retry if a atomic operation has failed
 #define MAX_ATOMIC_RETRY 5
 
-// alternativ ist acquire-release: memory_order_seq_cst -> siehe stdatomic.h
+// alternative is acquire-release: memory_order_seq_cst -> more at stdatomic.h
 #define MEMORY_LOAD_ORDER memory_order_acquire
 #define MEMORY_STORE_ORDER memory_order_acq_rel
 
 size_t div_ceil(uint64_t a, int b);
 
 /**
- * @brief Itterates over a Range between multiples of len starting at idx.
+ * @brief Iterates over a Range between multiples of len starting at idx.
  * Starting at idx up to the next Multiple of len (exclusive). Then the next
  * step will be the highest multiple of len less than idx. (_base_idx)
- * Loop will end after len itterations.
+ * Loop will end after len iterations.
  * code will be executed in each loop.
- * The currend loop value can accesed by current_i
+ * The current loop value can accessed by current_i
  *
  */
 #define ITERATE(idx, len, code)                                               \
@@ -67,7 +67,7 @@ size_t div_ceil(uint64_t a, int b);
  * member
  * @param obj pointer to struct with atomic raw member.
  * @param expect pointer to struct with matching raw member
- * @param desite struct with matching raw member
+ * @param desire struct with matching raw member
  * @return ERR_OK on success
  *         ERR_RETRY of atomic operation failed
  */
@@ -92,7 +92,7 @@ size_t div_ceil(uint64_t a, int b);
 
 /**
  * @brief Executes an endless Loop until given Function returns a value !=
- * ERR_RETRY Used for atomic stores to try until the cas succseed.
+ * ERR_RETRY Used for atomic stores to try until the cas succeed.
  * @return return value of given function. (never ERR_RETRY)
  */
 #define update(func)                                                           \

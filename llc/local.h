@@ -7,13 +7,13 @@
 
 #define UPDATE_RESERVED -7
 
-/// this struct strores data for the reserved tree
+/// this struct stores data for the reserved tree
 typedef struct reserved {
   union {
     _Atomic(uint64_t) raw;              //used for atomic access
     struct {
       uint16_t free_counter : 15;       // free frames counter of reserved tree
-      uint64_t preferred_index : 46;    // atomic intex of reserved tree
+      uint64_t preferred_index : 46;    // atomic index of reserved tree
       bool has_reserved_tree : 1;       // true if there is a reserved tree
       bool reservation_in_progress : 1; // used for spinlock if reservation is in progress
       uint8_t unused : 1;
@@ -26,7 +26,7 @@ typedef struct last_free {
   union {
     _Atomic(uint64_t) raw;          // used for atomic access
     struct {
-      uint16_t free_counter : 2;   // counter of concurrend free in same tree
+      uint16_t free_counter : 2;   // counter of concurrent free in same tree
       uint64_t last_free_idx : 46; // atomic index of last tree where a frame was freed
       uint16_t unused : 16;
     };
@@ -35,7 +35,7 @@ typedef struct last_free {
 
 /**
  * @brief This represents the local CPU data
- * they are alliged to the chachesize to avoid false sharing betrwwn the CPUs
+ * they are allied to the cachesize to avoid false sharing between the CPUs
  */
 typedef struct __attribute__((aligned(CACHESIZE))) local {
   reserved_t reserved;
@@ -43,7 +43,7 @@ typedef struct __attribute__((aligned(CACHESIZE))) local {
 } local_t;
 
 /**
- * @brief atomicly sets the preferred tree to given tree
+ * @brief atomically sets the preferred tree to given tree
  * @param self pointer to local object
  * @param pfn pfn of new tree
  * @param free_count count of free Frames
@@ -66,9 +66,9 @@ void local_init(local_t *self);
 uint64_t local_get_reserved_pfn(local_t *self);
 
 // set the flag for searching and returns previous status to check if the reservation_in_progress-flag was already set
-reserved_t local_mark_as_searchig(local_t *self);
+reserved_t local_mark_as_searching(local_t *self);
 // reset the flag for searching
-int local_unmark_as_searchig(local_t *self);
+int local_unmark_as_searching(local_t *self);
 
 /**
  * @brief increases the free counter if tree of frame matches the reserved tree
@@ -77,7 +77,7 @@ int local_unmark_as_searchig(local_t *self);
  * @param frame to determine the tree
  * @param order order of returned frame to calculate the amount of returned regular frames
  * @return int ERR_OK in success
- *         ERR_ADRESS if trees not match
+ *         ERR_ADDRESS if trees not match
  *         ERR_RETRY on atomic operation fail
  */
 int local_inc_counter(local_t *const self, const uint64_t frame,

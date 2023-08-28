@@ -22,7 +22,7 @@ bool set_preferred_test() {
   local_t local_o;
   local_t *local = &local_o;
   local_init(local);
-  local_mark_as_searchig(local);
+  local_mark_as_searching(local);
   uint64_t pfn = 45463135;
   unsigned counter = 1 << 13;
   reserved_t old;
@@ -32,7 +32,7 @@ bool set_preferred_test() {
   check_equal(local->reserved.free_counter, counter);
   check(local->reserved.has_reserved_tree, "");
 
-  local_mark_as_searchig(local);
+  local_mark_as_searching(local);
   local_t copy = local_o;
   pfn = 454135;
   counter = 9423;

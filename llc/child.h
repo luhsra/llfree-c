@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// child has 512 Eintrage
+// child has 512 entry's
 #define CHILDSIZE FIELDSIZE
 
 /**
@@ -27,7 +27,7 @@ typedef struct child {
  * @brief initializes the counter with the given values
  * @param counter initial counter Value must be < 0x400 (fit in 10 bit)
  * @param flag initial flag value
- * @return initialized flagcounter
+ * @return initialized child
  */
  #define child_init(_counter, _flag)\
 ({(child_t){((_flag) << 10) | (_counter)};})
@@ -35,7 +35,7 @@ typedef struct child {
  * @brief same as atomic_counter_inc but only increments if the flag is not set
  * @param self pointer to the counter
  * @return ERR_OK on success
- *         ERR_ADRESS if the Counder already reached the maximum Value
+ *         ERR_ADDRESS if the Counter already reached the maximum Value
  */
 int child_counter_inc(child_t *self);
 
@@ -50,18 +50,18 @@ int child_counter_dec(child_t *self);
 /**
  * @brief Reserves a Huge-Page by checking if all Frames are Free and setting
  * the Bit atomically.
- * @param self Pointer to the flagcounter
+ * @param self Pointer to the child
  * @return ERR_OK on success
- *         ERR_MEMORY if some Bits are alredy set (so no HP can be reserved)
+ *         ERR_MEMORY if some Bits are already set (so no HP can be reserved)
  */
 int child_reserve_HP(child_t *self);
 
 /**
  * @brief Frees a Huge-Page by resetting the flag and setting the Counter to 512
  * atomically.
- * @param self Pointer to the flagcounter
+ * @param self Pointer to the child
  * @return ERR_OK on success
- *         ERR_ADRESS if the flagcounter is not a reserved HP
+ *         ERR_ADDRESS if the child is not a reserved HP
  */
 int child_free_HP(child_t *self);
 

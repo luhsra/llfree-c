@@ -5,7 +5,7 @@
 
 #define TREESIZE (1 << 9 << 5)
 /**
- * the raw value is for atomic access purpose and for allignment
+ * the raw value is for atomic access purpose and for alignment
  * the counter and flag tags allow easy access to the components.
  */
 typedef struct tree {
@@ -27,7 +27,7 @@ typedef enum saturation_level {
 
 /**
  * @brief initializes the counter with the given values
- * it does so non-atomicly because at the time of creation there can be no
+ * it does so non-atomicity because at the time of creation there can be no
  * second access
  * @param counter initial counter Value must be < 0x8000 (fit in 15 bit)
  * @param flag initial flag value
@@ -52,11 +52,11 @@ int tree_counter_inc(tree_t *self, size_t order);
 int tree_counter_dec(tree_t *self, size_t order);
 
 /**
- * @brief atomically serts counter to 0 and flag as true
+ * @brief atomically sets counter to 0 and flag as true
  * @param self pointer to the tree
  * @return  counter value on success
  *          ERR_RETRY if the atomic access failed
- *          ERR_ADRESS if already reserved
+ *          ERR_ADDRESS if already reserved
  */
 int tree_reserve(tree_t *self);
 
@@ -66,12 +66,12 @@ int tree_reserve(tree_t *self);
  * @param self pointer to tree
  * @param free_counter counter to add
  * @return ERR_OK on success
- *         ERR_RETRY on atomic operration fail
+ *         ERR_RETRY on atomic operation fail
  */
 int tree_writeback(tree_t *self, uint16_t free_counter);
 
 /**
- * @brief evaluatex how many frames are allocates in given tree
+ * @brief evaluated how many frames are allocates in given tree
  * @param self pointer to the tree
  * @return  ALLOCATED if most of the Frames are allocated or the tree is
  * reserved FREE if most of the Frames are Free PARTIAL for everything in
