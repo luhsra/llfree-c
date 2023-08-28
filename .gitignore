@@ -15,8 +15,9 @@ memfile
 .cache/
 
 /results/*
+!results/bench.csv
 !/results/remote_ma/
 !/results/keep/
 !/results/*.ipynb
 !/results/remote.sh
-llc/perf.svg
+
