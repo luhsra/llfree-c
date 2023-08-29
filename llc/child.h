@@ -1,8 +1,10 @@
 #pragma once
 
 #include "enum.h"
+#include "utils.h"
 #include <stdalign.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 // child has 512 entry's
@@ -13,14 +15,14 @@
  * the counter and flag tags allow easy access to the fields.
  */
 typedef struct child {
-  union {
-    _Atomic(uint16_t) raw;
-    struct {
-      uint16_t counter : 10;
-      bool flag : 1;
-      uint8_t unused : 5;
-    };
-  };
+	union {
+		_Atomic(uint16_t) raw;
+		struct {
+			uint16_t counter : 10;
+			bool flag : 1;
+			uint8_t unused : 5;
+		};
+	};
 } child_t;
 
 /**
@@ -29,8 +31,8 @@ typedef struct child {
  * @param flag initial flag value
  * @return initialized child
  */
- #define child_init(_counter, _flag)\
-({(child_t){((_flag) << 10) | (_counter)};})
+#define child_init(_counter, _flag) \
+	({ (child_t){ ((_flag) << 10) | (_counter) }; })
 /**
  * @brief same as atomic_counter_inc but only increments if the flag is not set
  * @param self pointer to the counter
@@ -70,19 +72,19 @@ int child_free_HP(child_t *self);
  * @param self pointer to child
  * @return value of the counter
  */
-#define child_get_counter(child_ptr)                                                 \
-  ({                                                                           \
-    child_t _child_ = {load(&(child_ptr)->raw)};                               \
-    _child_.counter;                                                           \
-  })
+static inline size_t child_get_counter(child_t *child_ptr)
+{
+	child_t child = { load(&(child_ptr)->raw) };
+	return child.counter;
+}
 
 /**
  * @brief atomically checks weather this child is reserved as a HP
  * @param self pointer to child
  * @return true if child is a huge page
  */
-#define child_is_HP(child_ptr)                                                       \
-  ({                                                                           \
-    child_t _child_ = {load(&(child_ptr)->raw)};                               \
-    _child_.flag;                                                              \
-  })
+static inline bool child_is_HP(child_t *child_ptr)
+{
+	child_t child = { load(&(child_ptr)->raw) };
+	return child.flag;
+}

@@ -9,20 +9,20 @@
  * the counter and flag tags allow easy access to the components.
  */
 typedef struct tree {
-  union {
-    alignas(2) _Atomic(uint16_t) raw;
-    struct {
-      uint16_t counter : 15;
-      bool flag : 1;
-    };
-  };
+	union {
+		alignas(2) _Atomic(uint16_t) raw;
+		struct {
+			uint16_t counter : 15;
+			bool flag : 1;
+		};
+	};
 } tree_t;
 
 // Saturation level for frames
 typedef enum saturation_level {
-  ALLOCATED, // most of the fames are allocated
-  FREE,      // only a few frames are allocated
-  PARTIAL,   // anything in between
+	ALLOCATED, // most of the fames are allocated
+	FREE, // only a few frames are allocated
+	PARTIAL, // anything in between
 } saturation_level_t;
 
 /**

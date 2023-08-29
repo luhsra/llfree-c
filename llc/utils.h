@@ -5,14 +5,14 @@
 #include <stdint.h>
 
 // order of a Huge frame
-# define MAX(a,b) ((a) > (b) ? (a) : (b)) 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-#define HP_ORDER 9
-#define FRAME_SIZE (1ul << 12) // 4 KiB == 2^12
+static const size_t HP_ORDER = 9;
+static const size_t FRAME_SIZE = 1ul << 12; // 4 KiB == 2^12
 
-#define ATOMIC_SHIFT 6
-#define CHILD_SHIFT 9
-#define TREE_SHIFT 14
+static const size_t ATOMIC_SHIFT = 6;
+static const size_t CHILD_SHIFT = 9;
+static const size_t TREE_SHIFT = 14;
 
 #define tree_from_pfn(_N) ({ (_N) >> TREE_SHIFT; })
 #define pfn_from_tree(_N) ({ (_N) << TREE_SHIFT; })
@@ -26,13 +26,16 @@
 #define tree_from_atomic(_N) ({ (_N) >> (TREE_SHIFT - ATOMIC_SHIFT); })
 
 // Maximum amount of retry if a atomic operation has failed
-#define MAX_ATOMIC_RETRY 5
+static const size_t MAX_ATOMIC_RETRY = 5;
 
 // alternative is acquire-release: memory_order_seq_cst -> more at stdatomic.h
-#define MEMORY_LOAD_ORDER memory_order_acquire
-#define MEMORY_STORE_ORDER memory_order_acq_rel
+static const int MEMORY_LOAD_ORDER = memory_order_acquire;
+static const int MEMORY_STORE_ORDER = memory_order_acq_rel;
 
-size_t div_ceil(uint64_t a, int b);
+static inline size_t div_ceil(uint64_t a, int b)
+{
+	return (a + b - 1) / b;
+}
 
 /**
  * @brief Iterates over a Range between multiples of len starting at idx.
@@ -43,24 +46,11 @@ size_t div_ceil(uint64_t a, int b);
  * The current loop value can accessed by current_i
  *
  */
-#define ITERATE(idx, len, code)                                               \
-  do {                                                                         \
-    const size_t _offset = (idx) % (len);                                      \
-    const size_t _base_idx = (idx)-_offset;                                    \
-    for (size_t _i = 0; _i < (len); ++_i) {                                   \
-      const size_t current_i = _base_idx + ((_i + _offset) % (len));           \
-      { code }                                                                 \
-    }                                                                          \
-  } while (false)
-
-#define ITERATE_TOGGLE(idx, len, code)                                        \
-  do {                                                                         \
-    for (size_t _i = 1; _i <= (len); ++_i) {                                   \
-      int64_t toggle = _i & 1 ? _i / 2 : -_i / 2;                              \
-      const size_t current_i = ((idx) + toggle) % (len);       \
-      { code }                                                                 \
-    }                                                                          \
-  } while (false)
+#define for_offsetted(idx, len)                                   \
+	for (size_t _i = 0, _offset = (idx) % (len),              \
+		    _base_idx = (idx)-_offset, current_i = (idx); \
+	     _i < (len);                                          \
+	     _i = _i + 1, current_i = _base_idx + ((_i + _offset) % (len)))
 
 /**
  * @brief compare and swap wrapper for structs with a atomic 16 or 64 Bit raw
@@ -71,18 +61,19 @@ size_t div_ceil(uint64_t a, int b);
  * @return ERR_OK on success
  *         ERR_RETRY of atomic operation failed
  */
-#define cas(obj, expect, desire)                                               \
-  ({                                                                           \
-    int _ret = ERR_RETRY;                                                      \
-    if (atomic_compare_exchange_weak_explicit(                                 \
-            &(obj)->raw,                                                       \
-            (_Generic(((obj)->raw),                                            \
-            uint16_t: (uint16_t *)&(expect)->raw,                              \
-            default: (uint64_t *)&(expect)->raw)),                             \
-            (desire).raw, MEMORY_STORE_ORDER, MEMORY_LOAD_ORDER))              \
-      _ret = ERR_OK;                                                           \
-    _ret;                                                                      \
-  })
+#define cas(obj, expect, desire)                                   \
+	({                                                         \
+		int _ret = ERR_RETRY;                              \
+		if (atomic_compare_exchange_weak_explicit(         \
+			    &(obj)->raw,                           \
+			    (_Generic(((obj)->raw),                \
+			    uint16_t: (uint16_t *)&(expect)->raw,  \
+			    default: (uint64_t *)&(expect)->raw)), \
+			    (desire).raw, MEMORY_STORE_ORDER,      \
+			    MEMORY_LOAD_ORDER))                    \
+			_ret = ERR_OK;                             \
+		_ret;                                              \
+	})
 
 /**
  * @brief wrapper for atomic load
@@ -95,32 +86,32 @@ size_t div_ceil(uint64_t a, int b);
  * ERR_RETRY Used for atomic stores to try until the cas succeed.
  * @return return value of given function. (never ERR_RETRY)
  */
-#define update(func)                                                           \
-  ({                                                                           \
-    int _ret;                                                                  \
-    while (true) {                                                             \
-      _ret = func;                                                             \
-      if (_ret != ERR_RETRY)                                                   \
-        break;                                                                 \
-    }                                                                          \
-    _ret;                                                                      \
-  })
+#define update(func)                           \
+	({                                     \
+		int _ret;                      \
+		while (true) {                 \
+			_ret = func;           \
+			if (_ret != ERR_RETRY) \
+				break;         \
+		}                              \
+		_ret;                          \
+	})
 
 /**
  * @brief Executes given function up to MAX_ATOMIC_RETRY times or until return
  * value != ERR_RETRY
  * @return return value of given function. (could be ERR_RETRY)
  */
-#define try_update(func)                                                       \
-  ({                                                                           \
-    int _ret;                                                                  \
-    for (size_t _i_ = 0; _i_ < MAX_ATOMIC_RETRY; ++_i_) {                      \
-      _ret = func;                                                             \
-      if (_ret != ERR_RETRY)                                                   \
-        break;                                                                 \
-    }                                                                          \
-    _ret;                                                                      \
-  })
+#define try_update(func)                                              \
+	({                                                            \
+		int _ret;                                             \
+		for (size_t _i_ = 0; _i_ < MAX_ATOMIC_RETRY; ++_i_) { \
+			_ret = func;                                  \
+			if (_ret != ERR_RETRY)                        \
+				break;                                \
+		}                                                     \
+		_ret;                                                 \
+	})
 
 // #define verbose
 

@@ -9,13 +9,12 @@
 #define CHILDS_PER_TREE 32
 #define PAGESIZE (1 << 12)
 
-
 typedef struct lower {
-  uint64_t start_frame_adr; // first address of managed space
-  size_t length;  // number of managed frames
-  size_t num_of_childs; // array length for fields and childs
-  bitfield_t *fields;
-  child_t *childs;
+	uint64_t start_frame_adr; // first address of managed space
+	size_t length; // number of managed frames
+	size_t num_of_childs; // array length for fields and childs
+	bitfield_t *fields;
+	child_t *childs;
 } lower_t;
 
 /**
@@ -28,7 +27,8 @@ typedef struct lower {
  *                        OVERWRITE: allocator uses parts of the managed memory for its own control structures
  *                        RECOVER:   allocator assumes a initializes allocator an will recover its state.
   */
-void lower_init_default(lower_t *const self, uint64_t start_adr, size_t len, uint8_t init);
+void lower_init_default(lower_t *const self, uint64_t start_adr, size_t len,
+			uint8_t init);
 
 /**
  * @brief initialize the lower object and the bitfields and childs
@@ -39,14 +39,13 @@ void lower_init_default(lower_t *const self, uint64_t start_adr, size_t len, uin
  */
 int lower_init(lower_t const *const self, bool free_all);
 
-
 /**
  * @brief Recovers the state from persistent memory
  * checks and possibly corrects the free counter in childs
  * @param self pointer to lower allocator
  * @return ERR_OK
  */
-int lower_recover(lower_t* self);
+int lower_recover(lower_t *self);
 
 /**
  * @brief allocates frames
@@ -90,7 +89,7 @@ bool lower_is_free(lower_t const *const self, uint64_t frame_adr, size_t order);
 size_t lower_allocated_frames(lower_t const *const self);
 
 //returns the number of free huge frames
-size_t lower_free_HPs(lower_t const * const self);
+size_t lower_free_HPs(lower_t const *const self);
 
 /**
  * Helper to print the number of children, allocated and managed Frames
@@ -106,4 +105,5 @@ void lower_drop(lower_t const *const self);
 
 /// Calls f for each child. f will receive the context the current pfn and the free counter as arguments
 // used by frag.rs benchmark
-void lower_for_each_child(const lower_t *self, void* context, void f(void*, uint64_t, uint64_t));
+void lower_for_each_child(const lower_t *self, void *context,
+			  void f(void *, uint64_t, uint64_t));
