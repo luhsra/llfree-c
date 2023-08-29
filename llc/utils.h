@@ -98,6 +98,47 @@ static inline size_t div_ceil(uint64_t a, int b)
 	})
 
 /**
+ * @brief Atomic fetch-modify-update macro.
+ *
+ * This macro loads the value at `atom_ptr`, stores its result in `old_val`
+ * and then executes the `code` which is expected to modify `value`,
+ * which is then stored atomically with CAS.
+ *
+ * @return If the update was successfull. Fails only if `code` returns false.
+ *
+ * Example:
+ * ```
+ * _Atomic uint64_t my_atomic;
+ * uint64_t old;
+ * if (!fetch_update(&my_atomic, old, ({
+ * 	    value *= value;
+ * 	    true;
+ *     }))) {
+ * 	assert(!"here this should never fail!");
+ * }
+ * printf("old value %lu\n", old);
+ * ```
+ */
+#define fetch_update(atom_ptr, old_val, code)                                 \
+	({                                                                    \
+		bool _ret = false;                                            \
+		(old_val) = load(atom_ptr);                                   \
+		while (true) {                                                \
+			typeof(old_val) value = (old_val);                    \
+			bool _succ = (code);                                  \
+			if (!_succ)                                           \
+				break;                                        \
+			if (atomic_compare_exchange_weak_explicit(            \
+				    (atom_ptr), &(old_val), value,            \
+				    MEMORY_STORE_ORDER, MEMORY_LOAD_ORDER)) { \
+				_ret = true;                                  \
+				break;                                        \
+			}                                                     \
+		}                                                             \
+		_ret;                                                         \
+	})
+
+/**
  * @brief Executes given function up to MAX_ATOMIC_RETRY times or until return
  * value != ERR_RETRY
  * @return return value of given function. (could be ERR_RETRY)

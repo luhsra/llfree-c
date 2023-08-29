@@ -59,18 +59,19 @@ int64_t field_set_Bit(bitfield_t *field, const uint64_t pfn)
 
 	for_offsetted(row, FIELD_N)
 	{
-		int pos;
-		while ((pos = find_unset(atomic_load_explicit(
-				&field->rows[current_i],
-				memory_order_acquire))) >= 0) {
-			uint64_t mask = 1ul << pos;
-			uint64_t before = atomic_fetch_or_explicit(
-				&field->rows[current_i], mask,
-				memory_order_acq_rel);
-			if ((before | mask) != before) {
-				return current_i * (sizeof(uint64_t) * 8) + pos;
-			}
-		};
+		int pos = 0;
+		uint64_t old;
+		if (fetch_update(&field->rows[current_i], old, ({
+			    bool found = false;
+			    pos = find_unset(value);
+			    if (pos >= 0) {
+				    value |= (1ul << pos);
+				    found = true;
+			    }
+			    found;
+		    }))) {
+			return current_i * (sizeof(uint64_t) * 8) + pos;
+		}
 	}
 
 	return ERR_MEMORY;
