@@ -1,7 +1,6 @@
 #include "llc.h"
 #include "bitfield.h"
 #include "child.h"
-#include "enum.h"
 #include "local.h"
 #include "lower.h"
 #include "utils.h"
@@ -97,7 +96,7 @@ static void init_trees(upper_t const *const self)
 {
 	assert(self != NULL);
 
-	for (size_t tree_idx = 0; tree_idx < self->num_of_trees; ++tree_idx) {
+	for (size_t tree_idx = 0; tree_idx < self->trees_len; ++tree_idx) {
 		uint16_t sum = 0;
 		for (size_t child_idx = CHILDS_PER_TREE * tree_idx;
 		     child_idx < CHILDS_PER_TREE * (tree_idx + 1);
@@ -125,7 +124,7 @@ static int reserve_tree(upper_t const *const self, local_t *const local,
 {
 	assert(self != NULL);
 	assert(local != NULL);
-	assert(tree_idx < self->num_of_trees);
+	assert(tree_idx < self->trees_len);
 
 	int64_t counter = update(tree_reserve(&self->trees[tree_idx]));
 	if (counter < 0)
@@ -171,9 +170,9 @@ static int64_t search_global(const upper_t *const self, local_t *const local,
 			     saturation_level_t saturation)
 {
 	// search outside of current cacheline for a partial tree
-	for (size_t i = 1; i <= self->num_of_trees; ++i) {
+	for (size_t i = 1; i <= self->trees_len; ++i) {
 		const int64_t toggle = i & 1 ? i / 2 : -i / 2;
-		const uint64_t idx = (base_idx + toggle) % self->num_of_trees;
+		const uint64_t idx = (base_idx + toggle) % self->trees_len;
 
 		saturation_level_t sat = tree_status(&self->trees[idx]);
 		if (sat == saturation) {
@@ -197,23 +196,23 @@ static int64_t reserve_frame_in_new_tree(const upper_t *self, local_t *local,
 		start_idx = tree_from_atomic(reserved.preferred_index);
 	} else {
 		start_idx =
-			self->num_of_trees / self->cores * (core % self->cores);
+			self->trees_len / self->cores * (core % self->cores);
 	}
-	assert(start_idx < self->num_of_trees);
+	assert(start_idx < self->trees_len);
 
 	const uint64_t offset = start_idx % CHILDS_PER_TREE;
 	const uint64_t base_idx = start_idx - offset;
-	uint64_t vicinity = self->num_of_trees / self->cores / 4;
+	uint64_t vicinity = self->trees_len / self->cores / 4;
 	if (vicinity == 0)
 		vicinity = 1;
 	else if (vicinity > CHILDS_PER_TREE)
 		vicinity = CHILDS_PER_TREE;
 
 	// search inside of current cacheline for a partial tree
-	uint64_t free_tree_idx = self->num_of_trees;
+	uint64_t free_tree_idx = self->trees_len;
 	for (size_t i = 1; i <= vicinity; ++i) {
 		const int64_t toggle = i & 1 ? i / 2 : -i / 2;
-		const uint64_t idx = (base_idx + toggle) % self->num_of_trees;
+		const uint64_t idx = (base_idx + toggle) % self->trees_len;
 
 		const saturation_level_t sat = tree_status(&self->trees[idx]);
 		if (sat == PARTIAL) {
@@ -229,7 +228,7 @@ static int64_t reserve_frame_in_new_tree(const upper_t *self, local_t *local,
 	}
 
 	//reserve a free tree if no partial in current cacheline found
-	if (free_tree_idx != self->num_of_trees) {
+	if (free_tree_idx != self->trees_len) {
 		if (reserve_tree(self, local, free_tree_idx) == ERR_OK) {
 			const int64_t frame_adr =
 				reserve_frame(self, local, order);
@@ -250,9 +249,9 @@ static int64_t reserve_frame_in_new_tree(const upper_t *self, local_t *local,
 
 	// search whole tree for a tree with enough free frames
 	const uint16_t min_val = 1 << order;
-	for (uint64_t i = 1; i <= self->num_of_trees; ++i) {
+	for (uint64_t i = 1; i <= self->trees_len; ++i) {
 		const int64_t toggle = i & 1 ? i / 2 : -i / 2;
-		const uint64_t idx = (base_idx + toggle) % self->num_of_trees;
+		const uint64_t idx = (base_idx + toggle) % self->trees_len;
 
 		const tree_t tree = { load(&self->trees[idx].raw) };
 		if (!tree.flag && tree.counter >= min_val) {
@@ -346,18 +345,17 @@ int64_t llc_init(void *this, size_t cores, uint64_t start_frame_adr, size_t len,
 		lower_init(&self->lower, free_all);
 	}
 
-	self->num_of_trees =
-		div_ceil(self->lower.num_of_childs, CHILDS_PER_TREE);
+	self->trees_len = div_ceil(self->lower.num_of_childs, CHILDS_PER_TREE);
 	self->trees =
-		aligned_alloc(CACHESIZE, sizeof(child_t) * self->num_of_trees);
+		aligned_alloc(CACHESIZE, sizeof(child_t) * self->trees_len);
 	assert(self->trees != NULL);
 	if (self->trees == NULL)
 		return ERR_INITIALIZATION;
 
 	// check if more cores than trees -> if not shared locale data
 	size_t len_locale;
-	if (cores > self->num_of_trees) {
-		len_locale = self->num_of_trees;
+	if (cores > self->trees_len) {
+		len_locale = self->trees_len;
 	} else {
 		len_locale = cores;
 	}
@@ -533,28 +531,28 @@ void llc_print(const upper_t *self)
 	printf("-----------------------------------------------\nUPPER "
 	       "ALLOCATOR\nTrees:\t%lu\nCores:\t%lu\n allocated: %lu, free: %lu, "
 	       "all: %lu\n",
-	       self->num_of_trees, self->cores,
+	       self->trees_len, self->cores,
 	       llc_frames(self) - llc_free_frames(self), llc_free_frames(self),
 	       llc_frames(self));
 
 	printf("\nTrees:\n-----------------------------------------------\n");
-	if (self->num_of_trees > 20)
+	if (self->trees_len > 20)
 		printf("There are over 20 Trees. Print will only contain first and last "
 		       "10\n\n");
 
 	printf("Nr:\t\t");
-	for (size_t i = 0; i < self->num_of_trees; ++i) {
-		if (i < 10 || i >= self->num_of_trees - 10)
+	for (size_t i = 0; i < self->trees_len; ++i) {
+		if (i < 10 || i >= self->trees_len - 10)
 			printf("%lu\t", i);
 	}
 	printf("\nreserved:\t");
-	for (size_t i = 0; i < self->num_of_trees; ++i) {
-		if (i < 10 || i >= self->num_of_trees - 10)
+	for (size_t i = 0; i < self->trees_len; ++i) {
+		if (i < 10 || i >= self->trees_len - 10)
 			printf("%d\t", self->trees[i].flag);
 	}
 	printf("\nfree:\t\t");
-	for (size_t i = 0; i < self->num_of_trees; ++i) {
-		if (i < 10 || i >= self->num_of_trees - 10)
+	for (size_t i = 0; i < self->trees_len; ++i) {
+		if (i < 10 || i >= self->trees_len - 10)
 			printf("%d\t", self->trees[i].counter);
 	}
 	printf("\n");

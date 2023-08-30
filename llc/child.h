@@ -1,6 +1,5 @@
 #pragma once
 
-#include "enum.h"
 #include "utils.h"
 #include <stdalign.h>
 #include <stdbool.h>

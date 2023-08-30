@@ -1,7 +1,7 @@
 #include "local_tests.h"
 #include "../local.h"
 #include "check.h"
-#include "enum.h"
+#include "utils.h"
 
 bool init_local_test()
 {

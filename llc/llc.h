@@ -8,27 +8,18 @@
 #include "tree.h"
 #include "utils.h"
 
-// minimum one HP
-static const size_t MIN_PAGES = 1ul << MAX_ORDER;
-// 64 Bit Addresses - 12 Bit needed for offset inside the Page
-static const size_t MAX_PAGES = 1ul << (64 - FRAME_BITS);
-
 typedef struct upper {
 	struct meta *meta;
 	lower_t lower;
-	size_t cores; //array_size of local
 	struct local *local;
-	size_t num_of_trees; //array_size of trees
+	size_t cores; // array_size of local
 	tree_t *trees;
+	size_t trees_len;
 } upper_t;
 
 /// Creates the allocator and returns a pointer to its data that is passed into
 /// all other functions
 void *llc_default();
-
-/// Initializes the allocator for the given memory region, returning 0 on
-/// success or a negative error code
-//
 
 /**
  * @brief Initializes the Allocator

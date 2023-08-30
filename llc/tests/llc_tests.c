@@ -2,7 +2,6 @@
 #include "../llc.h"
 #include "check.h"
 
-#include "../enum.h"
 #include "../utils.h"
 #include "assert.h"
 #include "lower.h"
@@ -17,7 +16,7 @@
 void print_trees(upper_t *self)
 {
 	printf("TREES:\nIDX\tFlag\tCounter\n");
-	for (size_t i = 0; i < self->num_of_trees; ++i) {
+	for (size_t i = 0; i < self->trees_len; ++i) {
 		p("%lu\t%d\t%X\n", i, self->trees[i].flag,
 		  self->trees[i].counter);
 	}
@@ -30,7 +29,7 @@ bool general_function_test()
 	upper_t *upper = (upper_t *)llc_default();
 	int64_t ret = llc_init(upper, 4, 0, 132000, 0, true);
 	check(ret == ERR_OK, "init is success");
-	check(upper->num_of_trees == 9, "");
+	check(upper->trees_len == 9, "");
 	check(upper->cores == 4, "");
 	check(llc_frames(upper) == 132000, "");
 	check(llc_free_frames(upper) == 132000, "right number of free frames");
@@ -97,7 +96,7 @@ bool check_init(upper_t *upper, size_t cores, uint64_t start_frame_adr,
 	check_uequal((uint64_t)upper->trees % CACHESIZE, 0ul)
 
 		check(ret == ERR_OK, "init is success");
-	check_uequal(upper->num_of_trees, num_trees);
+	check_uequal(upper->trees_len, num_trees);
 	check_uequal(upper->lower.num_of_childs, num_childs);
 	check_uequal(upper->lower.start_frame_adr, start_frame_adr);
 	check_uequal(upper->cores, (cores > num_trees ? num_trees : cores));

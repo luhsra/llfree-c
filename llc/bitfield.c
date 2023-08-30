@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
-#include "enum.h"
 #include "utils.h"
 
 // Helping struct to store the position of a bit in a bitfield.
@@ -61,7 +60,7 @@ int64_t field_set_Bit(bitfield_t *field, const uint64_t pfn)
 	{
 		int pos = 0;
 		uint64_t old;
-		if (fetch_update(&field->rows[current_i], old, ({
+		if (atom_fetch_update(&field->rows[current_i], old, ({
 			    bool found = false;
 			    pos = find_unset(value);
 			    if (pos >= 0) {

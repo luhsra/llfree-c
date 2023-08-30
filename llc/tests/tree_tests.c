@@ -1,7 +1,7 @@
 #include "tree_tests.h"
 #include "check.h"
 #include "../tree.h"
-#include "../enum.h"
+#include "../utils.h"
 #include <stdbool.h>
 
 #define equal_trees(actual, expect)                  \

@@ -18,6 +18,37 @@ static const size_t ATOMIC_SHIFT = 6;
 static const size_t CHILD_SHIFT = 9;
 static const size_t TREE_SHIFT = 14;
 
+// minimum one HP
+static const size_t MIN_PAGES = 1ul << MAX_ORDER;
+// 64 Bit Addresses - 12 Bit needed for offset inside the Page
+static const size_t MAX_PAGES = 1ul << (64 - FRAME_BITS);
+
+// Error codes
+enum {
+	/// Success
+	ERR_OK = 0,
+	/// Not enough memory
+	ERR_MEMORY = -1,
+	/// Failed atomic operation, retry procedure
+	ERR_RETRY = -2,
+	/// Invalid address
+	ERR_ADDRESS = -3,
+	/// Allocator not initialized or initialization failed
+	ERR_INITIALIZATION = -4,
+	/// Corrupted allocator state
+	ERR_CORRUPTION = -5,
+};
+
+// Init modes
+enum {
+	/// Not persistent
+	VOLATILE = 0,
+	/// Persistent and try recovery
+	RECOVER = 1,
+	/// Overwrite the persistent memory
+	OVERWRITE = 2,
+};
+
 #define tree_from_pfn(_N) ({ (_N) >> TREE_SHIFT; })
 #define pfn_from_tree(_N) ({ (_N) << TREE_SHIFT; })
 
@@ -125,7 +156,7 @@ static inline size_t div_ceil(uint64_t a, int b)
  * printf("old value %lu\n", old);
  * ```
  */
-#define fetch_update(atom_ptr, old_val, code)                                 \
+#define atom_fetch_update(atom_ptr, old_val, code)                            \
 	({                                                                    \
 		bool _ret = false;                                            \
 		(old_val) = load(atom_ptr);                                   \

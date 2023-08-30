@@ -2,7 +2,7 @@
 #include "../bitfield.h"
 #include "../lower.h"
 #include "check.h"
-#include "enum.h"
+#include "utils.h"
 #include <assert.h>
 #include <stdalign.h>
 #include <stdint.h>

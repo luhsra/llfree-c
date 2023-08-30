@@ -1,7 +1,6 @@
 #include "lower.h"
 #include "bitfield.h"
 #include "child.h"
-#include "enum.h"
 #include "local.h"
 #include "utils.h"
 #include <assert.h>
@@ -23,21 +22,19 @@ void lower_init_default(lower_t *const self, uint64_t start_frame_adr,
 		self->fields = aligned_alloc(
 			CACHESIZE, sizeof(bitfield_t) * self->num_of_childs);
 		assert(self->fields != NULL);
+
 		self->childs = aligned_alloc(
 			CACHESIZE, sizeof(child_t) * self->num_of_childs);
 		assert(self->childs != NULL);
 
 	} else {
-		/*
-      Layout in persistent Memory:
-      |-----------------------------------------------------------------------|
-      |         Managed Frames       | childs |  bitfields  |(void)| metadata |
-      |-----------------------------------------------------------------------|
+		// Layout in persistent Memory:
+		// |-----------------------------------------------------------------------|
+		// |      Managed Frames     | childs |  bitfields  | (padding) | metadata |
+		// |-----------------------------------------------------------------------|
+		// padding is unused memory of a size smaller than a Frame.
+		// its clippings, because we can not hand out less than a full frame.
 
-      void is unused memory of a size smaller than a Frame.
-      its clippings, because we can not hand out less than a full frame.
-
-     */
 		uint64_t bytes_for_Bitfields =
 			self->num_of_childs * sizeof(bitfield_t);
 

@@ -3,7 +3,6 @@
 
 #include "bitfield.h"
 #include "child.h"
-#include "enum.h"
 #include "utils.h"
 
 int child_counter_inc(child_t *self)

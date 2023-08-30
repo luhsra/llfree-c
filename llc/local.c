@@ -2,7 +2,6 @@
 #include "assert.h"
 #include "bitfield.h"
 #include "child.h"
-#include "enum.h"
 #include "tree.h"
 #include "utils.h"
 #include <stddef.h>
