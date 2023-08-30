@@ -3,51 +3,54 @@
 #include "check.h"
 #include "enum.h"
 
-bool init_local_test() {
-  bool success = true;
+bool init_local_test()
+{
+	bool success = true;
 
-  local_t actual;
-  local_init(&actual);
-  check_equal(actual.last_free.free_counter, 0);
-  check_uequal(actual.last_free.last_free_idx, 0ul);
-  check_equal(actual.reserved.free_counter, 0);
-  check_equal(actual.reserved.reservation_in_progress, false);
-  check_equal(actual.reserved.has_reserved_tree, false);
+	local_t actual;
+	local_init(&actual);
+	check_equal(actual.last_free.free_counter, 0);
+	check_uequal(actual.last_free.last_free_idx, 0ul);
+	check_equal(actual.reserved.free_counter, 0);
+	check_equal(actual.reserved.reservation_in_progress, false);
+	check_equal(actual.reserved.has_reserved_tree, false);
 
-  return success;
+	return success;
 }
 
-bool set_preferred_test() {
-  bool success = true;
-  local_t local_o;
-  local_t *local = &local_o;
-  local_init(local);
-  local_mark_as_searching(local);
-  uint64_t pfn = 45463135;
-  unsigned counter = 1 << 13;
-  reserved_t old;
-  int ret = local_set_new_preferred_tree(local, pfn, counter, &old);
-  check(ret == ERR_OK, "");
-  check_uequal(local->reserved.preferred_index, atomic_from_pfn(pfn));
-  check_equal(local->reserved.free_counter, counter);
-  check(local->reserved.has_reserved_tree, "");
+bool set_preferred_test()
+{
+	bool success = true;
+	local_t local_o;
+	local_t *local = &local_o;
+	local_init(local);
+	local_mark_as_searching(local);
+	uint64_t pfn = 45463135;
+	unsigned counter = 1 << 13;
+	reserved_t old;
+	int ret = local_set_new_preferred_tree(local, pfn, counter, &old);
+	check(ret == ERR_OK, "");
+	check_uequal(local->reserved.preferred_index, atomic_from_pfn(pfn));
+	check_equal(local->reserved.free_counter, counter);
+	check(local->reserved.has_reserved_tree, "");
 
-  local_mark_as_searching(local);
-  local_t copy = local_o;
-  pfn = 454135;
-  counter = 9423;
-  ret = local_set_new_preferred_tree(local, pfn, counter, &old);
-  check(ret == ERR_OK, "");
-  check_uequal(local->reserved.preferred_index, atomic_from_pfn(pfn));
-  check_equal(local->reserved.free_counter, counter);
-  check(local->reserved.has_reserved_tree, "");
-  check(old.raw == copy.reserved.raw, "");
+	local_mark_as_searching(local);
+	local_t copy = local_o;
+	pfn = 454135;
+	counter = 9423;
+	ret = local_set_new_preferred_tree(local, pfn, counter, &old);
+	check(ret == ERR_OK, "");
+	check_uequal(local->reserved.preferred_index, atomic_from_pfn(pfn));
+	check_equal(local->reserved.free_counter, counter);
+	check(local->reserved.has_reserved_tree, "");
+	check(old.raw == copy.reserved.raw, "");
 
-  return success;
+	return success;
 }
 
-int local_tests(int *test_counter, int *fail_counter) {
-  run_test(init_local_test);
-  run_test(set_preferred_test);
-  return 0;
+int local_tests(int *test_counter, int *fail_counter)
+{
+	run_test(init_local_test);
+	run_test(set_preferred_test);
+	return 0;
 }

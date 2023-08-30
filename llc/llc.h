@@ -1,14 +1,17 @@
 #pragma once
+
 #include <stdint.h>
+
 #include "lower.h"
 #include "child.h"
 #include "local.h"
 #include "tree.h"
+#include "utils.h"
 
-#define MAX_ORDER 9
-#define MIN_PAGES 1ul << 9 // minimum one HP
-#define MAX_PAGES \
-	1ul << 52 // 64 Bit Addresses - 12 Bit needed for offset inside the Page
+// minimum one HP
+static const size_t MIN_PAGES = 1ul << MAX_ORDER;
+// 64 Bit Addresses - 12 Bit needed for offset inside the Page
+static const size_t MAX_PAGES = 1ul << (64 - FRAME_BITS);
 
 typedef struct upper {
 	struct meta *meta;
