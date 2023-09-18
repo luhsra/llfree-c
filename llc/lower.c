@@ -1,15 +1,8 @@
 #include "lower.h"
 #include "bitfield.h"
 #include "child.h"
-#include "local.h"
+#include "llc.h"
 #include "utils.h"
-#include <assert.h>
-#include <stdatomic.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdlib.h>
-
-#include <stdio.h>
 
 void lower_init_default(lower_t *const self, uint64_t start_frame_adr,
 			size_t len, uint8_t init)
@@ -20,11 +13,11 @@ void lower_init_default(lower_t *const self, uint64_t start_frame_adr,
 	self->childs_len = div_ceil(self->length, FIELDSIZE);
 
 	if (init == VOLATILE) {
-		self->fields = aligned_alloc(
+		self->fields = llc_ext_alloc(
 			CACHESIZE, sizeof(bitfield_t) * self->childs_len);
 		assert(self->fields != NULL);
 
-		self->childs = aligned_alloc(
+		self->childs = llc_ext_alloc(
 			CACHESIZE, sizeof(child_t) * self->childs_len);
 		assert(self->childs != NULL);
 
@@ -355,8 +348,10 @@ void lower_drop(lower_t const *const self)
 		(_Atomic(child_t) *)(self->start_frame_adr +
 				     self->length * PAGESIZE);
 	if (self->childs != start_data) {
-		free(self->childs);
-		free(self->fields);
+		llc_ext_free(CACHESIZE, sizeof(child_t) * self->childs_len,
+			     self->childs);
+		llc_ext_free(CACHESIZE, sizeof(bitfield_t) * self->childs_len,
+			     self->fields);
 	}
 }
 

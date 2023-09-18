@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #define run_test(test_func)        \
 	(*test_counter)++;         \
@@ -19,27 +20,39 @@
 	}                                                                  \
 	(void)"" // enforce semicolon!
 
-#define check_equal_m(actual, expected, msg)                                                          \
-	if ((actual) != (expected)) {                                                                 \
-		printf("\tFILE %s:%d: Check %s == %s failed: %s\n\texpected: %d, actual value: %d\n", \
-		       __FILE__, __LINE__, #actual, #expected, msg, expected,                         \
-		       actual);                                                                       \
-		success = false;                                                                      \
-	}                                                                                             \
+#define _check_msg_prefix \
+	"\tFILE %s:%d: Check %s == %s failed: %s\n\texpected: "
+#define _check_msg_mid ", actual value: "
+#define _check_msg_suffix \
+	"\tFILE %s:%d: Check %s == %s failed: %s\n\texpected: "
+
+#define fmt_spec(x)                    \
+	_Generic((x),                  \
+		_Bool: "%d",           \
+		char: "%c",            \
+		unsigned char: "%c",   \
+		short: "%hd",          \
+		unsigned short: "%hu", \
+		int: "%d",             \
+		unsigned int: "%u",    \
+		long: "%ld",           \
+		unsigned long: "%lu",  \
+		long long: "%lld",     \
+		unsigned long long: "%llu")
+
+#define check_equal_m(actual, expected, msg)                                    \
+	if ((actual) != (expected)) {                                           \
+		printf("\tFILE %s:%d: Check %s == %s failed: %s\n\texpected: ", \
+		       __FILE__, __LINE__, #actual, #expected, msg);            \
+		printf(fmt_spec(expected), (expected));                           \
+		printf(", actual value: ");                                     \
+		printf(fmt_spec(actual), (actual));                             \
+		printf("\n");                                                   \
+		success = false;                                                \
+	}                                                                       \
 	(void)"" // enforce semicolon!
 
 #define check_equal(actual, expected) check_equal_m(actual, expected, "")
-
-#define check_uequal_m(actual, expected, msg)                                                           \
-	if ((actual) != (expected)) {                                                                   \
-		printf("\tFILE %s:%d: Check %s == %s failed: %s\n\texpected: %lu, actual value: %lu\n", \
-		       __FILE__, __LINE__, #actual, #expected, msg, expected,                           \
-		       actual);                                                                         \
-		success = false;                                                                        \
-	}                                                                                               \
-	(void)"" // enforce semicolon!
-
-#define check_uequal(actual, expected) check_uequal_m(actual, expected, "")
 
 #define check_equal_bitfield_m(actual, expected, msg)                                 \
 	if (!field_equals(&actual, &expected)) {                                      \

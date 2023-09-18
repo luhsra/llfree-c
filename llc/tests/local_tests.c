@@ -1,7 +1,9 @@
 #include "local_tests.h"
-#include "../local.h"
+
 #include "check.h"
+#include "local.h"
 #include "utils.h"
+
 #include <stdint.h>
 
 bool init_local_test()
@@ -14,7 +16,7 @@ bool init_local_test()
 	reserved_t reserved = atom_load(&actual.reserved);
 
 	check_equal(lf.free_counter, 0);
-	check_uequal(lf.last_tree, 0ul);
+	check_equal(lf.last_tree, 0ul);
 	check_equal(reserved.free_counter, 0);
 	check_equal(reserved.reserving, false);
 	check_equal(reserved.present, false);
@@ -39,7 +41,7 @@ bool set_preferred_test()
 	check(ret, "");
 
 	reserved_t reserved = atom_load(&local.reserved);
-	check_uequal(reserved.preferred_index, atomic_from_pfn(pfn));
+	check_equal(reserved.preferred_index, atomic_from_pfn(pfn));
 	check_equal(reserved.free_counter, counter);
 	check(reserved.present, "");
 	check(reserved.reserving, "");
@@ -53,7 +55,7 @@ bool set_preferred_test()
 	check(ret, "");
 
 	reserved = atom_load(&local.reserved);
-	check_uequal(reserved.preferred_index, atomic_from_pfn(pfn));
+	check_equal(reserved.preferred_index, atomic_from_pfn(pfn));
 	check_equal(reserved.free_counter, counter);
 	check(reserved.present, "");
 	check(*((uint64_t *)&old_r) == *((uint64_t *)&copy), "");

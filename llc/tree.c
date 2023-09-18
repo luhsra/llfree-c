@@ -1,11 +1,5 @@
 #include "tree.h"
-#include "bitfield.h"
-#include "child.h"
-#include "lower.h"
 #include "utils.h"
-#include <assert.h>
-#include <stddef.h>
-#include <stdint.h>
 
 tree_t tree_new(uint16_t counter, bool flag)
 {

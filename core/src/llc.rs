@@ -5,9 +5,11 @@ use core::fmt;
 use core::ops::Range;
 use core::ptr::addr_of_mut;
 
+use alloc::alloc::{alloc, dealloc, Layout};
+
 use super::{Alloc, Init};
 
-use core::ffi::c_void;
+use core::ffi::{c_size_t, c_void};
 
 /// C implementation of LLFree
 ///
@@ -170,6 +172,17 @@ extern "C" {
         context: *mut c_void,
         f: extern "C" fn(*mut c_void, u64, u64),
     );
+}
+
+/// Allocate metadata function
+#[no_mangle]
+pub extern "C" fn llc_ext_alloc(align: c_size_t, size: c_size_t) -> *mut c_void {
+    unsafe { alloc(Layout::from_size_align(size as _, align as _).unwrap()) as _ }
+}
+/// Free metadata function
+#[no_mangle]
+pub extern "C" fn llc_ext_free(align: c_size_t, size: c_size_t, addr: *mut c_void) {
+    unsafe { dealloc(addr as _, Layout::from_size_align(size, align).unwrap()) }
 }
 
 #[cfg(test)]

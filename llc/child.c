@@ -1,11 +1,6 @@
-#include <assert.h>
-#include <stdatomic.h>
-#include <stdint.h>
-
 #include "bitfield.h"
 #include "child.h"
 #include "utils.h"
-#include <stdio.h>
 
 bool child_counter_inc(child_t *self, _void v)
 {

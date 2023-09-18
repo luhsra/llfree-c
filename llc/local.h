@@ -1,10 +1,7 @@
 #pragma once
 
 #include "bitfield.h"
-#include "child.h"
-#include <stdalign.h>
-#include <stddef.h>
-#include <stdint.h>
+#include "utils.h"
 
 #define UPDATE_RESERVED -7
 
@@ -85,7 +82,7 @@ result_t local_steal(local_t *const self, reserved_t *const old_reservation);
 // returns ERR_OK on success
 // ERR_Retry on atomic operation fail
 // UPDATE_RESERVED after 4 consecutive free on the same tree
-bool local_set_free_tree(last_free_t *self, uint64_t tree);
+bool local_inc_last_free(last_free_t *self, uint64_t tree);
 
 /// updates the atomic index of last reserved tree
 // returns ERR_OK on success

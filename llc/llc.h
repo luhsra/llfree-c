@@ -1,9 +1,6 @@
 #pragma once
 
-#include <stdint.h>
-
 #include "lower.h"
-#include "child.h"
 #include "local.h"
 #include "tree.h"
 #include "utils.h"
@@ -34,15 +31,15 @@ void *llc_default();
  * @param all_free boolean value- if true all frames are free otherwise all frames will be initially allocated
  * @return int64_t
  */
-result_t llc_init(void *self, size_t cores, uint64_t start_frame_adr, size_t len,
-		 uint8_t init, uint8_t all_free);
+result_t llc_init(void *self, size_t cores, uint64_t start_frame_adr,
+		  size_t len, uint8_t init, uint8_t all_free);
 
 /// Allocates a frame and returns its address, or a negative error code
 result_t llc_get(const void *self, size_t core, size_t order);
 
 /// Frees a frame, returning 0 on success or a negative error code
 result_t llc_put(const void *self, size_t core, uint64_t frame_adr,
-		size_t order);
+		 size_t order);
 
 /// Checks if a frame is allocated, returning 0 if not
 uint8_t llc_is_free(const void *self, uint64_t frame_adr, size_t order);
@@ -63,5 +60,10 @@ void llc_debug(const void *self, void (*writer)(void *, char *), void *arg);
 void llc_print(const upper_t *self);
 
 /// Calls f for each Huge Frame. f will receive the context the current pfn and the free counter as arguments - used by some rust benchmarks like frag.rs
-void llc_for_each_HP(const void *this, void *context,
+void llc_for_each_HP(const void *self, void *context,
 		     void f(void *, uint64_t, uint64_t));
+
+/// Allocate metadata function
+extern void *llc_ext_alloc(size_t align, size_t size);
+/// Free metadata function
+extern void llc_ext_free(size_t align, size_t size, void *addr);

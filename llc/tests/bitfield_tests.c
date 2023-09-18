@@ -1,11 +1,8 @@
 #include "bitfield_tests.h"
-#include "check.h"
-#include "../bitfield.h"
-#include "../utils.h"
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
+#include "check.h"
+#include "bitfield.h"
+#include "utils.h"
 
 #define u64MAX 0xffffffffffffffff
 

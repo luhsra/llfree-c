@@ -1,9 +1,4 @@
 #include "bitfield.h"
-#include <stdatomic.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <assert.h>
 #include "utils.h"
 
 // Helping struct to store the position of a bit in a bitfield.
@@ -42,7 +37,7 @@ static result_t find_unset(uint64_t val)
 	if (~val == 0)
 		return result(ERR_MEMORY);
 
-	int ret = __builtin_ctzll(~val);
+	int ret = trailing_zeros(~val);
 	assert(ret >= 0 && ret < 64 && "out of bounds");
 	return result(ret);
 }
@@ -102,7 +97,7 @@ int field_count_bits(bitfield_t *field)
 	int counter = 0;
 	for (size_t i = 0; i < FIELD_N; i++) {
 		uint64_t row = atom_load(&field->rows[i]);
-		counter += __builtin_popcountll(row);
+		counter += count_ones(row);
 	}
 
 	assert(0 <= counter && counter <= FIELDSIZE);

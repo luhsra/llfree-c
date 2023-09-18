@@ -1,9 +1,8 @@
 #include "child_tests.h"
 #include "check.h"
 
-#include "../child.h"
-#include "../bitfield.h"
-#include <assert.h>
+#include "child.h"
+#include "bitfield.h"
 
 #define check_counter(actual, expect)                \
 	check_equal(actual.counter, expect.counter); \

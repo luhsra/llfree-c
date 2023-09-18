@@ -1,9 +1,12 @@
 #pragma once
 
-#include "stdbool.h"
+#include <stdbool.h>
 #include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdalign.h>
+#include <assert.h>
+#include <stdio.h>
 
 /// Unused functions and variables
 #define _unused __attribute__((unused))
@@ -32,10 +35,43 @@ static inline _unused size_t div_ceil(uint64_t a, int b)
 {
 	return (a + b - 1) / b;
 }
+static inline _unused int trailing_zeros(uint64_t val)
+{
+	if (val == 0)
+		return -1;
+	return __builtin_ctzll(val);
+}
+static inline _unused int leading_zeros(uint64_t val)
+{
+	if (val == 0)
+		return -1;
+	return __builtin_clzll(val);
+}
+static inline _unused size_t count_ones(uint64_t val)
+{
+	return __builtin_popcountll(val);
+}
+static inline _unused size_t align_down(size_t align, size_t val)
+{
+	assert(align > 0);
+	assert(1 << trailing_zeros(align) == align);
+	return val & ~(align - 1);
+}
+static inline _unused size_t align_up(size_t align, size_t val)
+{
+	return align_down(align, val + align - 1);
+}
 /// Pause CPU
 static inline _unused void spin_wait()
 {
+#if defined(__x86_64__) || defined(_M_X64) || defined(i386) || \
+	defined(__i386__) || defined(__i386) || defined(_M_IX86)
 	asm("pause" ::);
+#elif defined(__aarch64__) || defined(_M_ARM64)
+	asm("isb" ::);
+#else
+#error "Unknown architecture"
+#endif
 }
 
 // Error codes
@@ -131,15 +167,15 @@ static const int ATOM_STORE_ORDER = memory_order_release;
 		int _ret = ERR_RETRY;                                          \
 		if (atomic_compare_exchange_weak_explicit(                     \
 			    &(obj)->raw,                                       \
-			    (_Generic(((obj)->raw), uint16_t                   \
-				      : (uint16_t *)&(expect)->raw, default    \
-				      : (uint64_t *)&(expect)->raw)),          \
+			    (_Generic(((obj)->raw),                            \
+			    uint16_t: (uint16_t *)&(expect)->raw,              \
+			    default: (uint64_t *)&(expect)->raw)),             \
 			    (desire).raw, ATOM_UPDATE_ORDER, ATOM_LOAD_ORDER)) \
 			_ret = ERR_OK;                                         \
 		_ret;                                                          \
 	})
 
-#define atom_cmp_exchange(obj, expected, desired)                                 \
+#define atom_cmp_exchange(obj, expected, desired)                             \
 	atomic_compare_exchange_strong_explicit((obj), (expected), (desired), \
 						ATOM_UPDATE_ORDER,            \
 						ATOM_LOAD_ORDER)

@@ -1,11 +1,6 @@
 #pragma once
 
 #include "utils.h"
-#include <stdalign.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <sys/cdefs.h>
 
 // child has 512 entry's
 #define CHILDSIZE FIELDSIZE

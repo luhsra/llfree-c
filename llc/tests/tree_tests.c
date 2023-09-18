@@ -1,8 +1,8 @@
 #include "tree_tests.h"
+
 #include "check.h"
-#include "../tree.h"
-#include "../utils.h"
-#include <stdbool.h>
+#include "tree.h"
+#include "utils.h"
 
 #define equal_trees(actual, expect)                  \
 	check_equal(actual.counter, expect.counter); \

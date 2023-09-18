@@ -1,11 +1,7 @@
 #include "local.h"
 #include "assert.h"
-#include "bitfield.h"
-#include "child.h"
 #include "tree.h"
 #include "utils.h"
-#include <stddef.h>
-#include <stdint.h>
 
 void local_init(local_t *self)
 {
@@ -90,12 +86,13 @@ bool local_unmark_reserving(reserved_t *self, _void v)
 bool local_inc_counter(reserved_t *self, reserve_change_t change)
 {
 	assert(self != NULL);
-	const size_t atomic_Idx = atomic_from_pfn(change.pfn);
+	const size_t tree_idx = tree_from_pfn(change.pfn);
 
 	// check if reserved tree is a match for given pfn
-	if (!self->present || tree_from_atomic(self->preferred_index) !=
-				      tree_from_atomic(atomic_Idx))
-		return ERR_ADDRESS;
+	if (!self->present ||
+	    tree_from_atomic(self->preferred_index) != tree_idx)
+		return false;
+
 	// check if counter has enough space
 	assert(self->free_counter <= TREESIZE - change.counter);
 	self->free_counter += change.counter;
@@ -115,7 +112,7 @@ bool local_dec_counter(reserved_t *self, size_t order)
 	return true;
 }
 
-bool local_set_free_tree(last_free_t *self, uint64_t tree)
+bool local_inc_last_free(last_free_t *self, uint64_t tree)
 {
 	assert(self != NULL);
 

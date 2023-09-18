@@ -3,9 +3,6 @@
 #include "bitfield.h"
 #include "child.h"
 #include "utils.h"
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
 
 #define CHILDS_PER_TREE 32
 #define PAGESIZE (1 << 12)

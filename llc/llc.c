@@ -4,13 +4,7 @@
 #include "local.h"
 #include "lower.h"
 #include "utils.h"
-
 #include <assert.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 // magic number to determine on recover if a allocator was previously
 // initialized
@@ -36,8 +30,8 @@ struct meta {
  * @return ERR_OK on success
  *         ERR_RETRY if atomic operation failed
  */
-static void inc_tree_counter(upper_t const *const self, local_t *const local,
-			     const uint64_t pfn, size_t order)
+static size_t inc_tree_counter(upper_t const *const self, local_t *const local,
+			       const uint64_t pfn, size_t order)
 {
 	reserved_t old;
 	if (!atom_update(&local->reserved, old,
@@ -50,6 +44,7 @@ static void inc_tree_counter(upper_t const *const self, local_t *const local,
 				    order, tree_counter_inc);
 		assert(success);
 	}
+	return tree_from_atomic(old.preferred_index);
 }
 
 /**
@@ -157,7 +152,9 @@ static result_t reserve_tree(upper_t const *const self, local_t *const local,
 	if (old_r.present) {
 		_Atomic(tree_t) *tree =
 			&self->trees[tree_from_atomic(old_r.preferred_index)];
-		atom_update(tree, old_tree, old_r.free_counter, tree_writeback);
+		success = atom_update(tree, old_tree, old_r.free_counter,
+				      tree_writeback);
+		assert(success);
 	}
 	return result(ERR_OK);
 }
@@ -327,7 +324,7 @@ static result_t reserve_frame_in_new_tree(const upper_t *self, local_t *local,
 /// into all other functions
 void *llc_default()
 {
-	upper_t *upper = aligned_alloc(CACHESIZE, sizeof(upper_t));
+	upper_t *upper = llc_ext_alloc(CACHESIZE, sizeof(upper_t));
 	assert(upper != NULL);
 	upper->local = NULL;
 	upper->meta = NULL;
@@ -373,7 +370,7 @@ result_t llc_init(void *this, size_t cores, uint64_t start_frame_adr,
 
 	self->trees_len = div_ceil(self->lower.childs_len, CHILDS_PER_TREE);
 	self->trees =
-		aligned_alloc(CACHESIZE, sizeof(child_t) * self->trees_len);
+		llc_ext_alloc(CACHESIZE, sizeof(child_t) * self->trees_len);
 	assert(self->trees != NULL);
 	if (self->trees == NULL)
 		return result(ERR_INITIALIZATION);
@@ -386,7 +383,7 @@ result_t llc_init(void *this, size_t cores, uint64_t start_frame_adr,
 		len_locale = cores;
 	}
 	self->cores = len_locale;
-	self->local = aligned_alloc(CACHESIZE, sizeof(local_t) * len_locale);
+	self->local = llc_ext_alloc(CACHESIZE, sizeof(local_t) * len_locale);
 
 	assert(self->local != NULL);
 	if (self->trees == NULL)
@@ -429,7 +426,10 @@ result_t llc_get(const void *this, size_t core, size_t order)
 				local_mark_reserving)) {
 			res = reserve_frame_in_new_tree(self, local, core,
 							order);
-			assert(result_ok(res)); // FIXME
+			// if (!result_ok(res)) {
+			// 	info("err %lld", res.val);
+			// 	assert(false);
+			// }
 
 			bool _unused success =
 				atom_update(&local->reserved, old, VOID,
@@ -458,23 +458,24 @@ result_t llc_put(void const *const this, const size_t core,
 		return res;
 
 	// frame is successfully freed in lower allocator
-	local_t *const local = get_local(self, core);
-	const uint64_t frame = frame_adr - self->lower.start_frame_adr;
-	const size_t tree_idx = tree_from_pfn(frame);
+	local_t *local = get_local(self, core);
+	uint64_t frame = frame_adr - self->lower.start_frame_adr;
+	size_t tree_idx = tree_from_pfn(frame);
+
+	size_t resv_tree = inc_tree_counter(self, local, frame, order);
 
 	// set last reserved in local
 	last_free_t old;
-	atom_update(&local->last_free, old, tree_idx, local_set_free_tree);
-	// info("lf: %lu %hu -> %lu", old.last_tree, old.free_counter, tree_idx);
+	atom_update(&local->last_free, old, tree_idx, local_inc_last_free);
 
-	if (old.last_tree != tree_idx && old.free_counter >= 3) {
+	if (resv_tree != tree_idx && old.free_counter >= 3) {
 		// this tree was the target of multiple consecutive frees
 		// -> reserve this tree if it is not completely allocated
 		tree_t tree = atom_load(&self->trees[tree_idx]);
 		saturation_level_t sat = tree_status(tree);
-                // info("tree: %hu %d -> %d", tree.counter, tree.flag, sat);
+		// info("tree %lu (%lu): %hu %d -> %d", tree_idx, resv_tree,
+		//      tree.counter, tree.flag, sat);
 		if (sat != ALLOCATED) {
-			info("put-reserve %lu", tree_idx);
 			reserved_t old;
 			if (atom_update(&local->reserved, old, VOID,
 					local_mark_reserving)) {
@@ -486,7 +487,6 @@ result_t llc_put(void const *const this, const size_t core,
 			}
 		}
 	}
-	inc_tree_counter(self, local, frame, order);
 	return result(ERR_OK);
 }
 
@@ -525,10 +525,12 @@ void llc_drop(void *this)
 
 	if (self->local != NULL) {
 		lower_drop(&self->lower);
-		free(self->trees);
-		free(self->local);
+		llc_ext_free(CACHESIZE, self->trees_len * sizeof(tree_t),
+			     self->trees);
+		llc_ext_free(CACHESIZE, self->cores * sizeof(local_t),
+			     self->local);
 	}
-	free(this);
+	llc_ext_free(CACHESIZE, sizeof(upper_t), this);
 }
 
 void llc_for_each_HP(const void *this, void *context,
@@ -547,8 +549,8 @@ void llc_debug(const void *this, void (*writer)(void *, char *), void *arg)
 	const upper_t *self = (upper_t *)this;
 
 	writer(arg, "\nLLC stats:\n");
-	char *msg = malloc(200 * sizeof(char));
-	snprintf(msg, 200, "frames:\t%7lu\tfree: %7lu\tallocated: %7lu\n",
+	char *msg = llc_ext_alloc(1, 200 * sizeof(char));
+	snprintf(msg, 200, "frames:\t%7lu\tfree: %7llu\tallocated: %7llu\n",
 		 self->lower.length, llc_free_frames(this),
 		 self->lower.length - llc_free_frames(this));
 	writer(arg, msg);
@@ -567,8 +569,8 @@ void llc_debug(const void *this, void (*writer)(void *, char *), void *arg)
 void llc_print(const upper_t *self)
 {
 	printf("-----------------------------------------------\n"
-	       "UPPER ALLOCATOR\nTrees:\t%lu\nCores:\t%lu\n allocated: %lu, free: %lu, "
-	       "all: %lu\n",
+	       "UPPER ALLOCATOR\nTrees:\t%lu\nCores:\t%lu\n allocated: %llu, free: %llu, "
+	       "all: %llu\n",
 	       self->trees_len, self->cores,
 	       llc_frames(self) - llc_free_frames(self), llc_free_frames(self),
 	       llc_frames(self));
@@ -614,7 +616,7 @@ void llc_print(const upper_t *self)
 	printf("\nTreeIDX:\t");
 	for (size_t i = 0; i < self->cores; ++i) {
 		local_t *local = get_local(self, i);
-		printf("%lu\t", tree_from_pfn(local_get_reserved_pfn(local)));
+		printf("%llu\t", tree_from_pfn(local_get_reserved_pfn(local)));
 	}
 	printf("\nFreeFrames:\t");
 	for (size_t i = 0; i < self->cores; ++i) {

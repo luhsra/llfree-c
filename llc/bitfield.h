@@ -1,9 +1,5 @@
 #pragma once
 
-#include <bits/stdint-uintn.h>
-#include <stdint.h>
-#include <stdalign.h>
-#include <stdbool.h>
 #include "utils.h"
 /*
  * Implements The Bitfield and behaviour.

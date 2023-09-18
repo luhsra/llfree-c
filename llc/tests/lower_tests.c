@@ -1,15 +1,15 @@
-#include "../lower.h"
-#include "../bitfield.h"
-#include "../lower.h"
+#include "lower_tests.h"
+
+#include "lower.h"
+#include "bitfield.h"
+#include "lower.h"
 #include "check.h"
 #include "utils.h"
-#include <assert.h>
-#include <stdalign.h>
-#include <stdint.h>
+
 #include <stdlib.h>
 
 #define check_child_number(expect)                  \
-	check_uequal_m(actual.childs_len, (expect), \
+	check_equal_m(actual.childs_len, (expect), \
 		       "should have exactly 1 Child per 512 Frames")
 
 #define bitfield_is_free(actual)                                             \
@@ -51,7 +51,7 @@ bool init_lower_test(uint8_t init)
 	check(result_ok(ret), "");
 	check_child_number(2ul);
 	bitfield_is_free(actual.fields[0]);
-	check_uequal(lower_allocated_frames(&actual), 0ul);
+	check_equal(lower_allocated_frames(&actual), 0ul);
 	if (init == VOLATILE) {
 		free_lower(actual);
 	}
@@ -73,7 +73,7 @@ bool init_lower_test(uint8_t init)
 					    init == VOLATILE ?
 						    0x8000000000000000 :
 						    0xC000000000000000 }));
-	check_uequal(lower_allocated_frames(&actual), 0ul);
+	check_equal(lower_allocated_frames(&actual), 0ul);
 	if (init == VOLATILE) {
 		free_lower(actual);
 	}
@@ -90,7 +90,7 @@ bool init_lower_test(uint8_t init)
 	lower_init_default(&actual, pfn_start, frames, init);
 	ret = lower_init(&actual, false);
 	check_child_number(2ul);
-	check_uequal(lower_allocated_frames(&actual),
+	check_equal(lower_allocated_frames(&actual),
 		     init == VOLATILE ? 632ul : 631ul);
 	if (init == VOLATILE) {
 		free_lower(actual);
@@ -121,13 +121,13 @@ bool init_lower_test(uint8_t init)
 						  0xfffffffffff80000,
 			       UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
 			       UINT64_MAX, UINT64_MAX }));
-	check_uequal(lower_allocated_frames(&actual), 0ul);
+	check_equal(lower_allocated_frames(&actual), 0ul);
 
 	//check alignment
 
-	check_uequal_m((uint64_t)actual.childs % CACHESIZE, 0ul,
+	check_equal_m((uint64_t)actual.childs % CACHESIZE, 0ul,
 		       "array must be aligned to cachesize");
-	check_uequal_m((uint64_t)actual.fields % CACHESIZE, 0ul,
+	check_equal_m((uint64_t)actual.fields % CACHESIZE, 0ul,
 		       "array must be aligned to cachesize");
 
 	if (init == VOLATILE) {
@@ -376,13 +376,13 @@ int lower_HP_tests()
 	result_t pfn1 = lower_get(&actual, 0, HP_ORDER);
 	check(result_ok(pfn1), "");
 	uint64_t offset = pfn1.val % FIELDSIZE;
-	check_uequal(offset, 0ul);
+	check_equal(offset, 0ul);
 	result_t pfn2 = lower_get(&actual, 0, HP_ORDER);
 	check(result_ok(pfn2), "");
 	offset = pfn2.val % FIELDSIZE;
-	check_uequal(offset, 0ul);
+	check_equal(offset, 0ul);
 	check(pfn1.val != pfn2.val, "");
-	check_uequal(lower_allocated_frames(&actual), 2ul * FIELDSIZE);
+	check_equal(lower_allocated_frames(&actual), 2ul * FIELDSIZE);
 
 	// request a regular frame
 	result_t regular = lower_get(&actual, 0, 0);
@@ -394,8 +394,8 @@ int lower_HP_tests()
 	result_t pfn3 = lower_get(&actual, pfn_from_atomic(10), HP_ORDER);
 	check(result_ok(pfn3), "");
 	offset = pfn3.val % FIELDSIZE;
-	check_uequal(offset, 0ul);
-	check_uequal((uint64_t)pfn3.val,
+	check_equal(offset, 0ul);
+	check_equal((uint64_t)pfn3.val,
 		     3 * FIELDSIZE + actual.start_frame_adr);
 
 	// free regular page und try get this child as complete HP
@@ -415,7 +415,7 @@ int lower_HP_tests()
 		check(result_ok(pfn), "");
 	}
 
-	check_uequal_m(lower_allocated_frames(&actual), actual.length,
+	check_equal_m(lower_allocated_frames(&actual), actual.length,
 		       "fully allocated with Huge Frames");
 
 	//reservation at full memory must fail
@@ -430,7 +430,7 @@ int lower_HP_tests()
 	check(result_ok(lower_put(&actual, pfn1.val, HP_ORDER)), "");
 
 	// check if right amout of free regular frames are present
-	check_uequal(actual.length - lower_allocated_frames(&actual),
+	check_equal(actual.length - lower_allocated_frames(&actual),
 		     FIELDSIZE + 1ul);
 
 	// new acquired frame should be in same positon as the old no 1
@@ -461,9 +461,9 @@ int free_all_test()
 	lower_init_default(&lower, start_adr, len, OVERWRITE);
 	result_t ret = lower_init(&lower, false);
 	assert(result_ok(ret));
-	check_uequal_m(lower.length, len - 1,
+	check_equal_m(lower.length, len - 1,
 		       "one frame for management structures");
-	check_uequal_m(lower.length - lower_allocated_frames(&lower), 0ul,
+	check_equal_m(lower.length - lower_allocated_frames(&lower), 0ul,
 		       "all_frames_are_allocated");
 
 	//free all HPs
@@ -471,7 +471,7 @@ int free_all_test()
 		ret = lower_put(&lower, start_adr + i * 512, HP_ORDER);
 		check(result_ok(ret), "");
 	}
-	check_uequal_m(lower_allocated_frames(&lower), 512ul + 34,
+	check_equal_m(lower_allocated_frames(&lower), 512ul + 34,
 		       "one allocated HF and the 34 regular frames");
 
 	// free last HP as regular frame and regular frames
@@ -481,7 +481,7 @@ int free_all_test()
 		check(result_ok(ret), "");
 	}
 
-	check_uequal_m(lower_allocated_frames(&lower), 0ul,
+	check_equal_m(lower_allocated_frames(&lower), 0ul,
 		       "lower should be completely free");
 
 	free(memory);
@@ -496,8 +496,8 @@ bool persistent_init()
 	assert(mem != NULL);
 	lower_t lower;
 	lower_init_default(&lower, (uint64_t)mem, len, OVERWRITE);
-	check_uequal((uint64_t)&lower.childs[0] % CACHESIZE, 0ul);
-	check_uequal((uint64_t)&lower.fields[0] % CACHESIZE, 0ul);
+	check_equal((uint64_t)&lower.childs[0] % CACHESIZE, 0ul);
+	check_equal((uint64_t)&lower.fields[0] % CACHESIZE, 0ul);
 	check((uint64_t)&lower.childs[lower.childs_len] <
 		      lower.start_frame_adr + len * PAGESIZE,
 	      "");

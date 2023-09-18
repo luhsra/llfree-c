@@ -1,6 +1,5 @@
-#include <stdint.h>
-#include <stdio.h>
-#include <stdatomic.h>
+#include "llc.h"
+#include "utils.h"
 
 #include "bitfield_tests.h"
 #include "child_tests.h"
@@ -8,6 +7,8 @@
 #include "local_tests.h"
 #include "llc_tests.h"
 #include "tree_tests.h"
+
+#include <stdlib.h>
 
 int main()
 {
@@ -49,4 +50,15 @@ int main()
 		printf("----------------FAILED----------------\n");
 	printf("---------------------------------------\n");
 	printf("Failed %d out of %d tests.\n", fail_counter, test_counter);
+}
+
+void *llc_ext_alloc(size_t align, size_t size)
+{
+	info("alloc a=%lu %lu -> %lu", align, size, align_up(align, size));
+	return aligned_alloc(align, align_up(align, size));
+}
+
+void llc_ext_free(_unused size_t align, _unused size_t size, void *addr)
+{
+	return free(addr);
 }
