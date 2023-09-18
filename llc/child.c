@@ -1,56 +1,60 @@
 #include <assert.h>
+#include <stdatomic.h>
 #include <stdint.h>
 
 #include "bitfield.h"
 #include "child.h"
 #include "utils.h"
+#include <stdio.h>
 
-int child_counter_inc(child_t *self)
+bool child_counter_inc(child_t *self, _void v)
 {
+	(void)v;
 	assert(self != NULL);
-	child_t old = { load(&self->raw) };
+
 	// If reserved as HP the counter should not be touched
 	// cannot increase the counter over the maximum number of free fields
-	if (old.flag == true || old.counter >= FIELDSIZE)
-		return ERR_ADDRESS;
-	child_t desire = old;
-	++desire.counter;
-	return cas(self, &old, desire);
+	if (self->huge == true || self->counter >= FIELDSIZE)
+		return false;
+
+	self->counter += 1;
+	return true;
 }
 
-int child_counter_dec(child_t *self)
+bool child_counter_dec(child_t *self, _void v)
 {
+	(void)v;
 	assert(self != NULL);
-	child_t old = { load(&self->raw) };
 	// If reserved as HP the counter an should not be touched
-	if (old.flag || old.counter == 0)
-		return ERR_MEMORY;
+	if (self->huge || self->counter == 0)
+		return false;
 
-	child_t desire = old;
-	--desire.counter;
-	return cas(self, &old, desire);
+	self->counter -= 1;
+	return true;
 }
 
-int child_free_HP(child_t *self)
+bool child_free_huge(child_t *self, _void v)
 {
+	(void)v;
 	assert(self != NULL);
 
-	child_t desire = child_init(CHILDSIZE, false);
-	child_t old = { load(&self->raw) };
 	// check if child is marked as HP || somehow pages are free
-	if (old.flag == false || old.counter != 0)
-		return ERR_ADDRESS;
-	return cas(self, &old, desire);
+	if (self->huge == false || self->counter != 0)
+		return false;
+
+	*self = child_new(CHILDSIZE, false);
+	return true;
 }
 
-int child_reserve_HP(child_t *self)
+bool child_reserve_huge(child_t *self, _void v)
 {
+	(void)v;
 	assert(self != NULL);
 
-	child_t desire = child_init(0, true);
-	child_t old = { load(&self->raw) };
 	// check if already reserved as HP or if not all frames are free
-	if (old.flag == true || old.counter != FIELDSIZE)
-		return ERR_MEMORY;
-	return cas(self, &old, desire);
+	if (self->huge == true || self->counter != FIELDSIZE)
+		return false;
+
+	*self = child_new(0, true);
+	return true;
 }

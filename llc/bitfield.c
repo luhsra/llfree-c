@@ -1,5 +1,6 @@
 #include "bitfield.h"
 #include <stdatomic.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
@@ -35,22 +36,29 @@ void field_init(bitfield_t *self)
  * @return  ERR_OK on success
  *          ERR_MEMORY if no unset Bit was found.
  */
-static int find_unset(uint64_t val)
+static result_t find_unset(uint64_t val)
 {
-	// ctzll(x) -> If x is 0, the result is undefined and there are no unset bits
+	// If x is 0, the result is undefined and there are no unset bits
 	if (~val == 0)
-		return ERR_MEMORY;
+		return result(ERR_MEMORY);
 
 	int ret = __builtin_ctzll(~val);
-
-	assert(ret >= 0 && "ctzll should never be negative");
-	assert(ret < 64 &&
-	       "ctzll should not count more zeros as there are Bits");
-
-	return ret;
+	assert(ret >= 0 && ret < 64 && "out of bounds");
+	return result(ret);
 }
 
-int64_t field_set_Bit(bitfield_t *field, const uint64_t pfn)
+static bool find_in_row(uint64_t *row, size_t *pos)
+{
+	result_t res = find_unset(*row);
+	if (result_ok(res)) {
+		*pos = res.val;
+		*row |= (1ul << res.val);
+		return true;
+	}
+	return false;
+}
+
+result_t field_set_Bit(bitfield_t *field, const uint64_t pfn)
 {
 	assert(field != NULL);
 
@@ -58,50 +66,42 @@ int64_t field_set_Bit(bitfield_t *field, const uint64_t pfn)
 
 	for_offsetted(row, FIELD_N)
 	{
-		int pos = 0;
+		size_t pos = 0;
 		uint64_t old;
-		if (atom_fetch_update(&field->rows[current_i], old, ({
-			    bool found = false;
-			    pos = find_unset(value);
-			    if (pos >= 0) {
-				    value |= (1ul << pos);
-				    found = true;
-			    }
-			    found;
-		    }))) {
-			return current_i * (sizeof(uint64_t) * 8) + pos;
+		if (atom_update(&field->rows[current_i], old, &pos,
+				find_in_row)) {
+			return result(current_i * (sizeof(uint64_t) * 8) + pos);
 		}
 	}
 
-	return ERR_MEMORY;
+	return result(ERR_MEMORY);
 }
 
-int field_reset_Bit(bitfield_t *field, size_t index)
+result_t field_reset_bit(bitfield_t *field, size_t index)
 {
 	assert(field != NULL);
 	assert(0 <= index && index < FIELDSIZE);
 
 	pos_t pos = get_pos(index);
 
-	uint64_t mask = ~(
-		1ull
-		<< pos.bit_index); // 11...101...11 -> zero at the bit-position
+	// 11...101...11 -> zero at the bit-position
+	uint64_t mask = ~(1ull << pos.bit_index);
 
 	uint64_t before = atomic_fetch_and(&field->rows[pos.row_index], mask);
 
 	if ((before & mask) == before) { // bit were already reset
-		return ERR_ADDRESS;
+		return result(ERR_ADDRESS);
 	}
 
-	return ERR_OK;
+	return result(ERR_OK);
 }
 
-int field_count_Set_Bits(bitfield_t *field)
+int field_count_bits(bitfield_t *field)
 {
 	assert(field != NULL);
 	int counter = 0;
 	for (size_t i = 0; i < FIELD_N; i++) {
-		uint64_t row = load(&field->rows[i]);
+		uint64_t row = atom_load(&field->rows[i]);
 		counter += __builtin_popcountll(row);
 	}
 
@@ -115,7 +115,7 @@ bool field_is_free(bitfield_t *self, size_t index)
 	assert(0 <= index && index < FIELDSIZE);
 	pos_t pos = get_pos(index);
 
-	uint64_t row = load(&self->rows[pos.row_index]);
+	uint64_t row = atom_load(&self->rows[pos.row_index]);
 	uint64_t mask = 1ul << pos.bit_index;
 
 	return (row & mask) == 0;

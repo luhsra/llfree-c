@@ -10,152 +10,133 @@
 void local_init(local_t *self)
 {
 	assert(self != NULL);
-	self->last_free.raw = 0;
-	self->reserved.raw = 0;
+	atom_store(&self->last_free, ((last_free_t){ 0, 0 }));
+	atom_store(&self->reserved, ((reserved_t){ 0, 0, false, false }));
 }
 
-int local_steal(local_t *const self, reserved_t *const old_reservation)
+result_t local_steal(local_t *const self, reserved_t *const old_reservation)
 {
-	*old_reservation = (reserved_t){ load(&self->reserved.raw) };
-	if (!old_reservation->has_reserved_tree ||
-	    old_reservation->free_counter == 0 ||
-	    old_reservation->reservation_in_progress)
-		return ERR_ADDRESS;
+	*old_reservation = atom_load(&self->reserved);
+	if (!old_reservation->present || old_reservation->free_counter == 0 ||
+	    old_reservation->reserving)
+		return result(ERR_ADDRESS);
 	reserved_t new = { 0 };
-	return cas(&self->reserved, old_reservation, new);
+	return atom_cmp_exchange(&self->reserved, old_reservation, new) ?
+		       result(ERR_OK) :
+		       result(ERR_RETRY);
 }
 
-int local_set_new_preferred_tree(local_t *self, uint64_t pfn,
-				 uint16_t free_count,
-				 reserved_t *old_reservation)
+bool local_set_new_reserved_tree(reserved_t *reserved, reserve_change_t tree)
 {
-	assert(self != NULL);
-	assert(free_count <= TREESIZE);
+	assert(reserved != NULL);
+	assert(reserved->reserving);
+	assert(tree.counter <= TREESIZE);
 
-	const size_t idx = atomic_from_pfn(pfn);
+	const size_t idx = atomic_from_pfn(tree.pfn);
 
-	reserved_t desire = { 0 };
-	desire.free_counter = free_count;
-	desire.preferred_index = idx;
-	desire.has_reserved_tree = true;
-	desire.reservation_in_progress = true;
-
-	old_reservation->raw = load(&self->reserved.raw);
-	assert(old_reservation->reservation_in_progress);
-	return cas(&self->reserved, old_reservation, desire);
+	*reserved = (reserved_t){ .free_counter = tree.counter,
+				  .preferred_index = idx,
+				  .present = true,
+				  .reserving = true };
+	return true;
 }
 
-int local_update_last_reserved(local_t *const self, uint64_t pfn)
+bool local_update_last_reserved(reserved_t *self, size_t pfn)
 {
-	reserved_t prev = { load(&self->reserved.raw) };
 	// no update if reservation is in progress
 	uint64_t new_reserved = atomic_from_pfn(pfn);
-	if (prev.reservation_in_progress ||
-	    tree_from_atomic(prev.preferred_index) !=
-		    tree_from_atomic(new_reserved)) {
-		return ERR_OK;
+	// TODO: is this check correct? The index will change or not?
+	if (self->reserving || tree_from_atomic(self->preferred_index) !=
+				       tree_from_atomic(new_reserved)) {
+		return false;
 	}
-	reserved_t desire = prev;
-	desire.preferred_index = new_reserved;
-	return cas(&self->reserved, &prev, desire);
+	self->preferred_index = new_reserved;
+	return true;
 }
 
 uint64_t local_get_reserved_pfn(local_t *self)
 {
 	assert(self != NULL);
 
-	reserved_t pref = { load(&self->reserved.raw) };
+	reserved_t pref = atom_load(&self->reserved);
 	return pfn_from_atomic(pref.preferred_index);
 }
 
-reserved_t local_mark_as_searching(local_t *self)
+bool local_mark_reserving(reserved_t *self, _void v)
 {
+	(void)v;
 	assert(self != NULL);
 
-	reserved_t mask = { 0ul };
-	mask.reservation_in_progress = true;
+	// Already reserving...
+	if (self->reserving)
+		return false;
 
-	return (reserved_t){ atomic_fetch_or(&self->reserved.raw, mask.raw) };
+	self->reserving = true;
+	return true;
 }
 
-int local_unmark_as_searching(local_t *self)
+bool local_unmark_reserving(reserved_t *self, _void v)
 {
+	(void)v;
 	assert(self != NULL);
 
-	reserved_t mask = { 0ul };
-	mask.reservation_in_progress = true;
-	mask.raw = ~mask.raw;
-	uint64_t before = atomic_fetch_and(&self->reserved.raw, mask.raw);
-	if ((before & mask.raw) == before)
-		return ERR_RETRY; // no change means flag was already reset
-	return ERR_OK;
+	if (!self->reserving)
+		return false;
+
+	self->reserving = false;
+	return true;
 }
 
-int local_inc_counter(local_t *const self, const uint64_t frame,
-		      const size_t order)
+bool local_inc_counter(reserved_t *self, reserve_change_t change)
 {
 	assert(self != NULL);
-	const size_t atomic_Idx = atomic_from_pfn(frame);
+	const size_t atomic_Idx = atomic_from_pfn(change.pfn);
 
-	reserved_t old = { load(&self->reserved.raw) };
 	// check if reserved tree is a match for given pfn
-	if (!old.has_reserved_tree || tree_from_atomic(old.preferred_index) !=
-					      tree_from_atomic(atomic_Idx))
+	if (!self->present || tree_from_atomic(self->preferred_index) !=
+				      tree_from_atomic(atomic_Idx))
 		return ERR_ADDRESS;
 	// check if counter has enough space
-	assert(old.free_counter <= TREESIZE - (1 << order));
-	reserved_t desire = old;
-	desire.free_counter += 1 << order;
-	return cas(&self->reserved, &old, desire);
+	assert(self->free_counter <= TREESIZE - change.counter);
+	self->free_counter += change.counter;
+	return true;
 }
 
-int64_t local_dec_counter(local_t *const self, const size_t order)
+bool local_dec_counter(reserved_t *self, size_t order)
 {
 	assert(self != NULL);
 
-	reserved_t old = { load(&self->reserved.raw) };
-	if (!old.has_reserved_tree || old.free_counter < (1 << order)) {
+	if (!self->present || self->free_counter < (1 << order)) {
 		// not enough free frames in this tree
-		return ERR_MEMORY;
+		return false;
 	}
-	reserved_t desire = old;
-	desire.free_counter -= (1 << order);
-	if (cas(&self->reserved, &old, desire) == ERR_OK) {
-		return old.preferred_index;
-	}
-	return ERR_RETRY;
+
+	self->free_counter -= (1 << order);
+	return true;
 }
 
-int local_set_free_tree(local_t *self, uint64_t frame)
+bool local_set_free_tree(last_free_t *self, uint64_t tree)
 {
 	assert(self != NULL);
 
-	last_free_t old = { load(&self->last_free.raw) };
-	last_free_t desire;
 	// if last free was in another tree -> overwrite last reserved Index
-	if (tree_from_atomic(old.last_free_idx) != tree_from_pfn(frame)) {
-		desire.last_free_idx = atomic_from_pfn(frame);
-		;
-		desire.free_counter = 0;
-
+	if (self->last_tree != tree) {
+		self->last_tree = tree;
+		self->free_counter = 0;
+	} else if (self->free_counter < 3) {
 		// if the same tree -> increase the counter for this
-	} else if (old.free_counter < 3) {
-		desire = old;
-		desire.free_counter += 1;
-
-	} else {
-		// in this tree were 4 consecutive frees
-		// -> no change and message to reserve this tree
-		return UPDATE_RESERVED;
+		self->free_counter += 1;
 	}
 
-	return cas(&self->last_free, &old, desire);
+	return true;
 }
 
 void local_wait_for_completion(const local_t *const self)
 {
-	reserved_t res;
-	do {
-		res = (reserved_t){ load(&self->reserved.raw) };
-	} while (res.reservation_in_progress);
+	while (({
+		reserved_t r = atom_load(&self->reserved);
+		r.reserving;
+	})) {
+		spin_wait();
+	}
 }

@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/cdefs.h>
 
 // child has 512 entry's
 #define CHILDSIZE FIELDSIZE
@@ -14,14 +15,8 @@
  * the counter and flag tags allow easy access to the fields.
  */
 typedef struct child {
-	union {
-		_Atomic(uint16_t) raw;
-		struct {
-			uint16_t counter : 10;
-			bool flag : 1;
-			uint8_t unused : 5;
-		};
-	};
+	uint16_t counter : 15;
+	bool huge : 1;
 } child_t;
 
 /**
@@ -30,15 +25,18 @@ typedef struct child {
  * @param flag initial flag value
  * @return initialized child
  */
-#define child_init(_counter, _flag) \
-	({ (child_t){ ((_flag) << 10) | (_counter) }; })
+static inline child_t _unused child_new(uint16_t counter, bool flag)
+{
+	return (child_t){ .counter = counter, .huge = flag };
+}
+
 /**
  * @brief same as atomic_counter_inc but only increments if the flag is not set
  * @param self pointer to the counter
  * @return ERR_OK on success
  *         ERR_ADDRESS if the Counter already reached the maximum Value
  */
-int child_counter_inc(child_t *self);
+bool child_counter_inc(child_t *self, _void v);
 
 /**
  * @brief same as atomic_counter_dec bit only decrements if the flag is not set.
@@ -46,7 +44,7 @@ int child_counter_inc(child_t *self);
  * @return ERR_OK on success
  *         ERR_MEMORY if the counter already reached the minimum Value
  */
-int child_counter_dec(child_t *self);
+bool child_counter_dec(child_t *self, _void v);
 
 /**
  * @brief Reserves a Huge-Page by checking if all Frames are Free and setting
@@ -55,7 +53,7 @@ int child_counter_dec(child_t *self);
  * @return ERR_OK on success
  *         ERR_MEMORY if some Bits are already set (so no HP can be reserved)
  */
-int child_reserve_HP(child_t *self);
+bool child_free_huge(child_t *self, _void v);
 
 /**
  * @brief Frees a Huge-Page by resetting the flag and setting the Counter to 512
@@ -64,26 +62,4 @@ int child_reserve_HP(child_t *self);
  * @return ERR_OK on success
  *         ERR_ADDRESS if the child is not a reserved HP
  */
-int child_free_HP(child_t *self);
-
-/**
- * @brief atomically reads and returns the counter Value of the given child
- * @param self pointer to child
- * @return value of the counter
- */
-static inline size_t child_get_counter(child_t *child_ptr)
-{
-	child_t child = { load(&(child_ptr)->raw) };
-	return child.counter;
-}
-
-/**
- * @brief atomically checks weather this child is reserved as a HP
- * @param self pointer to child
- * @return true if child is a huge page
- */
-static inline bool child_is_HP(child_t *child_ptr)
-{
-	child_t child = { load(&(child_ptr)->raw) };
-	return child.flag;
-}
+bool child_reserve_huge(child_t *self, _void v);

@@ -2,6 +2,7 @@
 
 #include "bitfield.h"
 #include "child.h"
+#include "utils.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -12,9 +13,9 @@
 typedef struct lower {
 	uint64_t start_frame_adr; // first address of managed space
 	size_t length; // number of managed frames
-	size_t num_of_childs; // array length for fields and childs
+	size_t childs_len; // array length for fields and childs
 	bitfield_t *fields;
-	child_t *childs;
+	_Atomic(child_t) *childs;
 } lower_t;
 
 /**
@@ -37,7 +38,7 @@ void lower_init_default(lower_t *const self, uint64_t start_adr, size_t len,
  * @param free_all if set all the space will be marked free at start. (allocated otherwise)
  * @return ERR_OK
  */
-int lower_init(lower_t const *const self, bool free_all);
+result_t lower_init(lower_t const *const self, bool free_all);
 
 /**
  * @brief Recovers the state from persistent memory
@@ -45,7 +46,7 @@ int lower_init(lower_t const *const self, bool free_all);
  * @param self pointer to lower allocator
  * @return ERR_OK
  */
-int lower_recover(lower_t *self);
+result_t lower_recover(lower_t *self);
 
 /**
  * @brief allocates frames
@@ -57,7 +58,7 @@ int lower_recover(lower_t *self);
  * @return frame address of reserved frame on success;
  *         ERR_MEMORY if not enough space was found (ret will be undefined)
  */
-int64_t lower_get(lower_t const *const self, uint64_t pfn, size_t order);
+result_t lower_get(lower_t const *const self, uint64_t pfn, size_t order);
 
 /**
  * @brief deallocates given frame
@@ -67,7 +68,7 @@ int64_t lower_get(lower_t const *const self, uint64_t pfn, size_t order);
  * @return ERR_OK in success
  *         ERR_ADDRESS if the pointed to frames were not alloced
  */
-int lower_put(lower_t const *const self, uint64_t frame_adr, size_t order);
+result_t lower_put(lower_t const *const self, uint64_t frame_adr, size_t order);
 
 /**
  * @brief checks if the memory location is free

@@ -9,13 +9,8 @@
  * the counter and flag tags allow easy access to the components.
  */
 typedef struct tree {
-	union {
-		alignas(2) _Atomic(uint16_t) raw;
-		struct {
-			uint16_t counter : 15;
-			bool flag : 1;
-		};
-	};
+	uint16_t counter : 15;
+	bool flag : 1;
 } tree_t;
 
 // Saturation level for frames
@@ -33,7 +28,7 @@ typedef enum saturation_level {
  * @param flag initial flag value
  * @return initialized tree
  */
-tree_t tree_init(uint16_t counter, bool flag);
+tree_t tree_new(uint16_t counter, bool flag);
 
 /**
  * @brief atomically increases the counter
@@ -41,7 +36,7 @@ tree_t tree_init(uint16_t counter, bool flag);
  * @return ERR_OK on success
  *         ERR_RETRY if the atomic access failed
  */
-int tree_counter_inc(tree_t *self, size_t order);
+bool tree_counter_inc(tree_t *self, size_t order);
 
 /**
  * @brief atomically decreases the counter
@@ -49,7 +44,7 @@ int tree_counter_inc(tree_t *self, size_t order);
  * @return ERR_OK on success
  *         ERR_RETRY if the atomic access failed
  */
-int tree_counter_dec(tree_t *self, size_t order);
+bool tree_counter_dec(tree_t *self, size_t order);
 
 /**
  * @brief atomically sets counter to 0 and flag as true
@@ -58,7 +53,7 @@ int tree_counter_dec(tree_t *self, size_t order);
  *          ERR_RETRY if the atomic access failed
  *          ERR_ADDRESS if already reserved
  */
-int tree_reserve(tree_t *self);
+bool tree_reserve(tree_t *self, _void v);
 
 /**
  * @brief adds the given counter to the existing counter and sets the flag to 0
@@ -68,7 +63,7 @@ int tree_reserve(tree_t *self);
  * @return ERR_OK on success
  *         ERR_RETRY on atomic operation fail
  */
-int tree_writeback(tree_t *self, uint16_t free_counter);
+bool tree_writeback(tree_t *self, uint16_t free_counter);
 
 /**
  * @brief evaluated how many frames are allocates in given tree
@@ -77,7 +72,7 @@ int tree_writeback(tree_t *self, uint16_t free_counter);
  * reserved FREE if most of the Frames are Free PARTIAL for everything in
  * between
  */
-saturation_level_t tree_status(const tree_t *self);
+saturation_level_t tree_status(const tree_t self);
 
 // steals the counter of a reserved tree
-int tree_steal_counter(tree_t *self);
+bool tree_steal_counter(tree_t *self, _void v);

@@ -1,5 +1,5 @@
 # Compiler and flags
-CC = clang
+CC = clang-14
 AR = ar
 CFLAGS = -Wall -Wextra -Werror -fPIE -std=gnu11 -pthread -I $(PWD)
 DEBUG ?= 1

@@ -13,7 +13,7 @@ typedef struct upper {
 	lower_t lower;
 	struct local *local;
 	size_t cores; // array_size of local
-	tree_t *trees;
+	_Atomic(tree_t) *trees;
 	size_t trees_len;
 } upper_t;
 
@@ -34,14 +34,14 @@ void *llc_default();
  * @param all_free boolean value- if true all frames are free otherwise all frames will be initially allocated
  * @return int64_t
  */
-int64_t llc_init(void *self, size_t cores, uint64_t start_frame_adr, size_t len,
+result_t llc_init(void *self, size_t cores, uint64_t start_frame_adr, size_t len,
 		 uint8_t init, uint8_t all_free);
 
 /// Allocates a frame and returns its address, or a negative error code
-int64_t llc_get(const void *self, size_t core, size_t order);
+result_t llc_get(const void *self, size_t core, size_t order);
 
 /// Frees a frame, returning 0 on success or a negative error code
-int64_t llc_put(const void *self, size_t core, uint64_t frame_adr,
+result_t llc_put(const void *self, size_t core, uint64_t frame_adr,
 		size_t order);
 
 /// Checks if a frame is allocated, returning 0 if not

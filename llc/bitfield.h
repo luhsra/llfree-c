@@ -32,7 +32,7 @@ void field_init(bitfield_t *self);
 *         ERR_MEMORY if no free bit was found
 *         ERR_RETRY  if the atomic operation failed
 */
-int64_t field_set_Bit(bitfield_t *field, const uint64_t pfn);
+result_t field_set_Bit(bitfield_t *field, const uint64_t pfn);
 
 /**
 * @brief Atomically resets the Bit in given field at index position
@@ -40,14 +40,14 @@ int64_t field_set_Bit(bitfield_t *field, const uint64_t pfn);
 * @return ERR_OK on success
 *         ERR_ADDRESS if the bit was already reset
 */
-int field_reset_Bit(bitfield_t *field, size_t index);
+result_t field_reset_bit(bitfield_t *field, size_t index);
 
 /**
 * @brief Count the Number of bits in the Field
 * @param field Field to count bits in.
 * @return number of set Bits
 */
-int field_count_Set_Bits(bitfield_t *field);
+int field_count_bits(bitfield_t *field);
 
 /**
 * @brief Atomically checks whether the bit is set.

@@ -9,14 +9,15 @@
 	if (!test_func())          \
 		(*fail_counter)++; \
 	else                       \
-		printf("\tsuccess\n");
+		printf("\tsuccess\n")
 
 #define check(x, msg)                                                      \
 	if (!(x)) {                                                        \
 		printf("\tFILE %s:%d:\n\tCheck %s failed: %s\n", __FILE__, \
 		       __LINE__, #x, msg);                                 \
 		success = false;                                           \
-	}
+	}                                                                  \
+	(void)"" // enforce semicolon!
 
 #define check_equal_m(actual, expected, msg)                                                          \
 	if ((actual) != (expected)) {                                                                 \
@@ -24,7 +25,9 @@
 		       __FILE__, __LINE__, #actual, #expected, msg, expected,                         \
 		       actual);                                                                       \
 		success = false;                                                                      \
-	}
+	}                                                                                             \
+	(void)"" // enforce semicolon!
+
 #define check_equal(actual, expected) check_equal_m(actual, expected, "")
 
 #define check_uequal_m(actual, expected, msg)                                                           \
@@ -33,7 +36,9 @@
 		       __FILE__, __LINE__, #actual, #expected, msg, expected,                           \
 		       actual);                                                                         \
 		success = false;                                                                        \
-	}
+	}                                                                                               \
+	(void)"" // enforce semicolon!
+
 #define check_uequal(actual, expected) check_uequal_m(actual, expected, "")
 
 #define check_equal_bitfield_m(actual, expected, msg)                                 \
@@ -44,6 +49,8 @@
 		printf("\texpected:\n");                                              \
 		field_print(&expected);                                               \
 		success = false;                                                      \
-	}
+	}                                                                             \
+	(void)"" // enforce semicolon!
+
 #define check_equal_bitfield(actual, expected) \
 	check_equal_bitfield_m(actual, expected, "")

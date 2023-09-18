@@ -2,6 +2,7 @@
 #include "../local.h"
 #include "check.h"
 #include "utils.h"
+#include <stdint.h>
 
 bool init_local_test()
 {
@@ -9,11 +10,14 @@ bool init_local_test()
 
 	local_t actual;
 	local_init(&actual);
-	check_equal(actual.last_free.free_counter, 0);
-	check_uequal(actual.last_free.last_free_idx, 0ul);
-	check_equal(actual.reserved.free_counter, 0);
-	check_equal(actual.reserved.reservation_in_progress, false);
-	check_equal(actual.reserved.has_reserved_tree, false);
+	last_free_t lf = atom_load(&actual.last_free);
+	reserved_t reserved = atom_load(&actual.reserved);
+
+	check_equal(lf.free_counter, 0);
+	check_uequal(lf.last_tree, 0ul);
+	check_equal(reserved.free_counter, 0);
+	check_equal(reserved.reserving, false);
+	check_equal(reserved.present, false);
 
 	return success;
 }
@@ -21,29 +25,38 @@ bool init_local_test()
 bool set_preferred_test()
 {
 	bool success = true;
-	local_t local_o;
-	local_t *local = &local_o;
-	local_init(local);
-	local_mark_as_searching(local);
+	local_t local;
+	local_init(&local);
+	reserved_t old_r;
+
+	check(atom_update(&local.reserved, old_r, VOID, local_mark_reserving),
+	      "");
 	uint64_t pfn = 45463135;
 	unsigned counter = 1 << 13;
-	reserved_t old;
-	int ret = local_set_new_preferred_tree(local, pfn, counter, &old);
-	check(ret == ERR_OK, "");
-	check_uequal(local->reserved.preferred_index, atomic_from_pfn(pfn));
-	check_equal(local->reserved.free_counter, counter);
-	check(local->reserved.has_reserved_tree, "");
+	bool ret = atom_update(&local.reserved, old_r,
+			       ((reserve_change_t){ pfn, counter }),
+			       local_set_new_reserved_tree);
+	check(ret, "");
 
-	local_mark_as_searching(local);
-	local_t copy = local_o;
+	reserved_t reserved = atom_load(&local.reserved);
+	check_uequal(reserved.preferred_index, atomic_from_pfn(pfn));
+	check_equal(reserved.free_counter, counter);
+	check(reserved.present, "");
+	check(reserved.reserving, "");
+
+	reserved_t copy = atom_load(&local.reserved);
 	pfn = 454135;
 	counter = 9423;
-	ret = local_set_new_preferred_tree(local, pfn, counter, &old);
-	check(ret == ERR_OK, "");
-	check_uequal(local->reserved.preferred_index, atomic_from_pfn(pfn));
-	check_equal(local->reserved.free_counter, counter);
-	check(local->reserved.has_reserved_tree, "");
-	check(old.raw == copy.reserved.raw, "");
+	ret = atom_update(&local.reserved, old_r,
+			  ((reserve_change_t){ pfn, counter }),
+			  local_set_new_reserved_tree);
+	check(ret, "");
+
+	reserved = atom_load(&local.reserved);
+	check_uequal(reserved.preferred_index, atomic_from_pfn(pfn));
+	check_equal(reserved.free_counter, counter);
+	check(reserved.present, "");
+	check(*((uint64_t *)&old_r) == *((uint64_t *)&copy), "");
 
 	return success;
 }
