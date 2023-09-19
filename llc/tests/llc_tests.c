@@ -314,7 +314,7 @@ bool multithreaded_alloc()
 				if (same >= 0) {
 					success = false;
 					printf("\tFound duplicate reserved Frame\n both core %lu and %lu "
-					       "reserved frame %lld in tree %llu\n",
+					       "reserved frame %ld in tree %lu\n",
 					       core, i, frame,
 					       tree_from_pfn(frame));
 					// leave all loops

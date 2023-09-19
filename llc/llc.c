@@ -426,19 +426,15 @@ result_t llc_get(const void *this, size_t core, size_t order)
 				local_mark_reserving)) {
 			res = reserve_frame_in_new_tree(self, local, core,
 							order);
-			// if (!result_ok(res)) {
-			// 	info("err %lld", res.val);
-			// 	assert(false);
-			// }
 
 			bool _unused success =
 				atom_update(&local->reserved, old, VOID,
 					    local_unmark_reserving);
 			assert(success);
-			return res;
-		}
-		local_wait_for_completion(local);
-		res = reserve_frame(self, local, order);
+		} else {
+                        local_wait_for_completion(local);
+                        res = reserve_frame(self, local, order);
+                }
 	}
 
 	return res;
@@ -550,7 +546,7 @@ void llc_debug(const void *this, void (*writer)(void *, char *), void *arg)
 
 	writer(arg, "\nLLC stats:\n");
 	char *msg = llc_ext_alloc(1, 200 * sizeof(char));
-	snprintf(msg, 200, "frames:\t%7lu\tfree: %7llu\tallocated: %7llu\n",
+	snprintf(msg, 200, "frames:\t%7lu\tfree: %7lu\tallocated: %7lu\n",
 		 self->lower.length, llc_free_frames(this),
 		 self->lower.length - llc_free_frames(this));
 	writer(arg, msg);
@@ -569,8 +565,8 @@ void llc_debug(const void *this, void (*writer)(void *, char *), void *arg)
 void llc_print(const upper_t *self)
 {
 	printf("-----------------------------------------------\n"
-	       "UPPER ALLOCATOR\nTrees:\t%lu\nCores:\t%lu\n allocated: %llu, free: %llu, "
-	       "all: %llu\n",
+	       "UPPER ALLOCATOR\nTrees:\t%lu\nCores:\t%lu\n allocated: %lu, free: %lu, "
+	       "all: %lu\n",
 	       self->trees_len, self->cores,
 	       llc_frames(self) - llc_free_frames(self), llc_free_frames(self),
 	       llc_frames(self));
@@ -616,7 +612,7 @@ void llc_print(const upper_t *self)
 	printf("\nTreeIDX:\t");
 	for (size_t i = 0; i < self->cores; ++i) {
 		local_t *local = get_local(self, i);
-		printf("%llu\t", tree_from_pfn(local_get_reserved_pfn(local)));
+		printf("%lu\t", tree_from_pfn(local_get_reserved_pfn(local)));
 	}
 	printf("\nFreeFrames:\t");
 	for (size_t i = 0; i < self->cores; ++i) {
