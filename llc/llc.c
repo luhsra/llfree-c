@@ -166,18 +166,18 @@ static result_t reserve_frame(const upper_t *self, local_t *local,
 	if (!atom_update(&local->reserved, old, order, local_dec_counter))
 		return result(ERR_MEMORY);
 
-	size_t idx = old.preferred_index;
+	uint64_t start_pfn = pfn_from_atomic(old.preferred_index);
 
-	result_t res = lower_get(&self->lower, pfn_from_atomic(idx), order);
+	result_t res = lower_get(&self->lower, start_pfn, order);
 	if (result_ok(res)) {
 		// success on reserving tree
 		atom_update(&local->reserved, old,
 			    res.val - self->lower.start_frame_adr,
 			    local_update_last_reserved);
-		return res;
+	} else {
+		// undo dec
+		inc_tree_counter(self, local, start_pfn, order);
 	}
-	// undo dec
-	inc_tree_counter(self, local, pfn_from_atomic(idx), order);
 	return res;
 }
 
@@ -432,9 +432,9 @@ result_t llc_get(const void *this, size_t core, size_t order)
 					    local_unmark_reserving);
 			assert(success);
 		} else {
-                        local_wait_for_completion(local);
-                        res = reserve_frame(self, local, order);
-                }
+			local_wait_for_completion(local);
+			res = reserve_frame(self, local, order);
+		}
 	}
 
 	return res;
