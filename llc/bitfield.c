@@ -18,7 +18,6 @@ static pos_t get_pos(uint64_t index)
 
 void field_init(bitfield_t *self)
 {
-	assert(self != NULL);
 	for (uint64_t i = 0; i < FIELD_N; ++i) {
 		self->rows[i] = 0;
 	}
@@ -53,10 +52,8 @@ static bool find_in_row(uint64_t *row, size_t *pos)
 	return false;
 }
 
-result_t field_set_Bit(bitfield_t *field, const uint64_t pfn)
+result_t field_set_next(bitfield_t *field, const uint64_t pfn)
 {
-	assert(field != NULL);
-
 	uint64_t row = atomic_from_pfn(pfn) % FIELD_N;
 
 	for_offsetted(row, FIELD_N)
@@ -74,7 +71,6 @@ result_t field_set_Bit(bitfield_t *field, const uint64_t pfn)
 
 result_t field_reset_bit(bitfield_t *field, size_t index)
 {
-	assert(field != NULL);
 	assert(0 <= index && index < FIELDSIZE);
 
 	pos_t pos = get_pos(index);
@@ -93,7 +89,6 @@ result_t field_reset_bit(bitfield_t *field, size_t index)
 
 int field_count_bits(bitfield_t *field)
 {
-	assert(field != NULL);
 	int counter = 0;
 	for (size_t i = 0; i < FIELD_N; i++) {
 		uint64_t row = atom_load(&field->rows[i]);
@@ -106,7 +101,6 @@ int field_count_bits(bitfield_t *field)
 
 bool field_is_free(bitfield_t *self, size_t index)
 {
-	assert(self != NULL);
 	assert(0 <= index && index < FIELDSIZE);
 	pos_t pos = get_pos(index);
 
@@ -118,26 +112,9 @@ bool field_is_free(bitfield_t *self, size_t index)
 
 void field_print(bitfield_t *field)
 {
-	assert(field != NULL);
-
 	printf("Field in HEX: MSB to LSB\n");
 	for (size_t i = 0; i < FIELD_N; i++) {
 		uint16_t *s = (uint16_t *)&(field->rows[i]);
 		printf("%04X %04X %04X %04X\n", s[3], s[2], s[1], s[0]);
 	}
-}
-
-// true if both fields are equal or both pointer are NULL;
-bool field_equals(bitfield_t *f1, bitfield_t *f2)
-{
-	if (f1 == NULL && f2 == NULL)
-		return true;
-	if (f1 == NULL || f2 == NULL)
-		return false;
-
-	for (size_t i = 0; i < FIELD_N; i++) {
-		if (f1->rows[i] != f2->rows[i])
-			return false;
-	}
-	return true;
 }

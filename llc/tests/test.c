@@ -10,8 +10,43 @@
 
 #include <stdlib.h>
 
-int main()
+int main(int argc, char** argv)
 {
+        (void)argv;
+        if (argc > 1) {
+                printf("Testing get/put");
+
+                llc_t *llc = llc_default();
+                assert(llc != NULL);
+
+                result_t res = llc_init(llc, 1, 0, 1024, 0, true);
+                assert(result_ok(res));
+
+                printf("get >>>\n");
+                result_t frame1 = llc_get(llc, 0, 0);
+                assert(result_ok(frame1));
+                printf("get <<<\n");
+
+                printf("get >>>\n");
+                result_t frame2 = llc_get(llc, 0, 0);
+                assert(result_ok(frame2));
+                printf("get <<<\n");
+
+                printf("put >>>\n");
+                res = llc_put(llc, 0, frame2.val, 0);
+                assert(result_ok(res));
+                printf("put <<<\n");
+
+                printf("put >>>\n");
+                res = llc_put(llc, 0, frame1.val, 0);
+                assert(result_ok(res));
+                printf("put <<<\n");
+
+                llc_drop(llc);
+
+                return 0;
+        }
+
 	int test_counter = 0;
 	int fail_counter = 0;
 	printf("Running Tests\n");
@@ -50,6 +85,8 @@ int main()
 		printf("----------------FAILED----------------\n");
 	printf("---------------------------------------\n");
 	printf("Failed %d out of %d tests.\n", fail_counter, test_counter);
+
+        return 0;
 }
 
 void *llc_ext_alloc(size_t align, size_t size)

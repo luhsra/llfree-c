@@ -13,7 +13,7 @@ use log::warn;
 use llfree::frame::{PFN, PT_LEN};
 use llfree::thread;
 use llfree::util::{self, WyRand};
-use llfree::{Alloc, AllocExt, Init, LLFree, LLC};
+use llfree::{Alloc, AllocExt, Init, LLC};
 
 /// Benchmarking the allocators against each other.
 #[derive(Parser, Debug)]

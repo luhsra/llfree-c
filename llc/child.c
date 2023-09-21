@@ -2,13 +2,8 @@
 #include "child.h"
 #include "utils.h"
 
-bool child_counter_inc(child_t *self, _void v)
+bool child_counter_inc(child_t *self, _void _unused v)
 {
-	(void)v;
-	assert(self != NULL);
-
-	// If reserved as HP the counter should not be touched
-	// cannot increase the counter over the maximum number of free fields
 	if (self->huge == true || self->counter >= FIELDSIZE)
 		return false;
 
@@ -16,11 +11,8 @@ bool child_counter_inc(child_t *self, _void v)
 	return true;
 }
 
-bool child_counter_dec(child_t *self, _void v)
+bool child_counter_dec(child_t *self, _void _unused v)
 {
-	(void)v;
-	assert(self != NULL);
-	// If reserved as HP the counter an should not be touched
 	if (self->huge || self->counter == 0)
 		return false;
 
@@ -28,12 +20,8 @@ bool child_counter_dec(child_t *self, _void v)
 	return true;
 }
 
-bool child_free_huge(child_t *self, _void v)
+bool child_free_huge(child_t *self, _void _unused v)
 {
-	(void)v;
-	assert(self != NULL);
-
-	// check if child is marked as HP || somehow pages are free
 	if (self->huge == false || self->counter != 0)
 		return false;
 
@@ -41,12 +29,8 @@ bool child_free_huge(child_t *self, _void v)
 	return true;
 }
 
-bool child_reserve_huge(child_t *self, _void v)
+bool child_reserve_huge(child_t *self, _void _unused v)
 {
-	(void)v;
-	assert(self != NULL);
-
-	// check if already reserved as HP or if not all frames are free
 	if (self->huge == true || self->counter != FIELDSIZE)
 		return false;
 

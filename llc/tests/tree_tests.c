@@ -42,29 +42,29 @@ bool reserve_test()
 	tree_t actual = tree_new(7645, false);
 	tree_t expect = tree_new(0, true);
 
-	ret = tree_reserve(&actual, VOID);
-	check(ret, "");
+	ret = tree_reserve(&actual, (range_t){ 0, (1 << TREE_SHIFT) });
+	check(ret);
 	equal_trees(actual, expect);
 
 	// chek min counter value
 	actual = tree_new(0, false);
 	expect = tree_new(0, true);
-	ret = tree_reserve(&actual, VOID);
-	check(ret, "");
+	ret = tree_reserve(&actual, (range_t){ 0, (1 << TREE_SHIFT) });
+	check(ret);
 	equal_trees(actual, expect);
 
 	// if already reserved
 	actual = tree_new(456, true);
 	expect = actual; // no change expected
-	ret = tree_reserve(&actual, VOID);
-	check(!ret, "already reserved");
+	ret = tree_reserve(&actual, (range_t){ 0, (1 << TREE_SHIFT) });
+	check_m(!ret, "already reserved");
 	equal_trees(actual, expect);
 
 	// max counter value
 	actual = tree_new(0x3fff, false);
 	expect = tree_new(0, true);
-	ret = tree_reserve(&actual, VOID);
-	check(ret, "");
+	ret = tree_reserve(&actual, (range_t){ 0, (1 << TREE_SHIFT) });
+	check(ret);
 	equal_trees(actual, expect);
 
 	return success;
@@ -85,7 +85,7 @@ bool unreserve_test()
 	actual = tree_new(counter, true);
 	expect = tree_new(counter + frees, false);
 	ret = tree_writeback(&actual, frees);
-	check(ret, "");
+	check(ret);
 	equal_trees(actual, expect);
 
 	counter = 4532;
@@ -93,30 +93,7 @@ bool unreserve_test()
 	actual = tree_new(counter, true);
 	expect = tree_new(counter + frees, false);
 	ret = tree_writeback(&actual, frees);
-	check(ret, "");
-	equal_trees(actual, expect);
-
-	return success;
-}
-
-bool tree_status_test()
-{
-	bool success = true;
-
-	tree_t actual;
-	tree_t expect;
-	int ret;
-
-	actual = tree_new(1, false);
-	expect = actual; // no change
-	ret = tree_status(actual);
-	check_equal(ret, ALLOCATED);
-	equal_trees(actual, expect);
-
-	actual = tree_new(1, false);
-	expect = actual; // no change
-	ret = tree_status(actual);
-	check_equal(ret, ALLOCATED);
+	check(ret);
 	equal_trees(actual, expect);
 
 	return success;
@@ -137,7 +114,7 @@ bool tree_inc_test()
 	actual = tree_new(counter, false);
 	expect = tree_new(counter + (1 << order), false);
 	ret = tree_counter_inc(&actual, order);
-	check(ret, "");
+	check(ret);
 	equal_trees(actual, expect);
 
 	order = 0;
@@ -145,7 +122,7 @@ bool tree_inc_test()
 	actual = tree_new(counter, false);
 	expect = tree_new(counter + (1 << order), false);
 	ret = tree_counter_inc(&actual, order);
-	check(ret, "");
+	check(ret);
 	equal_trees(actual, expect);
 
 	order = 0;
@@ -154,7 +131,7 @@ bool tree_inc_test()
 	actual = tree_new(counter, true);
 	expect = tree_new(counter + (1 << order), true);
 	ret = tree_counter_inc(&actual, order);
-	check(ret, "");
+	check(ret);
 	equal_trees(actual, expect);
 
 	order = HP_ORDER;
@@ -162,7 +139,7 @@ bool tree_inc_test()
 	actual = tree_new(counter, true);
 	expect = tree_new(counter + (1 << order), true);
 	ret = tree_counter_inc(&actual, order);
-	check(ret, "");
+	check(ret);
 	equal_trees(actual, expect);
 
 	order = HP_ORDER;
@@ -170,7 +147,7 @@ bool tree_inc_test()
 	actual = tree_new(counter, true);
 	expect = tree_new(counter + (1 << order), true);
 	ret = tree_counter_inc(&actual, order);
-	check(ret, "");
+	check(ret);
 	equal_trees(actual, expect);
 
 	return success;
@@ -191,7 +168,7 @@ bool tree_dec_test()
 	actual = tree_new(counter, false);
 	expect = tree_new(counter - (1 << order), false);
 	ret = tree_counter_dec(&actual, order);
-	check(ret, "");
+	check(ret);
 	equal_trees(actual, expect);
 
 	order = 0;
@@ -199,7 +176,7 @@ bool tree_dec_test()
 	actual = tree_new(counter, false);
 	expect = tree_new(counter - (1 << order), false);
 	ret = tree_counter_dec(&actual, order);
-	check(ret, "");
+	check(ret);
 	equal_trees(actual, expect);
 
 	order = 0;
@@ -208,7 +185,7 @@ bool tree_dec_test()
 	actual = tree_new(counter, true);
 	expect = tree_new(counter - (1 << order), true);
 	ret = tree_counter_dec(&actual, order);
-	check(ret, "");
+	check(ret);
 	equal_trees(actual, expect);
 
 	order = HP_ORDER;
@@ -216,7 +193,7 @@ bool tree_dec_test()
 	actual = tree_new(counter, true);
 	expect = tree_new(counter - (1 << order), true);
 	ret = tree_counter_dec(&actual, order);
-	check(ret, "");
+	check(ret);
 	equal_trees(actual, expect);
 
 	order = HP_ORDER;
@@ -224,7 +201,7 @@ bool tree_dec_test()
 	actual = tree_new(counter, true);
 	expect = tree_new(counter - (1 << order), true);
 	ret = tree_counter_dec(&actual, order);
-	check(ret, "");
+	check(ret);
 	equal_trees(actual, expect);
 
 	return success;
@@ -235,7 +212,6 @@ int tree_tests(int *test_counter, int *fail_counter)
 	run_test(init_tree_test);
 	run_test(reserve_test);
 	run_test(unreserve_test);
-	run_test(tree_status_test);
 	run_test(tree_inc_test);
 	run_test(tree_dec_test);
 

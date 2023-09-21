@@ -9,6 +9,8 @@
 #![feature(generic_const_exprs)]
 #![feature(inline_const)]
 #![feature(allocator_api)]
+#![feature(c_size_t)]
+
 // Don't warn for compile-time checks
 #![allow(clippy::assertions_on_constants)]
 #![allow(clippy::redundant_pattern_matching)]
@@ -158,9 +160,37 @@ mod test {
     use crate::Error;
     use crate::{Alloc, AllocExt, Init};
 
-    use super::LLC;
+    use super::*;
 
     type Allocator = LLC;
+
+    #[test]
+    fn minimal() {
+        logging();
+        // 8GiB
+        const MEM_SIZE: usize = 1 << 30;
+        let area = PFN(0)..PFN(MEM_SIZE / Frame::SIZE);
+
+        info!("mmap {MEM_SIZE} bytes at {:?}", area.as_ptr_range());
+
+        let alloc = Allocator::new(1, area.clone(), Init::Volatile, true).unwrap();
+
+        assert_eq!(alloc.free_frames(), alloc.frames());
+
+        warn!("get >>>");
+        let frame1 = alloc.get(0, 0).unwrap();
+        warn!("get <<<");
+        warn!("get >>>");
+        let frame2 = alloc.get(0, 0).unwrap();
+        warn!("get <<<");
+
+        warn!("put >>>");
+        alloc.put(0, frame2, 0).unwrap();
+        warn!("put <<<");
+        warn!("put >>>");
+        alloc.put(0, frame1, 0).unwrap();
+        warn!("put <<<");
+    }
 
     #[test]
     fn simple() {

@@ -1,75 +1,40 @@
 #include "utils.h"
 
-#define TREESIZE (1 << 9 << 5)
-/**
- * the raw value is for atomic access purpose and for alignment
- * the counter and flag tags allow easy access to the components.
- */
 typedef struct tree {
 	uint16_t counter : 15;
 	bool flag : 1;
 } tree_t;
 
-// Saturation level for frames
-typedef enum saturation_level {
-	ALLOCATED, // most of the fames are allocated
-	FREE, // only a few frames are allocated
-	PARTIAL, // anything in between
-} saturation_level_t;
+typedef struct range {
+	uint16_t min, max;
+} range_t;
 
-/**
- * @brief initializes the counter with the given values
- * it does so non-atomicity because at the time of creation there can be no
- * second access
- * @param counter initial counter Value must be < 0x8000 (fit in 15 bit)
- * @param flag initial flag value
- * @return initialized tree
- */
-tree_t tree_new(uint16_t counter, bool flag);
+static const size_t TREESIZE = (1 << 9 << 5);
+static const size_t TREE_LOWER_LIM = 2 << HP_ORDER;
+static const size_t TREE_UPPER_LIM = TREESIZE - (8 << HP_ORDER);
 
-/**
- * @brief atomically increases the counter
- * @param self pointer to the tree
- * @return ERR_OK on success
- *         ERR_RETRY if the atomic access failed
- */
+static const range_t TREE_PARTIAL = { TREE_LOWER_LIM, TREE_UPPER_LIM };
+static const range_t TREE_FREE = { TREE_UPPER_LIM, TREESIZE };
+static const range_t TREE_FULL = { 0, TREE_LOWER_LIM };
+
+/// Create a new tree entry
+static inline _unused tree_t tree_new(uint16_t counter, bool flag)
+{
+	assert(counter <= TREESIZE); // max limit for 15 bit
+	return (tree_t){ counter, flag };
+}
+
+/// Increment the free counter if possible
 bool tree_counter_inc(tree_t *self, size_t order);
 
-/**
- * @brief atomically decreases the counter
- * @param self pointer to the tree
- * @return ERR_OK on success
- *         ERR_RETRY if the atomic access failed
- */
+/// Decrement the free counter if possible
 bool tree_counter_dec(tree_t *self, size_t order);
 
-/**
- * @brief atomically sets counter to 0 and flag as true
- * @param self pointer to the tree
- * @return  counter value on success
- *          ERR_RETRY if the atomic access failed
- *          ERR_ADDRESS if already reserved
- */
-bool tree_reserve(tree_t *self, _void v);
+/// Try reserving the tree if the free counter is withing the range
+bool tree_reserve(tree_t *self, range_t free);
 
-/**
- * @brief adds the given counter to the existing counter and sets the flag to 0
- *
- * @param self pointer to tree
- * @param free_counter counter to add
- * @return ERR_OK on success
- *         ERR_RETRY on atomic operation fail
- */
+/// Adds the given counter to the existing counter and sets the flag to 0
 bool tree_writeback(tree_t *self, uint16_t free_counter);
 
-/**
- * @brief evaluated how many frames are allocates in given tree
- * @param self pointer to the tree
- * @return  ALLOCATED if most of the Frames are allocated or the tree is
- * reserved FREE if most of the Frames are Free PARTIAL for everything in
- * between
- */
-saturation_level_t tree_status(const tree_t self);
-
-// steals the counter of a reserved tree
+// Steals the counter of a reserved tree
 bool tree_steal_counter(tree_t *self, _void v);

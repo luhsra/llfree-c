@@ -35,7 +35,7 @@ impl Alloc for LLC {
             llc_init(
                 self.raw,
                 cores as _,
-                area.start.as_ptr() as _,
+                area.start.0 as _,
                 area.len() as _,
                 init as usize as _,
                 free_all as _,
@@ -78,7 +78,7 @@ impl Alloc for LLC {
             (context.f)(context.ctx, PFN(pfn as usize), free as usize)
         }
         let mut context = Context { f, ctx };
-        unsafe { llc_for_each_HP(self.raw, addr_of_mut!(context).cast(), wrapper) }
+        unsafe { llc_for_each_huge(self.raw, addr_of_mut!(context).cast(), wrapper) }
     }
 }
 
@@ -167,7 +167,7 @@ extern "C" {
         arg: *mut c_void,
     );
 
-    fn llc_for_each_HP(
+    fn llc_for_each_huge(
         this: *const c_void,
         context: *mut c_void,
         f: extern "C" fn(*mut c_void, u64, u64),

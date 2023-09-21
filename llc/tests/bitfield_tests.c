@@ -15,14 +15,14 @@ bool set_Bit_test()
 	bitfield_t expected =
 		(bitfield_t){ { 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 } };
 
-	result_t ret = field_set_Bit(&actual, 0);
+	result_t ret = field_set_next(&actual, 0);
 	check_equal((int)ret.val, 0);
 	check_equal_bitfield_m(actual, expected, "first bit must be set");
 
 	actual = (bitfield_t){ { 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 } };
 	expected = (bitfield_t){ { 0x3, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 } };
 
-	ret = field_set_Bit(&actual, 0);
+	ret = field_set_next(&actual, 0);
 	check_equal((int)ret.val, 1);
 	check_equal_bitfield(actual, expected);
 
@@ -30,7 +30,7 @@ bool set_Bit_test()
 	expected =
 		(bitfield_t){ { u64MAX, 0x1f, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 } };
 
-	ret = field_set_Bit(&actual, 0);
+	ret = field_set_next(&actual, 0);
 	check_equal_m((int)ret.val, 68, "call should be a success");
 	check_equal_bitfield(actual, expected);
 
@@ -41,7 +41,7 @@ bool set_Bit_test()
 		(bitfield_t){ { u64MAX, u64MAX, u64MAX, 0xfabdeadbefffffff, 0x0,
 				0xdeadbeefdeadbeef, 0x0, 0x8000000000000000 } };
 
-	ret = field_set_Bit(&actual, 0);
+	ret = field_set_next(&actual, 0);
 	check_equal_m((int)ret.val, 216, "call should be a success");
 	check_equal_bitfield_m(actual, expected, "row 3 bit 24 -> e to f");
 
@@ -50,7 +50,7 @@ bool set_Bit_test()
 	expected = (bitfield_t){ { u64MAX, u64MAX, u64MAX, u64MAX, u64MAX,
 				   u64MAX, u64MAX, u64MAX } };
 
-	ret = field_set_Bit(&actual, 0);
+	ret = field_set_next(&actual, 0);
 	check_equal_m((int)ret.val, ERR_MEMORY, "call should fail");
 	check_equal_bitfield_m(actual, expected, "no change");
 

@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
 }
 
 struct arg {
-  upper_t *upper;
+  llc_t *upper;
   unsigned core;
   unsigned allocations;
   int64_t *list;
@@ -100,7 +100,7 @@ void *allocHPs(void *a) {
 int alloc_all_as_HP() {
   int64_t len = 1ul << 22;
   int cores = 4;
-  upper_t *upper = llc_default();
+  llc_t *upper = llc_default();
   char* memory = aligned_alloc(PAGESIZE, len * PAGESIZE);
   if(memory == NULL) die("malloc memory");
 
@@ -187,7 +187,7 @@ void *allocRand(void *a) {
 int rand_reg() {
   int64_t len = 1ul << 20;
   unsigned cores = 8;
-  upper_t *upper = llc_default();
+  llc_t *upper = llc_default();
   int64_t ret = llc_init(upper, cores, 0, len, VOLATILE, true);
   if (ret != ERR_OK)
     return 1;
@@ -213,7 +213,7 @@ int rand_reg() {
   }
 
   printf("After random frees are %lu out of %lu HPs are free\n",
-         lower_free_HPs(&upper->lower), len >> HP_ORDER);
+         lower_free_huge(&upper->lower), len >> HP_ORDER);
 
     struct arg args[cores];
     pthread_t threads[cores];
@@ -253,7 +253,7 @@ int rand_reg() {
     // printf("worker did %u allocations\nfalied frees: %u\nfalied allocs:
     // %u\n",
     //        allocation_attempts, failed_frees, failed_allocations);
-    printf("%lu out of %lu HPs are free\n", lower_free_HPs(&upper->lower),
+    printf("%lu out of %lu HPs are free\n", lower_free_huge(&upper->lower),
            len >> HP_ORDER);
   }
   free(statebuf);

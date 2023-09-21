@@ -31,34 +31,33 @@ bool set_preferred_test()
 	local_init(&local);
 	reserved_t old_r;
 
-	check(atom_update(&local.reserved, old_r, VOID, local_mark_reserving),
-	      "");
+	check(atom_update(&local.reserved, old_r, VOID, local_mark_reserving));
 	uint64_t pfn = 45463135;
 	unsigned counter = 1 << 13;
 	bool ret = atom_update(&local.reserved, old_r,
 			       ((reserve_change_t){ pfn, counter }),
-			       local_set_new_reserved_tree);
-	check(ret, "");
+			       local_set_reserved);
+	check(ret);
 
 	reserved_t reserved = atom_load(&local.reserved);
-	check_equal(reserved.preferred_index, atomic_from_pfn(pfn));
+	check_equal(reserved.start_idx, atomic_from_pfn(pfn));
 	check_equal(reserved.free_counter, counter);
-	check(reserved.present, "");
-	check(reserved.reserving, "");
+	check(reserved.present);
+	check(reserved.reserving);
 
 	reserved_t copy = atom_load(&local.reserved);
 	pfn = 454135;
 	counter = 9423;
 	ret = atom_update(&local.reserved, old_r,
 			  ((reserve_change_t){ pfn, counter }),
-			  local_set_new_reserved_tree);
-	check(ret, "");
+			  local_set_reserved);
+	check(ret);
 
 	reserved = atom_load(&local.reserved);
-	check_equal(reserved.preferred_index, atomic_from_pfn(pfn));
+	check_equal(reserved.start_idx, atomic_from_pfn(pfn));
 	check_equal(reserved.free_counter, counter);
-	check(reserved.present, "");
-	check(*((uint64_t *)&old_r) == *((uint64_t *)&copy), "");
+	check(reserved.present);
+	check(*((uint64_t *)&old_r) == *((uint64_t *)&copy));
 
 	return success;
 }

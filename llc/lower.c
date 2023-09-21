@@ -3,14 +3,15 @@
 #include "child.h"
 #include "llc.h"
 #include "utils.h"
+#include <assert.h>
+#include <stdint.h>
 
-void lower_init_default(lower_t *const self, uint64_t start_frame_adr,
-			size_t len, uint8_t init)
+void lower_init(lower_t *const self, uint64_t offset, size_t len, uint8_t init)
 {
-	self->start_frame_adr = start_frame_adr;
-	self->length = len;
+	self->offset = offset;
+	self->frames = len;
 
-	self->childs_len = div_ceil(self->length, FIELDSIZE);
+	self->childs_len = div_ceil(self->frames, FIELDSIZE);
 
 	if (init == VOLATILE) {
 		self->fields = llc_ext_alloc(
@@ -23,57 +24,47 @@ void lower_init_default(lower_t *const self, uint64_t start_frame_adr,
 
 	} else {
 		// Layout in persistent Memory:
-		// |-----------------------------------------------------------------------|
-		// |      Managed Frames     | childs |  bitfields  | (padding) | metadata |
-		// |-----------------------------------------------------------------------|
-		// padding is unused memory of a size smaller than a Frame.
-		// its clippings, because we can not hand out less than a full frame.
+		// |-----------------------+----------+-----------+-----------+----------|
+		// |     Managed Frames    | children | bitfields | (padding) | metadata |
+		// |-----------------------+----------+-----------+-----------+----------|
 
-		uint64_t bytes_for_Bitfields =
-			self->childs_len * sizeof(bitfield_t);
+		uint64_t bitfield_bytes = self->childs_len * sizeof(bitfield_t);
 
-		uint64_t bytes_for_childs = self->childs_len * sizeof(child_t);
+		uint64_t child_bytes = self->childs_len * sizeof(child_t);
 		// round up to get complete cacheline
-		bytes_for_childs =
-			div_ceil(bytes_for_childs, CACHESIZE) * CACHESIZE;
+		child_bytes = div_ceil(child_bytes, CACHESIZE) * CACHESIZE;
 
-		uint64_t bytes_for_meta = CACHESIZE;
-		// round up to get complete cacheline
+		uint64_t meta_bytes = CACHESIZE;
 
-		uint64_t memory_for_control_structures =
-			bytes_for_Bitfields + bytes_for_childs + bytes_for_meta;
+		uint64_t metadata_bytes =
+			bitfield_bytes + child_bytes + meta_bytes;
+		uint64_t metadata_pages = div_ceil(metadata_bytes, PAGESIZE);
 
-		uint64_t pages_needed =
-			div_ceil(memory_for_control_structures, PAGESIZE);
-		assert(pages_needed < self->length);
-		self->length -= pages_needed;
-		self->childs_len = div_ceil(self->length, FIELDSIZE);
+		assert(metadata_pages < self->frames);
 
-		uint64_t start_data =
-			(self->start_frame_adr + self->length * PAGESIZE);
+		self->frames -= metadata_pages;
+		self->childs_len = div_ceil(self->frames, FIELDSIZE);
 
-		self->childs = (_Atomic(child_t) *)start_data;
-		self->fields = (bitfield_t *)(start_data + bytes_for_childs);
+		uint64_t metadata_start =
+			(self->offset + self->frames) * PAGESIZE;
+
+		self->childs = (_Atomic(child_t) *)metadata_start;
+		self->fields = (bitfield_t *)(metadata_start + child_bytes);
 
 		assert((uint64_t)&self->childs[0] % CACHESIZE == 0);
 		assert((uint64_t)&self->fields[0] % CACHESIZE == 0);
 		assert((uint64_t)&self->childs[self->childs_len] <
-		       self->start_frame_adr + len * PAGESIZE);
+		       (self->offset + len) * PAGESIZE);
 		assert((uint64_t)&self->childs[self->childs_len] >
-		       self->start_frame_adr);
+		       self->offset * PAGESIZE);
 		assert((uint64_t)&self->fields[self->childs_len] <
-		       self->start_frame_adr + len * PAGESIZE);
+		       (self->offset + len) * PAGESIZE);
 		assert((uint64_t)&self->fields[self->childs_len] >
-		       self->start_frame_adr);
-
-		//printf("region\tstart\tend\n");
-		//printf("memory\t%lX\t%lX\n", self->start_frame_adr, self->start_frame_adr + len * PAGESIZE);
-		//printf("childs\t%lX\t%lX\n", (uint64_t)&self->childs[0], (uint64_t)&self->childs[self->num_of_childs] + sizeof(child_t));
-		//printf("fields\t%lX\t%lX\n", (uint64_t)&self->fields[0], (uint64_t)&self->fields[self->num_of_childs] + sizeof(bitfield_t));
+		       self->offset * PAGESIZE);
 	}
 }
 
-result_t lower_init(lower_t const *const self, bool all_free)
+result_t lower_clear(lower_t *self, bool all_free)
 {
 	assert(self != NULL);
 
@@ -87,7 +78,7 @@ result_t lower_init(lower_t const *const self, bool all_free)
 	}
 
 	uint64_t last_child_idx = self->childs_len - 1;
-	uint64_t rest_frames = self->length % FIELDSIZE;
+	uint64_t rest_frames = self->frames % FIELDSIZE;
 	if (rest_frames == 0)
 		rest_frames = FIELDSIZE;
 
@@ -132,7 +123,7 @@ result_t lower_recover(lower_t *self)
 	return result(ERR_OK);
 }
 
-result_t get_HP(lower_t const *const self, uint64_t pfn)
+static result_t get_huge(lower_t *self, uint64_t pfn)
 {
 	assert(self != 0);
 
@@ -146,44 +137,22 @@ result_t get_HP(lower_t const *const self, uint64_t pfn)
 		child_t old;
 		if (atom_update(&self->childs[current_i], old, VOID,
 				child_reserve_huge)) {
-			return result(pfn_from_child(current_i) +
-				      self->start_frame_adr);
+			return result(pfn_from_child(current_i));
 		}
 	}
 
 	return result(ERR_MEMORY);
 }
 
-/**
- * @brief searches and reserves a frame in Bitfield with with index
- *
- * @param self pointer to lower
- * @param idx index of the Bitfield that is searched
- * @return address of the reserved frame on success
- *         ERR_MEMORY if no free Frame were found
- */
-static int64_t reserve_in_Bitfield(const lower_t *self,
-				   const uint64_t child_idx, const uint64_t pfn)
-{
-	result_t pos = field_set_Bit(&self->fields[child_idx], pfn);
-	if (result_ok(pos)) {
-		// found and reserved a frame
-		return pfn_from_child(child_idx) + pos.val +
-		       self->start_frame_adr;
-	}
-	return ERR_MEMORY;
-}
-
-result_t lower_get(lower_t const *const self, const uint64_t pfn,
-		   const size_t order)
+result_t lower_get(lower_t *self, const uint64_t start_pfn, const size_t order)
 {
 	assert(order == 0 || order == HP_ORDER);
-	assert(pfn < self->length);
+	assert(start_pfn < self->frames);
 
 	if (order == HP_ORDER)
-		return get_HP(self, pfn);
+		return get_huge(self, start_pfn);
 
-	const size_t start_idx = child_from_pfn(pfn);
+	const size_t start_idx = child_from_pfn(start_pfn);
 
 	for_offsetted(start_idx, CHILDS_PER_TREE)
 	{
@@ -193,28 +162,24 @@ result_t lower_get(lower_t const *const self, const uint64_t pfn,
 		child_t old;
 		if (atom_update(&self->childs[current_i], old, VOID,
 				child_counter_dec)) {
-			int64_t pfn_adr =
-				reserve_in_Bitfield(self, current_i, pfn);
+			result_t pos = field_set_next(&self->fields[current_i],
+						      start_pfn);
+			if (!result_ok(pos))
+				return result(ERR_CORRUPTION); // TODO: undo
 
-			assert(pfn_adr >= 0 &&
-			       "because of the counter in child there must "
-			       "always be a frame left");
-			if (pfn_adr == ERR_MEMORY)
-				return result(ERR_CORRUPTION);
-			assert(tree_from_pfn(pfn_adr - self->start_frame_adr) ==
-			       tree_from_pfn(pfn));
-			return result(pfn_adr);
+			return result(pfn_from_child(current_i) + pos.val);
 		}
 	}
 
 	return result(ERR_MEMORY);
 }
 
-void convert_huge_to_regular(_Atomic(child_t) *child, bitfield_t *field)
+static void split_huge(_Atomic(child_t) *child, bitfield_t *field)
 {
 	uint64_t zero = 0;
-	bool success = atom_cmp_exchange(&field->rows[0], &zero, UINT64_MAX);
 
+	// synchronize multiple threads on the first row
+	bool success = atom_cmp_exchange(&field->rows[0], &zero, UINT64_MAX);
 	if (success) {
 		for (size_t i = 1; i < FIELD_N; ++i) {
 			atom_store(&field->rows[i], UINT64_MAX);
@@ -237,50 +202,47 @@ void convert_huge_to_regular(_Atomic(child_t) *child, bitfield_t *field)
 	}
 }
 
-result_t lower_put(lower_t const *const self, uint64_t frame_adr, size_t order)
+result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 {
 	assert(order == 0 || order == HP_ORDER);
-
-	// check if outside of managed space
-	if (frame_adr >= self->start_frame_adr + self->length ||
-	    frame_adr < self->start_frame_adr)
+	if (frame >= self->frames)
 		return result(ERR_ADDRESS);
-	uint64_t frame_number = frame_adr - self->start_frame_adr;
-	const size_t child_index = child_from_pfn(frame_number);
-	_Atomic(child_t) *child = &self->childs[child_index];
-	bitfield_t *field = &self->fields[child_index];
 
-	child_t old;
+	const size_t child_idx = child_from_pfn(frame);
+	_Atomic(child_t) *child = &self->childs[child_idx];
+	bitfield_t *field = &self->fields[child_idx];
+
 	if (order == HP_ORDER) {
-		return atom_update(child, old, VOID, child_free_huge) ?
+		child_t old = child_new(0, true);
+		child_t new = child_new(CHILDSIZE, false);
+		return atom_cmp_exchange(child, &old, new) ?
 			       result(ERR_OK) :
 			       result(ERR_ADDRESS);
 	}
 
-	old = atom_load(child);
+	child_t old = atom_load(child);
 	if (old.huge) {
-		convert_huge_to_regular(child, field);
+		split_huge(child, field);
 	}
 
-	size_t field_index = (frame_number) % FIELDSIZE;
+	size_t field_index = frame % FIELDSIZE;
 	result_t ret = field_reset_bit(field, field_index);
 	if (!result_ok(ret))
 		return ret;
 
 	if (!atom_update(child, old, VOID, child_counter_inc)) {
 		assert(!"should never be possible");
+		return result(ERR_CORRUPTION);
 	}
 
 	return result(ERR_OK);
 }
 
-bool lower_is_free(lower_t const *const self, uint64_t frame, size_t order)
+bool lower_is_free(lower_t *self, uint64_t frame, size_t order)
 {
 	assert(order == 0 || order == HP_ORDER);
-
 	// check if outside of managed space
-	if (frame >= self->start_frame_adr + self->length ||
-	    frame < self->start_frame_adr)
+	if (frame >= self->frames)
 		return false;
 
 	size_t child_index = child_from_pfn(frame);
@@ -299,22 +261,22 @@ bool lower_is_free(lower_t const *const self, uint64_t frame, size_t order)
 	return field_is_free(&self->fields[child_index], field_index);
 }
 
-size_t lower_allocated_frames(lower_t const *const self)
+size_t lower_free_frames(lower_t *self)
 {
-	size_t counter = self->length;
+	size_t counter = 0;
 	for (size_t i = 0; i < self->childs_len; i++) {
 		child_t child = atom_load(&self->childs[i]);
-		counter -= child.counter;
+		counter += child.counter;
 	}
 	return counter;
 };
 
-void lower_print(lower_t const *const self)
+void lower_print(lower_t *self)
 {
 	printf("\n-------------------------------------\nLOWER ALLOCATOR\n"
 	       "childs\n%lu/%lu frames are allocated\n%lu/%lu Huge Frames are "
 	       "free\nChilds:\n",
-	       lower_allocated_frames(self), self->length, lower_free_HPs(self),
+	       lower_free_frames(self), self->frames, lower_free_huge(self),
 	       self->childs_len);
 	if (self->childs_len > 20)
 		printf("There are over 20 Childs. Print will only contain first and last "
@@ -341,12 +303,11 @@ void lower_print(lower_t const *const self)
 	printf("\n");
 }
 
-void lower_drop(lower_t const *const self)
+void lower_drop(lower_t *self)
 {
 	assert(self != NULL);
 	_Atomic(child_t) *start_data =
-		(_Atomic(child_t) *)(self->start_frame_adr +
-				     self->length * PAGESIZE);
+		(void *)((self->offset + self->frames) * PAGESIZE);
 	if (self->childs != start_data) {
 		llc_ext_free(CACHESIZE, sizeof(child_t) * self->childs_len,
 			     self->childs);
@@ -355,7 +316,7 @@ void lower_drop(lower_t const *const self)
 	}
 }
 
-size_t lower_free_HPs(lower_t const *const self)
+size_t lower_free_huge(lower_t *self)
 {
 	size_t count = 0;
 	for (size_t i = 0; i < self->childs_len; ++i) {
@@ -369,10 +330,8 @@ size_t lower_free_HPs(lower_t const *const self)
 void lower_for_each_child(const lower_t *self, void *context,
 			  void f(void *, uint64_t, uint64_t))
 {
-	uint64_t pfn = self->start_frame_adr;
 	for (uint64_t i = 0; i < self->childs_len; ++i) {
 		child_t child = atom_load(&self->childs[i]);
-		pfn += 512;
-		f(context, pfn, child.counter);
+		f(context, self->offset + i * (1 << HP_ORDER), child.counter);
 	}
 }

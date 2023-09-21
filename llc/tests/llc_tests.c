@@ -7,100 +7,37 @@
 #include "pthread.h"
 #include "utils.h"
 
+#include <stddef.h>
 #include <stdlib.h>
 
-void print_trees(upper_t *self)
+void print_trees(llc_t *self)
 {
-	printf("TREES:\nIDX\tFlag\tCounter\n");
+	printf("trees:\ti\tflag\tcounter\n");
 	for (size_t i = 0; i < self->trees_len; ++i) {
 		tree_t _unused tree = atom_load(&self->trees[i]);
-		info("%lu\t%d\t%X\n", i, tree.flag, tree.counter);
+		info("\t%lu\t%d\t%X\n", i, tree.flag, tree.counter);
 	}
 }
 
-bool general_function_test()
-{
-	bool success = true;
-
-	upper_t *upper = (upper_t *)llc_default();
-	result_t ret = llc_init(upper, 4, 0, 132000, 0, true);
-	check(result_ok(ret), "init is success");
-	check(upper->trees_len == 9, "");
-	check(upper->cores == 4, "");
-	check(llc_frames(upper) == 132000, "");
-	check(llc_free_frames(upper) == 132000, "right number of free frames");
-
-	//check allignment
-	check((uint64_t)upper->trees % CACHESIZE == 0, "Alignment of trees");
-	for (unsigned i = 0; i < upper->cores; ++i) {
-		check_equal_m((uint64_t)&upper->local[i] % CACHESIZE, 0ul,
-			      "Alignment of local");
-	}
-
-	info("Before get");
-
-	result_t frame = llc_get(upper, 0, 0);
-	check(result_ok(frame), "reservation must be success");
-
-	check(llc_frames(upper) == 132000, "");
-	check(llc_free_frames(upper) == 131999, "right number of free frames");
-
-	info("After get mit core 0\n");
-
-	ret = llc_put(upper, 0, frame.val, 0);
-
-	check(result_ok(ret), "successfully free");
-	check(llc_free_frames(upper) == 132000, "right number of free frames");
-
-	last_free_t lf = atom_load(&upper->local->last_free);
-	check_equal(lf.last_tree, atomic_from_pfn(frame.val));
-
-	// reserve all frames in first tree
-	for (int i = 0; i < TREESIZE; ++i) {
-		ret = llc_get(upper, 0, 0);
-		check(result_ok(ret), "");
-	}
-
-	check(result_ok(ret), "");
-
-	// reserve first frame in new tree
-	ret = llc_get(upper, 0, 0);
-	check(result_ok(ret), "");
-	reserved_t reserved = atom_load(&upper->local[0].reserved);
-	check(reserved.preferred_index = atomic_from_pfn(TREESIZE),
-	      "second tree must be allocated");
-
-	uint64_t free_frames = llc_free_frames(upper);
-	// reserve and free a HugeFrame
-	frame = llc_get(upper, 0, HP_ORDER);
-	check(result_ok(frame), "");
-	check_equal(llc_free_frames(upper), free_frames - FIELDSIZE);
-	check(result_ok(llc_put(upper, 0, frame.val, HP_ORDER)), "");
-	check_equal(llc_free_frames(upper), free_frames);
-
-	llc_drop(upper);
-	return success;
-}
-
-bool check_init(upper_t *upper, size_t cores, uint64_t start_frame_adr,
+bool check_init(llc_t *upper, size_t cores, uint64_t start_frame_adr,
 		size_t len, uint8_t init, uint8_t free_all)
 {
 	bool success = true;
-	result_t ret =
-		llc_init(upper, cores, start_frame_adr, len, init, free_all);
+	result_t ret = llc_init(upper, cores, start_frame_adr / PAGESIZE, len,
+				init, free_all);
 	size_t num_trees = div_ceil(len, TREESIZE);
 	size_t num_childs = div_ceil(len, CHILDSIZE);
 	check_equal((uint64_t)upper->trees % CACHESIZE, 0ull);
 
-	check(result_ok(ret), "init is success");
+	check_m(result_ok(ret), "init is success");
 	check_equal(upper->trees_len, num_trees);
 	check_equal(upper->lower.childs_len, num_childs);
-	check_equal(upper->lower.start_frame_adr, start_frame_adr);
+	check_equal(upper->lower.offset, start_frame_adr);
 	check_equal(upper->cores, (cores > num_trees ? num_trees : cores));
 	check_equal(llc_frames(upper), len);
 	check_equal(llc_free_frames(upper), free_all ? len : 0);
 	reserved_t reserved = atom_load(&upper->local[0].reserved);
-	check(!reserved.present, "");
+	check(!reserved.present);
 
 	return success;
 }
@@ -109,8 +46,8 @@ bool init_llc_test()
 {
 	int success = true;
 
-	upper_t *upper = llc_default();
-	check(upper != NULL, "default init must reserve memory");
+	llc_t *upper = llc_default();
+	check_m(upper != NULL, "default init must reserve memory");
 
 	if (!check_init(upper, 4, 0, 1 << 20, VOLATILE, true)) {
 		success = false;
@@ -120,46 +57,110 @@ bool init_llc_test()
 	return success;
 }
 
+bool general_function_test()
+{
+	bool success = true;
+
+	llc_t *upper = (llc_t *)llc_default();
+	result_t ret = llc_init(upper, 4, 0, 132000, VOLATILE, true);
+	check_m(result_ok(ret), "init is success");
+	check(upper->trees_len == 9);
+	check(upper->cores == 4);
+	check(llc_frames(upper) == 132000);
+	check_m(llc_free_frames(upper) == 132000,
+		"right number of free frames");
+
+	//check allignment
+	check_m((uint64_t)upper->trees % CACHESIZE == 0, "Alignment of trees");
+	for (unsigned i = 0; i < upper->cores; ++i) {
+		check_equal_m((uint64_t)&upper->local[i] % CACHESIZE, 0ul,
+			      "Alignment of local");
+	}
+
+	info("Before get");
+
+	result_t frame = llc_get(upper, 0, 0);
+	check_m(result_ok(frame), "reservation must be success");
+
+	check(llc_frames(upper) == 132000);
+	check_m(llc_free_frames(upper) == 131999,
+		"right number of free frames");
+
+	info("After get mit core 0\n");
+
+	ret = llc_put(upper, 0, frame.val, 0);
+
+	check_m(result_ok(ret), "successfully free");
+	check_m(llc_free_frames(upper) == 132000,
+		"right number of free frames");
+
+	last_free_t lf = atom_load(&upper->local->last_free);
+	check_equal(lf.last_tree, atomic_from_pfn(frame.val));
+
+	// reserve all frames in first tree
+	for (size_t i = 0; i < TREESIZE; ++i) {
+		ret = llc_get(upper, 0, 0);
+		check(result_ok(ret));
+	}
+
+	// reserve first frame in new tree
+	ret = llc_get(upper, 0, 0);
+	check(result_ok(ret));
+	reserved_t reserved = atom_load(&upper->local[0].reserved);
+	check_m(reserved.start_idx = atomic_from_pfn(TREESIZE),
+		"second tree must be allocated");
+
+	uint64_t free_frames = llc_free_frames(upper);
+	// reserve and free a HugeFrame
+	frame = llc_get(upper, 0, HP_ORDER);
+	check(result_ok(frame));
+	check_equal(llc_free_frames(upper), free_frames - FIELDSIZE);
+	check(result_ok(llc_put(upper, 0, frame.val, HP_ORDER)));
+	check_equal(llc_free_frames(upper), free_frames);
+
+	llc_drop(upper);
+	return success;
+}
+
 bool test_put()
 {
 	bool success = true;
-	upper_t *upper = (upper_t *)llc_default();
+	llc_t *upper = (llc_t *)llc_default();
 	result_t ret = llc_init(upper, 4, 0, TREESIZE << 4, VOLATILE, true);
 	assert(result_ok(ret));
 
 	int64_t reservedByCore1[TREESIZE + 5];
 
 	// reserve more frames than one tree
-	for (int i = 0; i < TREESIZE + 5; ++i) {
+	for (size_t i = 0; i < TREESIZE + 5; ++i) {
 		ret = llc_get(upper, 1, 0);
-		check(result_ok(ret), "");
+		check(result_ok(ret));
 		reservedByCore1[i] = ret.val;
 	}
 
 	check_equal(tree_from_pfn(reservedByCore1[0]),
 		    tree_from_pfn(reservedByCore1[TREESIZE - 1]));
 	check(tree_from_pfn(reservedByCore1[0]) !=
-		      tree_from_pfn(reservedByCore1[TREESIZE]),
-	      "");
+	      tree_from_pfn(reservedByCore1[TREESIZE]));
 
 	result_t ret2 = llc_get(upper, 2, 0);
-	assert(result_ok(ret2));
-	check(tree_from_pfn(ret2.val) !=
-		      tree_from_pfn(reservedByCore1[TREESIZE]),
-	      "second get must be in different tree");
+	check(result_ok(ret2));
+	check_m(tree_from_pfn(ret2.val) !=
+			tree_from_pfn(reservedByCore1[TREESIZE]),
+		"second get must be in different tree");
 
 	if (!success)
 		llc_print(upper);
 
 	// free half the frames from old tree with core 2
-	for (int i = 0; i < TREESIZE / 2; ++i) {
+	for (size_t i = 0; i < TREESIZE / 2; ++i) {
 		ret = llc_put(upper, 2, reservedByCore1[i], 0);
-		check(result_ok(ret), "");
+		check(result_ok(ret));
 	}
 
 	// core 2 must have now this first tree reserved
 	reserved_t reserved = atom_load(&upper->local[2].reserved);
-	check_equal(tree_from_atomic(reserved.preferred_index),
+	check_equal(tree_from_atomic(reserved.start_idx),
 		    (uint64_t)tree_from_pfn(reservedByCore1[0]));
 	if (!success)
 		llc_print(upper);
@@ -167,13 +168,13 @@ bool test_put()
 	return success;
 }
 
-bool llc_allocAll()
+bool llc_alloc_all()
 {
 	const uint64_t MEMORYSIZE = (1ul << 30); // 8GiB
 	const uint64_t LENGTH = (MEMORYSIZE / FRAME_SIZE);
 	const int CORES = 8;
 	int success = true;
-	upper_t *upper = llc_default();
+	llc_t *upper = llc_default();
 	result_t ret = llc_init(upper, CORES, 1024, LENGTH, 0, true);
 	assert(result_ok(ret));
 
@@ -182,7 +183,8 @@ bool llc_allocAll()
 
 	for (size_t i = 0; i < LENGTH; ++i) {
 		result_t ret = llc_get(upper, i % CORES, 0);
-		check(result_ok(ret), "must be able to alloc the whole memory");
+		check_m(result_ok(ret),
+			"must be able to alloc the whole memory");
 		if (!result_ok(ret)) {
 			llc_print(upper);
 			break;
@@ -190,7 +192,6 @@ bool llc_allocAll()
 		pfns[i] = ret.val;
 	}
 	check_equal(llc_free_frames(upper), 0ul);
-	check_equal(lower_allocated_frames(&upper->lower), llc_frames(upper));
 
 	return success;
 }
@@ -207,7 +208,7 @@ struct ret {
 	size_t amount_ENOMEM;
 };
 
-upper_t *upper;
+llc_t *upper;
 
 static int64_t contains(int64_t *sorted_list, size_t len, int64_t item)
 {
@@ -231,7 +232,7 @@ static int comp(const void *a, const void *b)
 	return *x - *y;
 }
 
-static void *allocFrames(void *arg)
+static void *alloc_frames(void *arg)
 {
 	struct arg *args = arg;
 
@@ -279,13 +280,13 @@ bool multithreaded_alloc()
 	assert(memory != NULL);
 
 	upper = llc_default();
-	assert(result_ok(llc_init(upper, CORES, (uint64_t)memory, LENGTH,
-				  OVERWRITE, true)));
+	assert(result_ok(llc_init(upper, CORES, (uint64_t)memory / PAGESIZE,
+				  LENGTH, OVERWRITE, true)));
 	pthread_t threads[CORES];
 	struct arg args[CORES];
 	for (int i = 0; i < CORES; ++i) {
 		args[i] = (struct arg){ i, 0, (TREESIZE + 500), 40000 };
-		assert(pthread_create(&threads[i], NULL, allocFrames,
+		assert(pthread_create(&threads[i], NULL, alloc_frames,
 				      &args[i]) == 0);
 	}
 
@@ -311,15 +312,15 @@ bool multithreaded_alloc()
 				int64_t frame = rets[core]->pfns[idx];
 				int64_t same = contains(rets[i]->pfns,
 							rets[i]->sp, frame);
-				if (same >= 0) {
-					success = false;
-					printf("\tFound duplicate reserved Frame\n both core %lu and %lu "
-					       "reserved frame %ld in tree %lu\n",
-					       core, i, frame,
-					       tree_from_pfn(frame));
-					// leave all loops
-					goto end;
-				}
+				if (same <= 0)
+					continue;
+
+				success = false;
+				printf("\tFound duplicate reserved Frame\n both core %lu and %lu "
+				       "reserved frame %ld in tree %lu\n",
+				       core, i, frame, tree_from_pfn(frame));
+				// leave all loops
+				goto end;
 			}
 		}
 	}
@@ -343,7 +344,7 @@ int llc_tests(int *test_counter, int *fail_counter)
 	run_test(init_llc_test);
 	run_test(general_function_test);
 	run_test(test_put);
-	run_test(llc_allocAll);
+	run_test(llc_alloc_all);
 	run_test(multithreaded_alloc);
 	return 0;
 }

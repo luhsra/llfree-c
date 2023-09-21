@@ -30,6 +30,7 @@ static const size_t MIN_PAGES = 1ul << MAX_ORDER;
 static const size_t MAX_PAGES = 1ul << (64 - FRAME_BITS);
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) > (b) ? (b) : (a))
 
 static inline _unused size_t div_ceil(uint64_t a, int b)
 {
@@ -70,7 +71,7 @@ static inline _unused void spin_wait()
 #elif defined(__aarch64__) || defined(_M_ARM64)
 	asm("isb" ::);
 #else
-#error "Unknown architecture"
+#error Unknown architecture
 #endif
 }
 
@@ -153,40 +154,30 @@ static const int ATOM_STORE_ORDER = memory_order_release;
 	     _i < (len);                                          \
 	     _i = _i + 1, current_i = _base_idx + ((_i + _offset) % (len)))
 
-/**
- * @brief compare and swap wrapper for structs with a atomic 16 or 64 Bit raw
- * member
- * @param obj pointer to struct with atomic raw member.
- * @param expect pointer to struct with matching raw member
- * @param desire struct with matching raw member
- * @return ERR_OK on success
- *         ERR_RETRY of atomic operation failed
- */
-#define atom_cas(obj, expect, desire)                                          \
-	({                                                                     \
-		int _ret = ERR_RETRY;                                          \
-		if (atomic_compare_exchange_weak_explicit(                     \
-			    &(obj)->raw,                                       \
-			    (_Generic(((obj)->raw),                            \
-			    uint16_t: (uint16_t *)&(expect)->raw,              \
-			    default: (uint64_t *)&(expect)->raw)),             \
-			    (desire).raw, ATOM_UPDATE_ORDER, ATOM_LOAD_ORDER)) \
-			_ret = ERR_OK;                                         \
-		_ret;                                                          \
+/// Checks if `obj` contains `expected` and writes `disired` to it if so.
+#define atom_cmp_exchange(obj, expected, desired)                          \
+	({                                                                 \
+		debug("cmpxchg");                                          \
+		atomic_compare_exchange_strong_explicit((obj), (expected), \
+							(desired),         \
+							ATOM_UPDATE_ORDER, \
+							ATOM_LOAD_ORDER);  \
 	})
-
-#define atom_cmp_exchange(obj, expected, desired)                             \
-	atomic_compare_exchange_strong_explicit((obj), (expected), (desired), \
-						ATOM_UPDATE_ORDER,            \
-						ATOM_LOAD_ORDER)
 
 /**
  * @brief wrapper for atomic load
  *
  */
-#define atom_load(obj) atomic_load_explicit(obj, ATOM_LOAD_ORDER)
-#define atom_store(obj, val) atomic_store_explicit(obj, val, ATOM_STORE_ORDER)
-
+#define atom_load(obj)                                      \
+	({                                                  \
+		debug("load");                              \
+		atomic_load_explicit(obj, ATOM_LOAD_ORDER); \
+	})
+#define atom_store(obj, val)                                       \
+	({                                                         \
+		debug("store");                                    \
+		atomic_store_explicit(obj, val, ATOM_STORE_ORDER); \
+	})
 /// Atomic fetch-modify-update macro.
 ///
 /// This macro loads the value at `atom_ptr`, stores its result in `old_val`
@@ -212,6 +203,7 @@ static const int ATOM_STORE_ORDER = memory_order_release;
 /// ```
 #define atom_update(atom_ptr, old_val, ctx, fn)                              \
 	({                                                                   \
+		debug("update");                                             \
 		bool _ret = false;                                           \
 		(old_val) = atomic_load_explicit(atom_ptr, ATOM_LOAD_ORDER); \
 		while (true) {                                               \
@@ -248,9 +240,9 @@ typedef struct {
 		result_ok(_ret);                                      \
 	})
 
-#define verbose
+#define VERBOSE
 
-#ifdef verbose
+#ifdef VERBOSE
 #define info(str, ...)                                                \
 	printf("\x1b[90m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
 	       ##__VA_ARGS__)
@@ -261,3 +253,11 @@ typedef struct {
 #define warn(str, ...)                                                \
 	printf("\x1b[93m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
 	       ##__VA_ARGS__)
+
+#ifdef DEBUG
+#define debug(str, ...)                                               \
+	printf("\x1b[90m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
+	       ##__VA_ARGS__)
+#else
+#define debug(str, ...)
+#endif
