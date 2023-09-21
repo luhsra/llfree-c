@@ -54,7 +54,7 @@ static bool find_in_row(uint64_t *row, size_t *pos)
 
 result_t field_set_next(bitfield_t *field, const uint64_t pfn)
 {
-	uint64_t row = atomic_from_pfn(pfn) % FIELD_N;
+	uint64_t row = row_from_pfn(pfn) % FIELD_N;
 
 	for_offsetted(row, FIELD_N)
 	{

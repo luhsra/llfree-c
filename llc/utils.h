@@ -124,11 +124,11 @@ enum {
 #define child_from_pfn(_N) ((_N) >> CHILD_SHIFT)
 #define pfn_from_child(_N) ((_N) << CHILD_SHIFT)
 
-#define atomic_from_pfn(_N) ((_N) >> ATOMIC_SHIFT)
-#define pfn_from_atomic(_N) ((_N) << ATOMIC_SHIFT)
+#define row_from_pfn(_N) ((_N) >> ATOMIC_SHIFT)
+#define pfn_from_row(_N) ((_N) << ATOMIC_SHIFT)
 
-// #define tree_from_atomic(_N) ((_N) >> (TREE_SHIFT - ATOMIC_SHIFT))
-#define tree_from_atomic(_N) tree_from_pfn(pfn_from_atomic(_N))
+// #define tree_from_row(_N) ((_N) >> (TREE_SHIFT - ATOMIC_SHIFT))
+#define tree_from_row(_N) tree_from_pfn(pfn_from_row(_N))
 
 // Maximum amount of retry if a atomic operation has failed
 static const size_t MAX_ATOMIC_RETRY = 5;

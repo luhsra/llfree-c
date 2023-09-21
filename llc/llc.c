@@ -37,7 +37,7 @@ static size_t inc_tree_counter(llc_t *self, local_t *const local,
 				    order, tree_counter_inc);
 		assert(success);
 	}
-	return tree_from_atomic(old.start_idx);
+	return tree_from_row(old.start_idx);
 }
 
 /**
@@ -53,7 +53,7 @@ static bool sync_with_global(llc_t *self, local_t *const local)
 	assert(local != NULL);
 	// get Index of reserved Tree
 	reserved_t reserved = atom_load(&local->reserved);
-	const size_t tree_idx = tree_from_atomic(reserved.start_idx);
+	const size_t tree_idx = tree_from_row(reserved.start_idx);
 
 	// get counter value from reserved Tree and set available Frames to 0
 	tree_t old_tree;
@@ -69,7 +69,7 @@ static bool sync_with_global(llc_t *self, local_t *const local)
 	reserved_t old = atom_load(&local->reserved);
 	while (true) {
 		// check if treeIdx is still the reserved Tree
-		if (tree_from_atomic(old.start_idx) != tree_idx) {
+		if (tree_from_row(old.start_idx) != tree_idx) {
 			// the tree we stole from is no longer the reserved tree -> writeback
 			// counter to global
 			bool _unused ret = atom_update(&self->trees[tree_idx],
@@ -145,7 +145,7 @@ static result_t reserve_tree(llc_t *self, local_t *local, uint64_t tree_idx,
 	// writeback the old counter to trees
 	if (old_r.present) {
 		_Atomic(tree_t) *tree =
-			&self->trees[tree_from_atomic(old_r.start_idx)];
+			&self->trees[tree_from_row(old_r.start_idx)];
 		success = atom_update(tree, old_tree, old_r.free_counter,
 				      tree_writeback);
 		assert(success);
@@ -159,13 +159,13 @@ static result_t alloc_frame(llc_t *self, local_t *local, uint64_t order)
 	if (!atom_update(&local->reserved, old, order, local_dec_counter))
 		return result(ERR_MEMORY);
 
-	uint64_t start_pfn = pfn_from_atomic(old.start_idx);
+	uint64_t start_pfn = pfn_from_row(old.start_idx);
 
 	result_t res = lower_get(&self->lower, start_pfn, order);
 	if (result_ok(res)) {
 		// save pfn only if necessary
 		if ((1 << order) < ATOMICSIZE &&
-		    old.start_idx != atomic_from_pfn(res.val)) {
+		    old.start_idx != row_from_pfn(res.val)) {
 			atom_update(&local->reserved, old, res.val,
 				    local_reserve_index);
 		}
@@ -201,7 +201,7 @@ static result_t reserve_and_get(llc_t *self, local_t *local, uint64_t core,
 	reserved_t reserved = atom_load(&local->reserved);
 	uint64_t start_idx;
 	if (reserved.present) {
-		start_idx = tree_from_atomic(reserved.start_idx);
+		start_idx = tree_from_row(reserved.start_idx);
 	} else {
 		start_idx =
 			self->trees_len / self->cores * (core % self->cores);
@@ -269,7 +269,7 @@ static result_t reserve_and_get(llc_t *self, local_t *local, uint64_t core,
 			local_steal(&self->local[idx], &other_reserved));
 		if (ret != ERR_OK)
 			continue;
-		uint64_t tree_idx = tree_from_atomic(other_reserved.start_idx);
+		uint64_t tree_idx = tree_from_row(other_reserved.start_idx);
 
 		tree_t old;
 		bool _unused success = atom_update(&self->trees[tree_idx], old,
@@ -277,14 +277,14 @@ static result_t reserve_and_get(llc_t *self, local_t *local, uint64_t core,
 		assert(success);
 		reserved_t old_reservation;
 		reserve_change_t change = {
-			pfn_from_atomic(other_reserved.start_idx),
+			pfn_from_row(other_reserved.start_idx),
 			old.counter + other_reserved.free_counter
 		};
 		ret = atom_update(&local->reserved, old_reservation, change,
 				  local_set_reserved);
 
 		if (old_reservation.present) {
-			atom_update(&self->trees[tree_from_atomic(
+			atom_update(&self->trees[tree_from_row(
 					    old_reservation.start_idx)],
 				    old, old_reservation.free_counter,
 				    tree_writeback);
@@ -295,18 +295,6 @@ static result_t reserve_and_get(llc_t *self, local_t *local, uint64_t core,
 			return res;
 	}
 	return result(ERR_MEMORY);
-}
-
-/// Creates the allocator and returns a pointer to its data that is passed
-/// into all other functions
-void *llc_default()
-{
-	llc_t *upper = llc_ext_alloc(CACHESIZE, sizeof(llc_t));
-	assert(upper != NULL);
-	upper->local = NULL;
-	upper->meta = NULL;
-	upper->trees = NULL;
-	return upper;
 }
 
 /// Initializes the allocator for the given memory region, returning 0 on
@@ -329,10 +317,9 @@ result_t llc_init(llc_t *self, size_t cores, uint64_t offset, size_t len,
 	if (init == VOLATILE) {
 		self->meta = NULL;
 	} else {
-		const uint64_t end_managed_memory = (offset + len) * PAGESIZE;
-		self->meta = (struct meta *)(end_managed_memory -
-					     sizeof(struct meta));
 		len -= 1;
+		uint64_t last_page = (offset + len) * PAGESIZE;
+		self->meta = (struct meta *)last_page;
 	}
 
 	lower_init(&self->lower, offset, len, init);
@@ -575,7 +562,7 @@ void llc_print(llc_t *self)
 	printf("\nTreeIDX:\t");
 	for (size_t i = 0; i < self->cores; ++i) {
 		reserved_t reserved = atom_load(&get_local(self, i)->reserved);
-		printf("%lu\t", tree_from_atomic(reserved.start_idx));
+		printf("%lu\t", tree_from_row(reserved.start_idx));
 	}
 	printf("\nFreeFrames:\t");
 	for (size_t i = 0; i < self->cores; ++i) {

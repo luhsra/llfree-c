@@ -95,7 +95,7 @@ bool general_function_test()
 		"right number of free frames");
 
 	last_free_t lf = atom_load(&upper->local->last_free);
-	check_equal(lf.last_tree, atomic_from_pfn(frame.val));
+	check_equal(lf.last_row, row_from_pfn(frame.val));
 
 	// reserve all frames in first tree
 	for (size_t i = 0; i < TREESIZE; ++i) {
@@ -107,7 +107,7 @@ bool general_function_test()
 	ret = llc_get(upper, 0, 0);
 	check(result_ok(ret));
 	reserved_t reserved = atom_load(&upper->local[0].reserved);
-	check_m(reserved.start_idx = atomic_from_pfn(TREESIZE),
+	check_m(reserved.start_idx = row_from_pfn(TREESIZE),
 		"second tree must be allocated");
 
 	uint64_t free_frames = llc_free_frames(upper);
@@ -160,7 +160,7 @@ bool test_put()
 
 	// core 2 must have now this first tree reserved
 	reserved_t reserved = atom_load(&upper->local[2].reserved);
-	check_equal(tree_from_atomic(reserved.start_idx),
+	check_equal(tree_from_row(reserved.start_idx),
 		    (uint64_t)tree_from_pfn(reservedByCore1[0]));
 	if (!success)
 		llc_print(upper);

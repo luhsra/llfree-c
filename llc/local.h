@@ -16,7 +16,7 @@ typedef struct reserved {
 // stores information about the last free
 typedef struct last_free {
 	uint16_t free_counter : 2; // counter of concurrent free in same tree
-	uint64_t last_tree : 62; // atomic index of last tree where a frame was freed
+	uint64_t last_row : 62; // atomic index of last tree where a frame was freed
 } last_free_t;
 
 /**
@@ -33,43 +33,21 @@ typedef struct reserve_change {
 	size_t counter;
 } reserve_change_t;
 
-/**
- * @brief atomically sets the preferred tree to given tree
- * @param self pointer to local object
- * @param pfn pfn of new tree
- * @param free_count count of free Frames
- * @param old_reservation the old reservation
- * @return ERR_RETRY if atomic operation fails
- *         ERR_OK on success
- */
+/// Changes the preferred tree (and free counter) to a new one
 bool local_set_reserved(reserved_t *self, reserve_change_t tree);
 
-// init with no tree reserved
+/// Initialize the per-cpu data
 void local_init(local_t *self);
 
-// set the flag for searching and returns previous status to check if the reservation_in_progress-flag was already set
+/// set the flag for searching and returns previous status to check if the reservation_in_progress-flag was already set
 bool local_mark_reserving(reserved_t *self, _void v);
-// reset the flag for searching
+/// reset the flag for searching
 bool local_unmark_reserving(reserved_t *self, _void v);
 
-/**
- * @brief increases the free counter if tree of frame matches the reserved tree
- *
- * @param self pointer to local data
- * @param frame to determine the tree
- * @param order order of returned frame to calculate the amount of returned regular frames
- * @return int ERR_OK in success
- *         ERR_ADDRESS if trees not match
- *         ERR_RETRY on atomic operation fail
- */
-bool local_inc_counter(reserved_t *self, reserve_change_t);
+/// Increases the free counter if tree of frame matches the reserved tree
+bool local_inc_counter(reserved_t *self, reserve_change_t change);
 
-/**
- * @brief decrements the free counter by 2^order
- * returns ERR_OK on success
- * ERR_RETRY on atomic operation fail
- * ERR_MEMORY if counter value was not high enough
- */
+/// Decrements the  free counter
 bool local_dec_counter(reserved_t *self, size_t order);
 
 // resets the reserved tree and returns the old reservation

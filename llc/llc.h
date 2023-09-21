@@ -14,10 +14,6 @@ typedef struct llc {
 	size_t trees_len;
 } llc_t;
 
-/// Creates the allocator and returns a pointer to its data that is passed into
-/// all other functions
-void *llc_default();
-
 /// Allocate and initialize the data structures of the allocator.
 ///
 /// `offset` is the number of the first page to be managed and `len` determins

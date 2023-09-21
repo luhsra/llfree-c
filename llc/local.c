@@ -27,7 +27,7 @@ bool local_set_reserved(reserved_t *reserved, reserve_change_t tree)
 	assert(reserved != NULL);
 	assert(tree.counter <= TREESIZE);
 
-	const size_t idx = atomic_from_pfn(tree.pfn);
+	const size_t idx = row_from_pfn(tree.pfn);
 
 	*reserved = (reserved_t){ .free_counter = tree.counter,
 				  .start_idx = idx,
@@ -42,7 +42,7 @@ bool local_reserve_index(reserved_t *self, size_t pfn)
 	if (self->reserving) {
 		return false;
 	}
-	self->start_idx = atomic_from_pfn(pfn);
+	self->start_idx = row_from_pfn(pfn);
 	return true;
 }
 
@@ -71,7 +71,7 @@ bool local_inc_counter(reserved_t *self, reserve_change_t change)
 	const size_t tree_idx = tree_from_pfn(change.pfn);
 
 	// check if reserved tree is a match for given pfn
-	if (!self->present || tree_from_atomic(self->start_idx) != tree_idx)
+	if (!self->present || tree_from_row(self->start_idx) != tree_idx)
 		return false;
 
 	// check if counter has enough space
@@ -96,8 +96,8 @@ bool local_inc_last_free(last_free_t *self, uint64_t tree)
 	assert(self != NULL);
 
 	// if last free was in another tree -> overwrite last reserved Index
-	if (self->last_tree != tree) {
-		self->last_tree = tree;
+	if (self->last_row != tree) {
+		self->last_row = tree;
 		self->free_counter = 0;
 	} else if (self->free_counter < 3) {
 		// if the same tree -> increase the counter for this

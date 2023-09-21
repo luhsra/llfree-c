@@ -1,15 +1,15 @@
-use crate::frame::PFNRange;
-use crate::{Error, Result, PFN};
-use core::ffi::{c_char, CStr};
+use core::ffi::{c_char, c_size_t, c_void, CStr};
 use core::fmt;
+use core::mem::align_of;
 use core::ops::Range;
 use core::ptr::addr_of_mut;
 
 use alloc::alloc::{alloc, dealloc, Layout};
 
 use super::{Alloc, Init};
-
-use core::ffi::{c_size_t, c_void};
+use crate::frame::PFNRange;
+use crate::util::Align;
+use crate::{Error, Result, PFN};
 
 /// C implementation of LLFree
 ///
@@ -26,14 +26,20 @@ unsafe impl Send for LLC {}
 unsafe impl Sync for LLC {}
 
 impl Alloc for LLC {
-    fn name(&self) -> &'static str {
+    fn name() -> &'static str {
         "LLC"
     }
 
-    fn init(&mut self, cores: usize, area: Range<PFN>, init: Init, free_all: bool) -> Result<()> {
+    fn new(cores: usize, area: Range<PFN>, init: Init, free_all: bool) -> Result<Self> {
+        // WARN: Assumes that the state is smaller than two cache lines!
+        let raw = unsafe {
+            alloc(Layout::from_size_align(2 * align_of::<Align>(), align_of::<Align>()).unwrap())
+                .cast()
+        };
+
         let ret = unsafe {
             llc_init(
-                self.raw,
+                raw,
                 cores as _,
                 area.start.0 as _,
                 area.len() as _,
@@ -41,7 +47,7 @@ impl Alloc for LLC {
                 free_all as _,
             )
         };
-        to_result(ret).map(|_| ())
+        to_result(ret).map(|_| LLC { raw })
     }
 
     fn get(&self, core: usize, order: usize) -> Result<PFN> {
@@ -104,14 +110,6 @@ fn to_result(code: i64) -> Result<u64> {
     }
 }
 
-impl Default for LLC {
-    fn default() -> Self {
-        Self {
-            raw: unsafe { llc_default() },
-        }
-    }
-}
-
 impl fmt::Debug for LLC {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // wrapper function that is called by the c implementation
@@ -129,9 +127,6 @@ impl fmt::Debug for LLC {
 
 #[link(name = "llc", kind = "static")]
 extern "C" {
-    /// Creates the allocator and returns a pointer to its data that is passed into all other functions
-    fn llc_default() -> *mut c_void;
-
     /// Initializes the allocator for the given memory region, returning 0 on success or a negative error code
     fn llc_init(
         this: *mut c_void,
@@ -187,11 +182,13 @@ pub extern "C" fn llc_ext_free(align: c_size_t, size: c_size_t, addr: *mut c_voi
 
 #[cfg(test)]
 mod test {
+    use crate::{frame::PFN, Alloc, Init};
+
     use super::LLC;
 
     #[test]
     fn test_debug() {
-        let alloc = LLC::default();
+        let alloc = LLC::new(1, PFN(0)..PFN(128), Init::Volatile, true).unwrap();
         println!("{alloc:?}");
     }
 }

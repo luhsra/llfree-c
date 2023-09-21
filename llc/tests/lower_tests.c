@@ -388,7 +388,7 @@ int lower_huge_tests()
 	assert(!result_ok(lower_put(&actual, regular.val, HP_ORDER)));
 
 	//this HF must be in another child than the regular frame.
-	result_t pfn3 = lower_get(&actual, pfn_from_atomic(10), HP_ORDER);
+	result_t pfn3 = lower_get(&actual, pfn_from_row(10), HP_ORDER);
 	check(result_ok(pfn3));
 	offset = pfn3.val % FIELDSIZE;
 	check_equal(offset, 0ul);

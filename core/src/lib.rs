@@ -10,7 +10,6 @@
 #![feature(inline_const)]
 #![feature(allocator_api)]
 #![feature(c_size_t)]
-
 // Don't warn for compile-time checks
 #![allow(clippy::assertions_on_constants)]
 #![allow(clippy::redundant_pattern_matching)]
@@ -69,16 +68,16 @@ pub type Result<T> = core::result::Result<T, Error>;
 pub const CAS_RETRIES: usize = 4;
 
 /// The general interface of the allocator implementations.
-pub trait Alloc: Sync + Send + fmt::Debug {
+pub trait Alloc: Sized + Sync + Send + fmt::Debug {
     /// Return the name of the allocator.
     #[cold]
-    fn name(&self) -> &'static str {
+    fn name() -> &'static str {
         "Unknown"
     }
 
     /// Initialize the allocator.
     #[cold]
-    fn init(&mut self, cores: usize, area: Range<PFN>, init: Init, free_all: bool) -> Result<()>;
+    fn new(cores: usize, area: Range<PFN>, init: Init, free_all: bool) -> Result<Self>;
 
     /// Allocate a new frame of `order` on the given `core`.
     fn get(&self, core: usize, order: usize) -> Result<PFN>;
@@ -108,6 +107,14 @@ pub trait Alloc: Sync + Send + fmt::Debug {
     /// Execute f for each huge frame with the number of free frames
     /// in this huge frame as parameter.
     fn for_each_huge_frame(&self, _ctx: *mut c_void, _f: fn(*mut c_void, PFN, usize)) {}
+
+    /// Calls f for every huge page
+    fn each_huge_frame<F: FnMut(PFN, usize)>(&self, mut f: F) {
+        self.for_each_huge_frame((&mut f) as *mut F as *mut c_void, |ctx, pfn, free| {
+            let f = unsafe { &mut *ctx.cast::<F>() };
+            f(pfn, free)
+        })
+    }
 }
 
 /// Defines if the allocator should be allocated persistently
@@ -121,26 +128,6 @@ pub enum Init {
     /// Overwrite the persistent memory
     Overwrite,
 }
-
-/// Extending the dynamic [Alloc] interface
-pub trait AllocExt: Sized + Alloc + Default {
-    /// Create and initialize the allocator.
-    #[cold]
-    fn new(cores: usize, area: Range<PFN>, init: Init, free_all: bool) -> Result<Self> {
-        let mut a = Self::default();
-        a.init(cores, area, init, free_all)?;
-        Ok(a)
-    }
-    /// Calls f for every huge page
-    fn each_huge_frame<F: FnMut(PFN, usize)>(&self, mut f: F) {
-        self.for_each_huge_frame((&mut f) as *mut F as *mut c_void, |ctx, pfn, free| {
-            let f = unsafe { &mut *ctx.cast::<F>() };
-            f(pfn, free)
-        })
-    }
-}
-// Implement for all default initializable allocators
-impl<A: Sized + Alloc + Default> AllocExt for A {}
 
 #[cfg(all(test, feature = "std"))]
 mod test {
@@ -158,7 +145,7 @@ mod test {
     use crate::thread;
     use crate::util::{logging, WyRand};
     use crate::Error;
-    use crate::{Alloc, AllocExt, Init};
+    use crate::{Alloc, Init};
 
     use super::*;
 
@@ -778,8 +765,7 @@ mod test {
             std::mem::forget(alloc);
         }
 
-        let mut alloc = Allocator::default();
-        alloc.init(1, area, Init::Recover, true).unwrap();
+        let alloc = Allocator::new(1, area, Init::Recover, true).unwrap();
         assert_eq!(alloc.allocated_frames(), expected_frames);
     }
 
