@@ -178,6 +178,13 @@ static const int ATOM_STORE_ORDER = memory_order_release;
 		debug("store");                                    \
 		atomic_store_explicit(obj, val, ATOM_STORE_ORDER); \
 	})
+
+#define atom_and(obj, mask)                                              \
+	({                                                               \
+		debug("and");                                            \
+		atomic_fetch_and_explicit(obj, mask, ATOM_UPDATE_ORDER); \
+	})
+
 /// Atomic fetch-modify-update macro.
 ///
 /// This macro loads the value at `atom_ptr`, stores its result in `old_val`
@@ -240,7 +247,7 @@ typedef struct {
 		result_ok(_ret);                                      \
 	})
 
-#define VERBOSE
+// #define VERBOSE
 
 #ifdef VERBOSE
 #define info(str, ...)                                                \
@@ -253,6 +260,8 @@ typedef struct {
 #define warn(str, ...)                                                \
 	printf("\x1b[93m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
 	       ##__VA_ARGS__)
+
+// #define DEBUG
 
 #ifdef DEBUG
 #define debug(str, ...)                                               \

@@ -131,6 +131,7 @@ static result_t get_huge(lower_t *self, uint64_t pfn)
 
 	for_offsetted(idx, CHILDS_PER_TREE)
 	{
+		// TODO: just allocate a multiple of N childs so that we do not have to check this
 		if (current_i >= self->childs_len)
 			continue;
 
@@ -214,7 +215,7 @@ result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 
 	if (order == HP_ORDER) {
 		child_t old = child_new(0, true);
-		child_t new = child_new(CHILDSIZE, false);
+		child_t new = child_new(FIELDSIZE, false);
 		return atom_cmp_exchange(child, &old, new) ?
 			       result(ERR_OK) :
 			       result(ERR_ADDRESS);

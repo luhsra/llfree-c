@@ -75,7 +75,7 @@ bool local_inc_counter(reserved_t *self, reserve_change_t change)
 		return false;
 
 	// check if counter has enough space
-	assert(self->free_counter <= TREESIZE - change.counter);
+	assert(self->free_counter + change.counter <= TREESIZE);
 	self->free_counter += change.counter;
 	return true;
 }

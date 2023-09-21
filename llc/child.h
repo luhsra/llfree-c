@@ -23,8 +23,5 @@ bool child_counter_inc(child_t *self, _void v);
 /// Decrement the free counter if possible
 bool child_counter_dec(child_t *self, _void v);
 
-/// Reserve the entry as huge page if possible
-bool child_free_huge(child_t *self, _void v);
-
 /// Free the entry as huge page if possible
 bool child_reserve_huge(child_t *self, _void v);

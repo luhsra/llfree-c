@@ -64,6 +64,16 @@ bool set_preferred_test()
 
 int local_tests(int *test_counter, int *fail_counter)
 {
+	assert(({
+		_Atomic reserved_t v;
+		atomic_is_lock_free(&v);
+	}));
+
+	assert(({
+		_Atomic last_free_t v;
+		atomic_is_lock_free(&v);
+	}));
+
 	run_test(init_local_test);
 	run_test(set_preferred_test);
 	return 0;

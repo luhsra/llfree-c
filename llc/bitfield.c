@@ -78,7 +78,7 @@ result_t field_reset_bit(bitfield_t *field, size_t index)
 	// 11...101...11 -> zero at the bit-position
 	uint64_t mask = ~(1ull << pos.bit_index);
 
-	uint64_t before = atomic_fetch_and(&field->rows[pos.row_index], mask);
+	uint64_t before = atom_and(&field->rows[pos.row_index], mask);
 
 	if ((before & mask) == before) { // bit were already reset
 		return result(ERR_ADDRESS);

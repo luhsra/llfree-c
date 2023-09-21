@@ -8,54 +8,6 @@
 	check_equal(actual.counter, expect.counter); \
 	check_equal(actual.flag, expect.flag);
 
-bool reserve_HP_test()
-{
-	bool success = true;
-	bool ret = false;
-	check_m(sizeof(child_t) == 2, "right child size");
-
-	child_t actual = child_new(512, false);
-	child_t expect = child_new(0, true);
-	ret = child_reserve_huge(&actual, VOID);
-	check(ret);
-	check_equal(actual.counter, expect.counter);
-	check_equal(actual.huge, expect.huge);
-
-	actual = child_new(0, true);
-	ret = child_reserve_huge(&actual, VOID);
-	check_m(!ret, "already huge");
-
-	actual = child_new(320, false);
-	ret = child_reserve_huge(&actual, VOID);
-	check_m(!ret, "must fail if some frame are allocated");
-
-	return success;
-}
-
-bool free_HP_test()
-{
-	bool success = true;
-	bool ret = false;
-
-	child_t actual = child_new(0, true);
-	child_t expect = child_new(FIELDSIZE, false);
-
-	ret = child_free_huge(&actual, VOID);
-	check(ret);
-	check_equal(actual.counter, expect.counter);
-	check_equal(actual.huge, expect.huge);
-
-	actual = child_new(0, false);
-	ret = child_free_huge(&actual, VOID);
-	check_m(!ret, "must fail if already reset");
-
-	actual = child_new(320, true);
-	ret = child_free_huge(&actual, VOID);
-	check_m(!ret, "should not be possible to have a flag with a counter > 0");
-
-	return success;
-}
-
 bool child_counter_inc_test()
 {
 	bool success = true;
@@ -124,8 +76,6 @@ int child_tests(int *test_counter, int *fail_counter)
 		atomic_is_lock_free(&v);
 	}));
 
-	run_test(reserve_HP_test);
-	run_test(free_HP_test);
 	run_test(child_counter_inc_test);
 	run_test(child_counter_dec_test);
 

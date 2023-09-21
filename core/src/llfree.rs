@@ -298,8 +298,7 @@ impl Alloc for LLFree {
             let mut v = v.inc(num_frames, max)?;
             if !v.reserved() && v.free() > Trees::<{ Lower::N }>::MIN_FREE && local.frees_in_tree(i)
             {
-                // put-reserve optimization:
-                // Reserve the tree that was targeted by the recent frees
+                // Reserve the tree that was targeted by the last N frees
                 v = v.with_free(0).with_reserved(true);
                 reserved = true;
             }

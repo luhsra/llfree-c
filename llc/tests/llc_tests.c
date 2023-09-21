@@ -46,7 +46,7 @@ bool init_llc_test()
 {
 	int success = true;
 
-	llc_t *upper = llc_default();
+	llc_t *upper = llc_ext_alloc(CACHESIZE, sizeof(llc_t));
 	check_m(upper != NULL, "default init must reserve memory");
 
 	if (!check_init(upper, 4, 0, 1 << 20, VOLATILE, true)) {
@@ -61,7 +61,7 @@ bool general_function_test()
 {
 	bool success = true;
 
-	llc_t *upper = (llc_t *)llc_default();
+	llc_t *upper = llc_ext_alloc(CACHESIZE, sizeof(llc_t));
 	result_t ret = llc_init(upper, 4, 0, 132000, VOLATILE, true);
 	check_m(result_ok(ret), "init is success");
 	check(upper->trees_len == 9);
@@ -125,7 +125,7 @@ bool general_function_test()
 bool test_put()
 {
 	bool success = true;
-	llc_t *upper = (llc_t *)llc_default();
+	llc_t *upper = (llc_t *)llc_ext_alloc(CACHESIZE, sizeof(llc_t));
 	result_t ret = llc_init(upper, 4, 0, TREESIZE << 4, VOLATILE, true);
 	assert(result_ok(ret));
 
@@ -174,7 +174,7 @@ bool llc_alloc_all()
 	const uint64_t LENGTH = (MEMORYSIZE / FRAME_SIZE);
 	const int CORES = 8;
 	int success = true;
-	llc_t *upper = llc_default();
+	llc_t *upper = llc_ext_alloc(CACHESIZE, sizeof(llc_t));
 	result_t ret = llc_init(upper, CORES, 1024, LENGTH, 0, true);
 	assert(result_ok(ret));
 
@@ -279,7 +279,7 @@ bool multithreaded_alloc()
 	char *memory = aligned_alloc(1 << HP_ORDER, LENGTH << 12);
 	assert(memory != NULL);
 
-	upper = llc_default();
+	upper = llc_ext_alloc(CACHESIZE, sizeof(llc_t));
 	assert(result_ok(llc_init(upper, CORES, (uint64_t)memory / PAGESIZE,
 				  LENGTH, OVERWRITE, true)));
 	pthread_t threads[CORES];

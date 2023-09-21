@@ -209,6 +209,11 @@ bool tree_dec_test()
 
 int tree_tests(int *test_counter, int *fail_counter)
 {
+	assert(({
+		_Atomic tree_t v;
+		atomic_is_lock_free(&v);
+	}));
+
 	run_test(init_tree_test);
 	run_test(reserve_test);
 	run_test(unreserve_test);
