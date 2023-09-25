@@ -6,16 +6,18 @@
 #include "utils.h"
 #include <assert.h>
 
-// magic number to determine on recover if a allocator was previously
-// initialized
+/// magic number to determine on recover if a allocator was previously
+/// initialized
 #define MAGIC 0xC0FFEE
 
 struct meta {
-	uint32_t magic; // used to check if the allocator was previously initializes
-	bool crashed; // used to check if last shutdown was a crash
+        /// Marker to find the parsistent state
+	uint32_t magic;
+        /// If it has crashed
+	bool crashed;
 };
 
-// returns pointer to local data of given core
+/// returns pointer to local data of given core
 #define get_local(_self, _core) ({ &_self->local[_core % _self->cores]; })
 
 /**
@@ -51,6 +53,7 @@ static bool sync_with_global(llc_t *self, local_t *const local)
 {
 	assert(self != NULL);
 	assert(local != NULL);
+
 	// get Index of reserved Tree
 	reserved_t reserved = atom_load(&local->reserved);
 	const size_t tree_idx = tree_from_row(reserved.start_idx);
@@ -260,13 +263,15 @@ static result_t reserve_and_get(llc_t *self, local_t *local, uint64_t core,
 	if (res.val != ERR_MEMORY)
 		return res;
 
-	// drain other cores for a tree //TODO make nicer
+	// drain other cores for a tree
 	uint64_t local_idx = core % self->cores;
 	reserved_t other_reserved;
 	for (uint64_t i = 1; i < self->cores; ++i) {
 		const uint64_t idx = (local_idx + i) % self->cores;
+
 		int64_t ret = try_update(
 			local_steal(&self->local[idx], &other_reserved));
+
 		if (ret != ERR_OK)
 			continue;
 		uint64_t tree_idx = tree_from_row(other_reserved.start_idx);

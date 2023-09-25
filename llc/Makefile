@@ -13,12 +13,12 @@ endif
 
 # Library name, sources, and build directory
 BUILDDIR ?= build
-LIBNAME = libllc.a
+LIB = $(BUILDDIR)/libllc.a
 SRCS = $(wildcard *.c)
 OBJS = $(addprefix $(BUILDDIR)/,$(SRCS:.c=.o))
 
 # Default target
-all: $(BUILDDIR)/$(LIBNAME)
+all: $(LIB)
 
 # Rule to create the build directory
 $(BUILDDIR):
@@ -29,55 +29,47 @@ $(BUILDDIR)/%.o: %.c | $(BUILDDIR)
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
 # Rule to create the static library
-$(BUILDDIR)/$(LIBNAME): $(OBJS)
+$(LIB): $(OBJS)
 	$(AR) rcs $@ $(OBJS)
 
 # Clean target
 clean:
 	rm -rf $(BUILDDIR)
 
-TESTSRCS = $(wildcard tests/*.c)
-TESTOBJS = $(addprefix $(BUILDDIR)/,$(TESTSRCS:.c=.o))
-TESTDIR = tests
 
-$(TESTDIR): $(BUILDDIR)
+# --- Tests ---
+
+TESTDIR = tests
+TESTSRCS = $(wildcard $(TESTDIR)/*.c)
+TESTOBJS = $(addprefix $(BUILDDIR)/,$(TESTSRCS:.c=.o))
+
+$(BUILDDIR)/$(TESTDIR): $(BUILDDIR)
 	mkdir -p $(BUILDDIR)/$(TESTDIR)
 
-
-$(BUILDDIR)/tests/%.o: tests/%.c | $(BUILDDIR)
-	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
-
-
-test_build: $(TESTDIR) $(OBJS) $(TESTOBJS)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(TESTOBJS) -o $(BUILDDIR)/$(TESTDIR)/run_tests
+test_build: $(BUILDDIR)/$(TESTDIR) $(LIB) $(TESTOBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(TESTOBJS) $(LIB) -o $(BUILDDIR)/$(TESTDIR)/tests
 
 test: test_build
-	./$(BUILDDIR)/$(TESTDIR)/run_tests
-
-debug: test_build
-	gdb ./$(BUILDDIR)/$(TESTDIR)/run_tests
+	./$(BUILDDIR)/$(TESTDIR)/tests
 
 
-BENCHSRCS = $(wildcard bench/*.c)
-BENCHOBJS = $(addprefix $(BUILDDIR)/,$(BENCHSRCS:.c=.o))
+# --- Bench ---
+
 BENCHDIR = bench
+BENCHSRCS = $(wildcard $(BENCHDIR)/*.c)
+BENCHOBJS = $(addprefix $(BUILDDIR)/,$(BENCHSRCS:.c=.o))
+T ?= rand
 
-$(BENCHDIR): $(BUILDDIR)
+$(BUILDDIR)/$(BENCHDIR): $(BUILDDIR)
 	mkdir -p $(BUILDDIR)/$(BENCHDIR)
 
-$(BUILDDIR)/bench/%.o: bench/%.c | $(BENCHDIR)
-	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
+bench_build: $(BUILDDIR)/$(BENCHDIR) $(LIB) $(BENCHOBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(BENCHOBJS) $(LIB) -o $(BUILDDIR)/$(BENCHDIR)/bench
 
-benchmark_build: $(BENCHDIR) $(OBJS) $(BENCHOBJS)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(BENCHOBJS) -o $(BUILDDIR)/$(BENCHDIR)/benchmark
+bench: bench_build
+	./$(BUILDDIR)/$(BENCHDIR)/bench $(T)
 
-benchmark: benchmark_build
-	./$(BUILDDIR)/$(BENCHDIR)/benchmark rand
 
-flamegraph:
-	perf record -F 99 -a -g build/bench/benchmark allHP_MC
-	perf script | ../../FlameGraph/stackcollapse-perf.pl > out.perf-folded
-	../../FlameGraph/flamegraph.pl out.perf-folded > perf.svg
 .PHONY: all clean test debug
 
 ALL_OBJS = $(OBJS) $(TESTOBJS) $(BENCHOBJS)

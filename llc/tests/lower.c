@@ -1,5 +1,3 @@
-#include "lower_tests.h"
-
 #include "lower.h"
 #include "bitfield.h"
 #include "lower.h"
@@ -133,7 +131,7 @@ bool init_lower_test(uint8_t init)
 	return success;
 }
 
-bool get_test()
+declare_test(lower_get)
 {
 	bool success = true;
 
@@ -221,7 +219,7 @@ bool get_test()
 	return success;
 }
 
-bool put_test()
+declare_test(lower_put)
 {
 	bool success = true;
 
@@ -319,7 +317,7 @@ bool put_test()
 	return success;
 }
 
-bool is_free_test()
+declare_test(lower_is_free)
 {
 	bool success = true;
 
@@ -361,7 +359,7 @@ bool is_free_test()
 	return success;
 }
 
-int lower_huge_tests()
+declare_test(lower_huge)
 {
 	bool success = true;
 
@@ -434,17 +432,17 @@ int lower_huge_tests()
 	return success;
 }
 
-int init_persistent_test()
+declare_test(lower_init_persistent)
 {
 	return init_lower_test(OVERWRITE);
 }
 
-int init_volatile_test()
+declare_test(lower_init_volatile)
 {
 	return init_lower_test(VOLATILE);
 }
 
-int free_all_test()
+declare_test(lower_free_all)
 {
 	bool success = true;
 	const uint64_t len = (1 << 13) + 35; //16 HP + 35 regular frames
@@ -483,7 +481,7 @@ int free_all_test()
 	return success;
 }
 
-bool persistent_init()
+declare_test(lower_peristent_init)
 {
 	bool success = true;
 	uint64_t len = (16ul << 30) / PAGESIZE; //16 GiB
@@ -510,24 +508,4 @@ bool persistent_init()
 	result_t ret = lower_clear(&lower, true);
 	check(result_ok(ret));
 	return success;
-}
-
-//runns all tests an returns the number of failed Tests
-int lower_tests(int *test_counter, int *fail_counter)
-{
-	bitfield_t field[3] = { 0 };
-	uint64_t *words = (uint64_t *)&field[0];
-	for (int i = 0; i < 18; ++i) {
-		words[i] = i;
-	}
-
-	run_test(init_volatile_test);
-	run_test(init_persistent_test);
-	run_test(get_test);
-	run_test(put_test);
-	run_test(is_free_test);
-	run_test(lower_huge_tests);
-	run_test(free_all_test);
-	run_test(persistent_init);
-	return 0;
 }

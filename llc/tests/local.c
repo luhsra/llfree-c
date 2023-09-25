@@ -1,12 +1,20 @@
-#include "local_tests.h"
-
 #include "check.h"
 #include "local.h"
 #include "utils.h"
 
 #include <stdint.h>
 
-bool init_local_test()
+declare_test(local_atomic)
+{
+	bool success = true;
+	_Atomic(reserved_t) r;
+	_Atomic(last_free_t) l;
+	check(atomic_is_lock_free(&r));
+	check(atomic_is_lock_free(&l));
+	return success;
+}
+
+declare_test(local_init)
 {
 	bool success = true;
 
@@ -24,7 +32,7 @@ bool init_local_test()
 	return success;
 }
 
-bool set_preferred_test()
+declare_test(local_set_preferred)
 {
 	bool success = true;
 	local_t local;
@@ -60,21 +68,4 @@ bool set_preferred_test()
 	check(*((uint64_t *)&old_r) == *((uint64_t *)&copy));
 
 	return success;
-}
-
-int local_tests(int *test_counter, int *fail_counter)
-{
-	assert(({
-		_Atomic reserved_t v;
-		atomic_is_lock_free(&v);
-	}));
-
-	assert(({
-		_Atomic last_free_t v;
-		atomic_is_lock_free(&v);
-	}));
-
-	run_test(init_local_test);
-	run_test(set_preferred_test);
-	return 0;
 }

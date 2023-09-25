@@ -1,4 +1,3 @@
-#include "child_tests.h"
 #include "check.h"
 
 #include "child.h"
@@ -8,7 +7,16 @@
 	check_equal(actual.counter, expect.counter); \
 	check_equal(actual.flag, expect.flag);
 
-bool child_counter_inc_test()
+declare_test(child_atomic) {
+        bool success = true;
+	check(({
+		_Atomic child_t v;
+		atomic_is_lock_free(&v);
+	}));
+        return success;
+}
+
+declare_test(child_counter_inc)
 {
 	bool success = true;
 	bool ret = false;
@@ -39,7 +47,7 @@ bool child_counter_inc_test()
 	return success;
 }
 
-bool child_counter_dec_test()
+declare_test(child_counter_dec)
 {
 	bool success = true;
 	bool ret = false;
@@ -67,17 +75,4 @@ bool child_counter_dec_test()
 	check_m(!ret, "invalid state");
 
 	return success;
-}
-
-int child_tests(int *test_counter, int *fail_counter)
-{
-	assert(({
-		_Atomic child_t v;
-		atomic_is_lock_free(&v);
-	}));
-
-	run_test(child_counter_inc_test);
-	run_test(child_counter_dec_test);
-
-	return 0;
 }

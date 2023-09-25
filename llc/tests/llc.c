@@ -1,5 +1,3 @@
-#include "llc_tests.h"
-
 #include "check.h"
 #include "llc.h"
 #include "local.h"
@@ -42,7 +40,7 @@ bool check_init(llc_t *upper, size_t cores, uint64_t start_frame_adr,
 	return success;
 }
 
-bool init_llc_test()
+declare_test(llc_init)
 {
 	int success = true;
 
@@ -57,7 +55,7 @@ bool init_llc_test()
 	return success;
 }
 
-bool general_function_test()
+declare_test(llc_general_function)
 {
 	bool success = true;
 
@@ -122,7 +120,7 @@ bool general_function_test()
 	return success;
 }
 
-bool test_put()
+declare_test(llc_put)
 {
 	bool success = true;
 	llc_t *upper = (llc_t *)llc_ext_alloc(CACHESIZE, sizeof(llc_t));
@@ -168,7 +166,7 @@ bool test_put()
 	return success;
 }
 
-bool llc_alloc_all()
+declare_test(llc_alloc_all)
 {
 	const uint64_t MEMORYSIZE = (1ul << 30); // 8GiB
 	const uint64_t LENGTH = (MEMORYSIZE / FRAME_SIZE);
@@ -270,7 +268,7 @@ static void *alloc_frames(void *arg)
 	pthread_exit(ret);
 	return NULL;
 }
-bool multithreaded_alloc()
+declare_test(llc_multithreaded_alloc)
 {
 	int success = true;
 
@@ -337,14 +335,4 @@ end:
 	llc_drop(upper);
 	free(memory);
 	return success;
-}
-
-int llc_tests(int *test_counter, int *fail_counter)
-{
-	run_test(init_llc_test);
-	run_test(general_function_test);
-	run_test(test_put);
-	run_test(llc_alloc_all);
-	run_test(multithreaded_alloc);
-	return 0;
 }

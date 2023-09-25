@@ -15,7 +15,7 @@
 	else                       \
 		printf("\t\x1b[92msuccess\x1b[0m\n")
 
-#define check_m(x, msg)                                               \
+#define check_m(x, msg)                                             \
 	if (!(x)) {                                                 \
 		printf("\x1b[91m%s:%d failed", __FILE__, __LINE__); \
 		if (msg && msg[0])                                  \
@@ -81,3 +81,14 @@ static inline _unused bool field_equals(bitfield_t *f1, bitfield_t *f2)
 
 #define check_equal_bitfield(actual, expected) \
 	check_equal_bitfield_m(actual, expected, "")
+
+
+void add_test(char *name, bool (*f)());
+
+#define declare_test(name)                                   \
+	static bool _test_##name(void);                      \
+	__attribute__((constructor)) void _init_##name(void) \
+	{                                                    \
+		add_test(#name, _test_##name);               \
+	}                                                    \
+	static bool _test_##name(void)

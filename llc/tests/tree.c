@@ -1,5 +1,3 @@
-#include "tree_tests.h"
-
 #include "check.h"
 #include "tree.h"
 #include "utils.h"
@@ -8,7 +6,15 @@
 	check_equal(actual.counter, expect.counter); \
 	check_equal(actual.flag, expect.flag)
 
-bool init_tree_test()
+declare_test(tree_atomic)
+{
+	bool success = true;
+	_Atomic tree_t v;
+	check(atomic_is_lock_free(&v));
+	return success;
+}
+
+declare_test(tree_init)
 {
 	int success = true;
 
@@ -34,7 +40,7 @@ bool init_tree_test()
 	return success;
 }
 
-bool reserve_test()
+declare_test(tree_reserve)
 {
 	int success = true;
 	bool ret = false;
@@ -70,7 +76,7 @@ bool reserve_test()
 	return success;
 }
 
-bool unreserve_test()
+declare_test(tree_unreserve)
 {
 	int success = true;
 
@@ -99,7 +105,7 @@ bool unreserve_test()
 	return success;
 }
 
-bool tree_inc_test()
+declare_test(tree_inc)
 {
 	bool success = true;
 
@@ -153,7 +159,7 @@ bool tree_inc_test()
 	return success;
 }
 
-bool tree_dec_test()
+declare_test(tree_dec)
 {
 	bool success = true;
 
@@ -205,20 +211,4 @@ bool tree_dec_test()
 	equal_trees(actual, expect);
 
 	return success;
-}
-
-int tree_tests(int *test_counter, int *fail_counter)
-{
-	assert(({
-		_Atomic tree_t v;
-		atomic_is_lock_free(&v);
-	}));
-
-	run_test(init_tree_test);
-	run_test(reserve_test);
-	run_test(unreserve_test);
-	run_test(tree_inc_test);
-	run_test(tree_dec_test);
-
-	return 0;
 }

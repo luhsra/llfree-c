@@ -5,11 +5,17 @@
 #include "tree.h"
 #include "utils.h"
 
+/// The llc metadata
 typedef struct llc {
+        /// Persistent metadata, used for recovery
 	struct meta *meta;
+        /// Lower allocator
 	lower_t lower;
+        /// Cpu-local data
 	struct local *local;
-	size_t cores; // array_size of local
+        /// Length of local
+	size_t cores;
+        /// Array of tree entries
 	_Atomic(tree_t) *trees;
 	size_t trees_len;
 } llc_t;
@@ -47,13 +53,17 @@ uint64_t llc_free_frames(llc_t *self);
 /// Destructs the allocator
 void llc_drop(llc_t *self);
 
+// == Debugging ==
+
 /// Prints the allocators state for debugging with given Rust printer
 void llc_debug(llc_t *self, void (*writer)(void *, char *), void *arg);
 
 /// Prints detailed stats about the allocator state
 void llc_print(llc_t *self);
 
-/// Calls f for each Huge Frame. f will receive the context the current pfn and the free counter as arguments - used by some rust benchmarks like frag.rs
+/// Calls f for each Huge Frame. f will receive the context the current pfn
+/// and the free counter as arguments
+/// - used by some rust benchmarks like frag.rs
 void llc_for_each_huge(llc_t *self, void *context,
 		       void f(void *, uint64_t, uint64_t));
 

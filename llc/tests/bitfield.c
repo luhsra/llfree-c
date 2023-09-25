@@ -1,12 +1,10 @@
-#include "bitfield_tests.h"
-
 #include "check.h"
 #include "bitfield.h"
 #include "utils.h"
 
 #define u64MAX 0xffffffffffffffff
 
-bool set_Bit_test()
+declare_test(bitfield_set_bit)
 {
 	bool success = true;
 
@@ -57,7 +55,7 @@ bool set_Bit_test()
 	return success;
 }
 
-bool reset_Bit_test()
+declare_test(bitfield_reset_bit)
 {
 	bool success = true;
 
@@ -112,7 +110,7 @@ bool reset_Bit_test()
 	return success;
 }
 
-bool count_Set_Bits_test()
+declare_test(bitfield_count_bits)
 {
 	bool success = true;
 
@@ -155,7 +153,7 @@ bool count_Set_Bits_test()
 	return success;
 }
 
-bool is_free_bit_test()
+declare_test(bitfield_free_bit)
 {
 	bool success = true;
 
@@ -188,13 +186,4 @@ bool is_free_bit_test()
 	check_equal_bitfield_m(actual, expect, "no change!");
 
 	return success;
-}
-
-int bitfield_tests(int *test_counter, int *fail_counter)
-{
-	run_test(set_Bit_test);
-	run_test(reset_Bit_test);
-	run_test(count_Set_Bits_test);
-	run_test(is_free_bit_test);
-	return 0;
 }
