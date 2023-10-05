@@ -1,6 +1,6 @@
 use core::ffi::{c_char, c_size_t, c_void, CStr};
 use core::fmt;
-use core::mem::align_of;
+use core::mem::{align_of, size_of};
 use core::ops::Range;
 use core::ptr::addr_of_mut;
 
@@ -13,13 +13,10 @@ use crate::{Error, Result, PFN};
 
 /// C implementation of LLFree
 ///
-/// Only containts an opaque pointer, that is passed to the C functions.
-///
-/// TODO: As the Alloc trait is already dyn (opaque), we could just use
-/// LLC directly as opaque type, but then default cannot be implemented anymore...
+/// Note: This abstraction assumes that the state is movable and smaller than two cache lines!
 #[repr(transparent)]
 pub struct LLC {
-    raw: *mut c_void,
+    raw: [u8; 2 * align_of::<Align>()],
 }
 
 unsafe impl Send for LLC {}
@@ -31,15 +28,11 @@ impl Alloc for LLC {
     }
 
     fn new(cores: usize, area: Range<PFN>, init: Init, free_all: bool) -> Result<Self> {
-        // WARN: Assumes that the state is smaller than two cache lines!
-        let raw = unsafe {
-            alloc(Layout::from_size_align(2 * align_of::<Align>(), align_of::<Align>()).unwrap())
-                .cast()
-        };
+        let mut raw = [0u8; size_of::<Self>()];
 
         let ret = unsafe {
             llc_init(
-                raw,
+                raw.as_mut_ptr().cast(),
                 cores as _,
                 area.start.0 as _,
                 area.len() as _,
@@ -51,46 +44,53 @@ impl Alloc for LLC {
     }
 
     fn get(&self, core: usize, order: usize) -> Result<PFN> {
-        let ret = unsafe { llc_get(self.raw, core as _, order as _) };
+        let ret = unsafe { llc_get(self.raw.as_ptr().cast(), core as _, order as _) };
         Ok(PFN(to_result(ret)? as _))
     }
 
     fn put(&self, core: usize, frame: PFN, order: usize) -> Result<()> {
-        let ret = unsafe { llc_put(self.raw, core as _, frame.0 as _, order as _) };
+        let ret = unsafe {
+            llc_put(
+                self.raw.as_ptr().cast(),
+                core as _,
+                frame.0 as _,
+                order as _,
+            )
+        };
         to_result(ret).map(|_| ())
     }
 
     fn is_free(&self, frame: PFN, order: usize) -> bool {
-        let ret = unsafe { llc_is_free(self.raw, frame.0 as _, order as _) };
+        let ret = unsafe { llc_is_free(self.raw.as_ptr().cast(), frame.0 as _, order as _) };
         ret != 0
     }
 
     fn frames(&self) -> usize {
-        unsafe { llc_frames(self.raw) as _ }
+        unsafe { llc_frames(self.raw.as_ptr().cast()) as _ }
     }
 
     fn free_frames(&self) -> usize {
-        unsafe { llc_free_frames(self.raw) as _ }
+        unsafe { llc_free_frames(self.raw.as_ptr().cast()) as _ }
     }
 
-    // Optional functions ...
-    fn for_each_huge_frame(&self, ctx: *mut c_void, f: fn(*mut c_void, PFN, usize)) {
-        struct Context {
-            f: fn(*mut c_void, PFN, usize),
-            ctx: *mut c_void,
+    fn for_each_huge_frame<F: FnMut(PFN, usize)>(&self, mut f: F) {
+        extern "C" fn wrapper<F: FnMut(PFN, usize)>(context: *mut c_void, pfn: u64, free: u64) {
+            let f: &mut F = unsafe { &mut *context.cast() };
+            f(PFN(pfn as usize), free as usize)
         }
-        extern "C" fn wrapper(context: *mut c_void, pfn: u64, free: u64) {
-            let context: &Context = unsafe { &*context.cast() };
-            (context.f)(context.ctx, PFN(pfn as usize), free as usize)
+        unsafe {
+            llc_for_each_huge(
+                self.raw.as_ptr().cast(),
+                addr_of_mut!(f).cast(),
+                wrapper::<F>,
+            )
         }
-        let mut context = Context { f, ctx };
-        unsafe { llc_for_each_huge(self.raw, addr_of_mut!(context).cast(), wrapper) }
     }
 }
 
 impl Drop for LLC {
     fn drop(&mut self) {
-        unsafe { llc_drop(self.raw) }
+        unsafe { llc_drop(self.raw.as_mut_ptr().cast()) };
     }
 }
 
@@ -119,7 +119,13 @@ impl fmt::Debug for LLC {
             write!(f, "{}", c_str.to_str().unwrap()).unwrap();
         }
 
-        unsafe { llc_debug(self.raw, writer, (f as *mut fmt::Formatter).cast()) };
+        unsafe {
+            llc_debug(
+                self.raw.as_ptr().cast(),
+                writer,
+                (f as *mut fmt::Formatter).cast(),
+            )
+        };
 
         Ok(())
     }
@@ -188,7 +194,7 @@ mod test {
 
     #[test]
     fn test_debug() {
-        let alloc = LLC::new(1, PFN(0)..PFN(128), Init::Volatile, true).unwrap();
+        let alloc = LLC::new(1, PFN(0)..PFN(512), Init::Volatile, true).unwrap();
         println!("{alloc:?}");
     }
 }

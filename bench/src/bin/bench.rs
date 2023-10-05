@@ -21,39 +21,27 @@ use llfree::{Alloc, Init, LLFree, Result, LLC};
 /// Number of allocations per block
 const RAND_BLOCK_SIZE: usize = 8;
 
+/// Reduced, VTable-compatible alloc trait for dynamic dispatch
 trait DynAlloc: fmt::Debug + Send + Sync {
-    fn name(&self) -> &'static str;
-
     fn get(&self, core: usize, order: usize) -> Result<PFN>;
     fn put(&self, core: usize, frame: PFN, order: usize) -> Result<()>;
-    fn is_free(&self, frame: PFN, order: usize) -> bool;
 
     fn frames(&self) -> usize;
     fn allocated_frames(&self) -> usize;
-    fn free_frames(&self) -> usize;
 }
 
 impl<T: Alloc> DynAlloc for T {
-    fn name(&self) -> &'static str {
-        T::name()
-    }
     fn get(&self, core: usize, order: usize) -> Result<PFN> {
         T::get(self, core, order)
     }
     fn put(&self, core: usize, frame: PFN, order: usize) -> Result<()> {
         T::put(self, core, frame, order)
     }
-    fn is_free(&self, frame: PFN, order: usize) -> bool {
-        T::is_free(self, frame, order)
-    }
     fn frames(&self) -> usize {
         T::frames(self)
     }
     fn allocated_frames(&self) -> usize {
         T::allocated_frames(self)
-    }
-    fn free_frames(&self) -> usize {
-        T::free_frames(self)
     }
 }
 

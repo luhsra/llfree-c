@@ -40,7 +40,6 @@ pub use llc::LLC;
 mod lower;
 mod trees;
 
-use core::ffi::c_void;
 use core::fmt;
 use core::ops::Range;
 
@@ -104,17 +103,9 @@ pub trait Alloc: Sized + Sync + Send + fmt::Debug {
     fn free_huge_frames(&self) -> usize {
         0
     }
-    /// Execute f for each huge frame with the number of free frames
-    /// in this huge frame as parameter.
-    fn for_each_huge_frame(&self, _ctx: *mut c_void, _f: fn(*mut c_void, PFN, usize)) {}
 
     /// Calls f for every huge page
-    fn each_huge_frame<F: FnMut(PFN, usize)>(&self, mut f: F) {
-        self.for_each_huge_frame((&mut f) as *mut F as *mut c_void, |ctx, pfn, free| {
-            let f = unsafe { &mut *ctx.cast::<F>() };
-            f(pfn, free)
-        })
-    }
+    fn for_each_huge_frame<F: FnMut(PFN, usize)>(&self, f: F);
 }
 
 /// Defines if the allocator should be allocated persistently
@@ -466,6 +457,86 @@ mod test {
             },
         );
         warn!("Allocation finished in {}ms", timer.elapsed().as_millis());
+
+        assert_eq!(alloc.allocated_frames(), frames.len());
+        warn!("allocated frames: {}", frames.len());
+
+        // Check that the same frame was not allocated twice
+        frames.sort_unstable();
+        for &[a, b] in frames.array_windows() {
+            assert_ne!(a, b);
+            assert!(area.contains(&a) && area.contains(&b));
+        }
+    }
+
+    #[test]
+    fn alloc_all() {
+        logging();
+
+        const PAGES: usize = 2 * PT_LEN * PT_LEN;
+
+        let area = PFN(0)..PFN(PAGES);
+
+        let alloc = Allocator::new(1, area.clone(), Init::Volatile, true).unwrap();
+
+        // Stress test
+        let mut frames = Vec::new();
+        let timer = Instant::now();
+
+        loop {
+            match alloc.get(0, 0) {
+                Ok(frame) => frames.push(frame),
+                Err(Error::Memory) => break,
+                Err(e) => panic!("{e:?}"),
+            }
+
+        }
+        warn!("Allocation finished in {}ms", timer.elapsed().as_millis());
+        warn!("{alloc:?}");
+
+        assert_eq!(alloc.allocated_frames(), frames.len());
+        warn!("allocated frames: {}", frames.len());
+
+        // Check that the same frame was not allocated twice
+        frames.sort_unstable();
+        for &[a, b] in frames.array_windows() {
+            assert_ne!(a, b);
+            assert!(area.contains(&a) && area.contains(&b));
+        }
+    }
+
+    #[test]
+    fn parallel_alloc_all() {
+        logging();
+
+        const THREADS: usize = 4;
+        const PAGES: usize = 2 * THREADS * PT_LEN * PT_LEN;
+
+        let area = PFN(0)..PFN(PAGES);
+
+        let alloc = Allocator::new(THREADS, area.clone(), Init::Volatile, true).unwrap();
+
+        // Stress test
+        let mut frames = vec![Vec::new(); THREADS];
+        let barrier = Barrier::new(THREADS);
+        let timer = Instant::now();
+
+        thread::parallel(frames.iter_mut().enumerate(), |(t, frames)| {
+            thread::pin(t);
+            barrier.wait();
+
+            loop {
+                match alloc.get(t, 0) {
+                    Ok(frame) => frames.push(frame),
+                    Err(Error::Memory) => break,
+                    Err(e) => panic!("{e:?}"),
+                }
+            }
+        });
+        warn!("Allocation finished in {}ms", timer.elapsed().as_millis());
+        warn!("{alloc:?}");
+
+        let mut frames = frames.into_iter().flatten().collect::<Vec<_>>();
 
         assert_eq!(alloc.allocated_frames(), frames.len());
         warn!("allocated frames: {}", frames.len());

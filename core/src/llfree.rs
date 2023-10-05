@@ -1,6 +1,5 @@
 //! Upper allocator implementation
 
-use core::ffi::c_void;
 use core::fmt;
 use core::hint::spin_loop;
 use core::ops::Range;
@@ -372,8 +371,8 @@ impl Alloc for LLFree {
         counter
     }
 
-    fn for_each_huge_frame(&self, ctx: *mut c_void, f: fn(*mut c_void, PFN, usize)) {
-        self.lower.for_each_huge_frame(|frame, c| f(ctx, frame, c))
+    fn for_each_huge_frame<F: FnMut(PFN, usize)>(&self, f: F) {
+        self.lower.for_each_huge_frame(f)
     }
 }
 

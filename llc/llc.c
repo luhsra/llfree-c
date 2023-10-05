@@ -5,15 +5,16 @@
 #include "lower.h"
 #include "utils.h"
 #include <assert.h>
+#include <stdint.h>
 
 /// magic number to determine on recover if a allocator was previously
 /// initialized
 #define MAGIC 0xC0FFEE
 
 struct meta {
-        /// Marker to find the parsistent state
+	/// Marker to find the parsistent state
 	uint32_t magic;
-        /// If it has crashed
+	/// If it has crashed
 	bool crashed;
 };
 
@@ -308,16 +309,21 @@ result_t llc_init(llc_t *self, size_t cores, uint64_t offset, size_t len,
 		  uint8_t init, uint8_t free_all)
 {
 	assert(self != NULL);
-
-	if (init != VOLATILE && init != OVERWRITE && init != RECOVER)
+	if (init != VOLATILE && init != OVERWRITE && init != RECOVER) {
+		warn("Invalid init mode %d", init);
 		return result(ERR_INITIALIZATION);
+	}
 
 	// check if given memory is enough
-	if (len < MIN_PAGES || len > MAX_PAGES)
+	if (len < MIN_PAGES || len > MAX_PAGES) {
+		warn("Invalid size %lu", len);
 		return result(ERR_INITIALIZATION);
+	}
 	// check on unexpected Memory alignment
-	if ((offset * PAGESIZE) % (1 << MAX_ORDER) != 0)
+	if ((offset * PAGESIZE) % (1 << MAX_ORDER) != 0) {
+		warn("Invalid alignment");
 		return result(ERR_INITIALIZATION);
+	}
 
 	if (init == VOLATILE) {
 		self->meta = NULL;
@@ -329,8 +335,10 @@ result_t llc_init(llc_t *self, size_t cores, uint64_t offset, size_t len,
 
 	lower_init(&self->lower, offset, len, init);
 	if (init == RECOVER) {
-		if (self->meta->magic != MAGIC)
+		if (self->meta->magic != MAGIC) {
+			warn("Invalid magic");
 			return result(ERR_INITIALIZATION);
+		}
 		if (self->meta->crashed)
 			lower_recover(&self->lower);
 	} else {
@@ -459,7 +467,16 @@ uint64_t llc_frames(llc_t *self)
 uint64_t llc_free_frames(llc_t *self)
 {
 	assert(self != NULL);
-	return lower_free_frames(&self->lower);
+	uint64_t free = 0;
+        for (size_t i = 0; i < self->trees_len; i++) {
+                tree_t t = atom_load(&self->trees[i]);
+                free += t.counter;
+        }
+	for (size_t core = 0; core < self->cores; core++) {
+		reserved_t r = atom_load(&get_local(self, core)->reserved);
+		free += r.free_counter;
+	}
+	return free;
 }
 
 uint8_t llc_is_free(llc_t *self, uint64_t frame_adr, size_t order)
@@ -483,7 +500,6 @@ void llc_drop(llc_t *self)
 		llc_ext_free(CACHESIZE, self->cores * sizeof(local_t),
 			     self->local);
 	}
-	llc_ext_free(CACHESIZE, sizeof(llc_t), self);
 }
 
 void llc_for_each_huge(llc_t *self, void *context,
