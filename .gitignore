@@ -1,10 +1,6 @@
-# rust
-/target
-Cargo.lock
-
 # c
-/llc/build
-llc/compile_commands.json
+build
+compile_commands.json
 
 # misc
 .DS_Store
@@ -20,4 +16,3 @@ memfile
 !/results/keep/
 !/results/*.ipynb
 !/results/remote.sh
-
