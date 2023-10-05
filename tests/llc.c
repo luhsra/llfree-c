@@ -68,7 +68,7 @@ declare_test(llc_general_function)
 	check_m(llc_free_frames(upper) == 132000,
 		"right number of free frames");
 
-	//check allignment
+	// check allignment
 	check_m((uint64_t)upper->trees % CACHESIZE == 0, "Alignment of trees");
 	for (unsigned i = 0; i < upper->cores; ++i) {
 		check_equal_m((uint64_t)&upper->local[i] % CACHESIZE, 0ul,

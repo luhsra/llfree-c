@@ -50,34 +50,22 @@ void lower_init(lower_t *const self, uint64_t offset, size_t len, uint8_t init)
 
 		self->childs = (_Atomic(child_t) *)metadata_start;
 		self->fields = (bitfield_t *)(metadata_start + child_bytes);
-
-		assert((uint64_t)&self->childs[0] % CACHESIZE == 0);
-		assert((uint64_t)&self->fields[0] % CACHESIZE == 0);
-		assert((uint64_t)&self->childs[self->childs_len] <
-		       (self->offset + len) * PAGESIZE);
-		assert((uint64_t)&self->childs[self->childs_len] >
-		       self->offset * PAGESIZE);
-		assert((uint64_t)&self->fields[self->childs_len] <
-		       (self->offset + len) * PAGESIZE);
-		assert((uint64_t)&self->fields[self->childs_len] >
-		       self->offset * PAGESIZE);
 	}
 }
 
-result_t lower_clear(lower_t *self, bool all_free)
+void lower_clear(lower_t *self, bool all_free)
 {
 	assert(self != NULL);
 
-	uint64_t *field = (uint64_t *)&self->fields[0];
 	for (size_t i = 0; i < self->childs_len - 1; i++) {
 		self->childs[i] =
 			child_new(all_free ? FIELDSIZE : 0, !all_free);
-		for (uint64_t j = 0; j < 8; ++j) {
-			field[i * 8 + j] = 0;
+		bitfield_t *field = &self->fields[i];
+		for (uint64_t j = 0; j < FIELD_N; ++j) {
+			*((uint64_t *)&field->rows[j]) = 0;
 		}
 	}
 
-	uint64_t last_child_idx = self->childs_len - 1;
 	uint64_t rest_frames = self->frames % FIELDSIZE;
 	if (rest_frames == 0)
 		rest_frames = FIELDSIZE;
@@ -86,22 +74,20 @@ result_t lower_clear(lower_t *self, bool all_free)
 		all_free ? child_new(rest_frames, false) :
 			   child_new(0, rest_frames == FIELDSIZE);
 
+	bitfield_t *field = &self->fields[self->childs_len - 1];
 	uint64_t val = all_free ? 0 : UINT64_MAX;
-	for (uint64_t j = 0; j < 8; ++j) {
+	for (uint64_t j = 0; j < FIELD_N; ++j) {
 		if (rest_frames >= ATOMICSIZE) {
-			field[last_child_idx * 8 + j] = val;
+			*((uint64_t *)&field->rows[j]) = val;
 			rest_frames -= ATOMICSIZE;
-			continue;
-		}
-		if (rest_frames > 0) {
+		} else if (rest_frames > 0) {
 			val = all_free ? UINT64_MAX << rest_frames : UINT64_MAX;
-			field[last_child_idx * 8 + j] = val;
+			*((uint64_t *)&field->rows[j]) = val;
 			rest_frames = 0;
-			continue;
+		} else {
+			*((uint64_t *)&field->rows[j]) = UINT64_MAX;
 		}
-		field[last_child_idx * 8 + j] = UINT64_MAX;
 	}
-	return result(ERR_OK);
 }
 
 result_t lower_recover(lower_t *self)
@@ -123,15 +109,34 @@ result_t lower_recover(lower_t *self)
 	return result(ERR_OK);
 }
 
+static result_t get_max(lower_t *self, uint64_t pfn)
+{
+	assert(self != 0);
+
+	size_t idx = child_from_pfn(pfn) / 2;
+	for_offsetted(idx, CHILDS_PER_TREE / 2)
+	{
+		if (current_i * 2 + 1 >= self->childs_len)
+			continue;
+
+		child_pair_t old;
+		if (atom_update((_Atomic(child_pair_t) *)&self
+					->childs[current_i * 2],
+				old, VOID, child_reserve_max)) {
+			return result(pfn_from_child(current_i * 2));
+		}
+	}
+
+	return result(ERR_MEMORY);
+}
+
 static result_t get_huge(lower_t *self, uint64_t pfn)
 {
 	assert(self != 0);
 
 	size_t idx = child_from_pfn(pfn);
-
 	for_offsetted(idx, CHILDS_PER_TREE)
 	{
-		// TODO: just allocate a multiple of N childs so that we do not have to check this
 		if (current_i >= self->childs_len)
 			continue;
 
@@ -147,9 +152,11 @@ static result_t get_huge(lower_t *self, uint64_t pfn)
 
 result_t lower_get(lower_t *self, const uint64_t start_pfn, const size_t order)
 {
-	assert(order == 0 || order == HP_ORDER);
+	assert(order <= MAX_ORDER);
 	assert(start_pfn < self->frames);
 
+	if (order == MAX_ORDER)
+		return get_max(self, start_pfn);
 	if (order == HP_ORDER)
 		return get_huge(self, start_pfn);
 
@@ -205,14 +212,22 @@ static void split_huge(_Atomic(child_t) *child, bitfield_t *field)
 
 result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 {
-	assert(order == 0 || order == HP_ORDER);
-	if (frame >= self->frames)
+	assert(order <= MAX_ORDER);
+	if (frame + (1 << order) > self->frames || frame % (1 << order) != 0)
 		return result(ERR_ADDRESS);
 
 	const size_t child_idx = child_from_pfn(frame);
 	_Atomic(child_t) *child = &self->childs[child_idx];
-	bitfield_t *field = &self->fields[child_idx];
 
+	if (order == MAX_ORDER) {
+		child_pair_t old = { child_new(0, true), child_new(0, true) };
+		child_pair_t new = { child_new(FIELDSIZE, false),
+				     child_new(FIELDSIZE, false) };
+		return atom_cmp_exchange((_Atomic(child_pair_t) *)child, &old,
+					 new) ?
+			       result(ERR_OK) :
+			       result(ERR_ADDRESS);
+	}
 	if (order == HP_ORDER) {
 		child_t old = child_new(0, true);
 		child_t new = child_new(FIELDSIZE, false);
@@ -220,6 +235,8 @@ result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 			       result(ERR_OK) :
 			       result(ERR_ADDRESS);
 	}
+
+	bitfield_t *field = &self->fields[child_idx];
 
 	child_t old = atom_load(child);
 	if (old.huge) {

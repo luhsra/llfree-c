@@ -18,7 +18,7 @@ static const size_t FRAME_SIZE = 1 << FRAME_BITS;
 static const size_t HP_ORDER = 9;
 
 /// Maximum order that can be allocated
-static const size_t MAX_ORDER = HP_ORDER;
+static const size_t MAX_ORDER = HP_ORDER + 1;
 
 static const size_t ATOMIC_SHIFT = 6;
 static const size_t CHILD_SHIFT = 9;

@@ -25,14 +25,14 @@ declare_test(tree_init)
 	check_equal(actual.counter, counter);
 	check_equal(actual.flag, flag);
 
-	counter = 0x3fff; //maximum value
+	counter = 0x3fff; // maximum value
 	flag = false;
 	actual = tree_new(counter, flag);
 	check_equal(actual.counter, counter);
 	check_equal(actual.flag, flag);
 
-	counter = 0; //minimum value
-	flag = true; //check if flag is set
+	counter = 0; // minimum value
+	flag = true; // check if flag is set
 	actual = tree_new(counter, flag);
 	check_equal(actual.counter, counter);
 	check_equal(actual.flag, flag);
@@ -124,7 +124,7 @@ declare_test(tree_inc)
 	equal_trees(actual, expect);
 
 	order = 0;
-	counter = 16383; //max counter for success
+	counter = 16383; // max counter for success
 	actual = tree_new(counter, false);
 	expect = tree_new(counter + (1 << order), false);
 	ret = tree_counter_inc(&actual, order);
@@ -133,7 +133,7 @@ declare_test(tree_inc)
 
 	order = 0;
 	counter = 3456;
-	//should be no difference if flag is true
+	// should be no difference if flag is true
 	actual = tree_new(counter, true);
 	expect = tree_new(counter + (1 << order), true);
 	ret = tree_counter_inc(&actual, order);

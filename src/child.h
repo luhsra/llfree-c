@@ -25,3 +25,10 @@ bool child_counter_dec(child_t *self, _void v);
 
 /// Free the entry as huge page if possible
 bool child_reserve_huge(child_t *self, _void v);
+
+
+typedef struct child_pair {
+        child_t first, second;
+} child_pair_t;
+
+bool child_reserve_max(child_pair_t *self, _void v);

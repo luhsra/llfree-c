@@ -31,7 +31,7 @@ void lower_init(lower_t *const self, uint64_t offset, size_t len, uint8_t init);
 /// Resets the contents of the lower allocator to everything allocated or free based on `free_all`.
 ///
 /// Note: this is not thread safe.
-result_t lower_clear(lower_t *self, bool free_all);
+void lower_clear(lower_t *self, bool free_all);
 
 /// Recovers the state from persistent memory
 ///
