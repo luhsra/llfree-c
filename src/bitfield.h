@@ -22,7 +22,7 @@ typedef struct bitfield {
 void field_init(bitfield_t *self);
 
 /// Atomic search for the first unset bit and set it to 1.
-result_t field_set_next(bitfield_t *field, const uint64_t pfn);
+result_t field_set_next(bitfield_t *field, uint64_t pfn, size_t order);
 
 /// Atomically resets the bit at index position
 result_t field_reset_bit(bitfield_t *field, size_t index);

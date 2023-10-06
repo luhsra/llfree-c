@@ -171,7 +171,7 @@ result_t lower_get(lower_t *self, const uint64_t start_pfn, const size_t order)
 		if (atom_update(&self->childs[current_i], old, VOID,
 				child_counter_dec)) {
 			result_t pos = field_set_next(&self->fields[current_i],
-						      start_pfn);
+						      start_pfn, order);
 			if (!result_ok(pos))
 				return result(ERR_CORRUPTION); // TODO: undo
 
