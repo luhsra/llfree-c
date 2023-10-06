@@ -122,7 +122,7 @@ static result_t get_max(lower_t *self, uint64_t pfn)
 		child_pair_t old;
 		if (atom_update((_Atomic(child_pair_t) *)&self
 					->childs[current_i * 2],
-				old, VOID, child_reserve_max)) {
+				old, child_reserve_max)) {
 			return result(pfn_from_child(current_i * 2));
 		}
 	}
@@ -141,7 +141,7 @@ static result_t get_huge(lower_t *self, uint64_t pfn)
 			continue;
 
 		child_t old;
-		if (atom_update(&self->childs[current_i], old, VOID,
+		if (atom_update(&self->childs[current_i], old,
 				child_reserve_huge)) {
 			return result(pfn_from_child(current_i));
 		}
@@ -168,8 +168,8 @@ result_t lower_get(lower_t *self, const uint64_t start_pfn, const size_t order)
 			continue;
 
 		child_t old;
-		if (atom_update(&self->childs[current_i], old, VOID,
-				child_counter_dec)) {
+		if (atom_update(&self->childs[current_i], old, child_dec,
+				order)) {
 			result_t pos = field_set_next(&self->fields[current_i],
 						      start_pfn, order);
 			if (!result_ok(pos))
@@ -244,11 +244,11 @@ result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 	}
 
 	size_t field_index = frame % FIELDSIZE;
-	result_t ret = field_reset_bit(field, field_index);
+	result_t ret = field_toggle(field, field_index, order, true);
 	if (!result_ok(ret))
 		return ret;
 
-	if (!atom_update(child, old, VOID, child_counter_inc)) {
+	if (!atom_update(child, old, child_inc, order)) {
 		assert(!"should never be possible");
 		return result(ERR_CORRUPTION);
 	}
@@ -268,12 +268,12 @@ bool lower_is_free(lower_t *self, uint64_t frame, size_t order)
 	child_t child = atom_load(&self->childs[child_index]);
 
 	if (order == HP_ORDER) {
-		return (!child.huge && child.counter == FIELDSIZE);
+		return (!child.huge && child.free == FIELDSIZE);
 	}
 
 	size_t field_index = frame % FIELDSIZE;
 
-	if (child.counter < (1 << order))
+	if (child.free < (1 << order))
 		return false;
 
 	return field_is_free(&self->fields[child_index], field_index);
@@ -284,7 +284,7 @@ size_t lower_free_frames(lower_t *self)
 	size_t counter = 0;
 	for (size_t i = 0; i < self->childs_len; i++) {
 		child_t child = atom_load(&self->childs[i]);
-		counter += child.counter;
+		counter += child.free;
 	}
 	return counter;
 };
@@ -315,7 +315,7 @@ void lower_print(lower_t *self)
 	for (size_t i = 0; i < self->childs_len; ++i) {
 		if (i < 10 || i >= self->childs_len - 10) {
 			child_t child = atom_load(&self->childs[i]);
-			printf("%d\t", child.counter);
+			printf("%d\t", child.free);
 		}
 	}
 	printf("\n");
@@ -339,7 +339,7 @@ size_t lower_free_huge(lower_t *self)
 	size_t count = 0;
 	for (size_t i = 0; i < self->childs_len; ++i) {
 		child_t child = atom_load(&self->childs[i]);
-		if (child.counter == CHILDSIZE)
+		if (child.free == CHILDSIZE)
 			++count;
 	}
 	return count;
@@ -350,6 +350,6 @@ void lower_for_each_child(const lower_t *self, void *context,
 {
 	for (uint64_t i = 0; i < self->childs_len; ++i) {
 		child_t child = atom_load(&self->childs[i]);
-		f(context, self->offset + i * (1 << HP_ORDER), child.counter);
+		f(context, self->offset + i * (1 << HP_ORDER), child.free);
 	}
 }

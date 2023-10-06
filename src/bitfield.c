@@ -6,16 +6,15 @@
 /// Helping struct to store the position of a bit in a bitfield.
 typedef struct pos {
 	/// 0 <= row_number < N
-	size_t row_index;
+	size_t row;
 	/// 0 <= bit_number < sizeof(uint64_t)
-	size_t bit_index;
+	size_t bit;
 } pos_t;
 
 /// Translates the index of the bit to the position in the field.
 static pos_t get_pos(uint64_t index)
 {
 	index = index & (FIELDSIZE - 1);
-
 	pos_t pos = { index / ATOMICSIZE, index % ATOMICSIZE };
 	return pos;
 }
@@ -27,94 +26,69 @@ void field_init(bitfield_t *self)
 	}
 }
 
-/// Finds the position of the first 0 in the value
-static result_t find_unset(uint64_t val)
-{
-	// If x is 0, the result is undefined and there are no unset bits
-	if (~val == 0)
-		return result(ERR_MEMORY);
-
-	int ret = trailing_zeros(~val);
-	assert(ret >= 0 && ret < 64 && "out of bounds");
-	return result(ret);
-}
-
-struct f_pair {
-	size_t *pos;
-	size_t order;
-};
-
-static bool find_in_row(uint64_t *row, struct f_pair pair)
-{
-	result_t res = find_unset(*row);
-	if (result_ok(res)) {
-		*pair.pos = res.val;
-		*row |= (1ul << res.val);
-		return true;
-	}
-	return false;
-}
-
 /// Set the first aligned 2^`order` zero bits, returning the bit offset
 ///
 /// - See <https://graphics.stanford.edu/~seander/bithacks.html#ZeroInWord>
-result_t first_zeros_aligned(uint64_t *v, size_t order)
+bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos)
 {
-	result_t off = result(ERR_MEMORY);
+	uint64_t mask;
+	int p = -1;
 	switch (order) {
-	case 0: {
-		off = find_unset(*v);
-		if (result_ok(off))
-			*v |= 1 << off.val;
-	}
-	case 1: {
-		uint64_t mask = 0xaaaaaaaaaaaaaaaallu;
-		uint64_t or = (*v | (*v >> 1)) | mask;
-		off = find_unset(or);
-		if (result_ok(off))
-			*v |= 0b11 << off.val;
-	}
-	case 2: {
-		uint64_t mask = 0x1111111111111111llu;
-		off = find_unset((((*v - mask) & !*v) >> 3) & mask);
-		if (result_ok(off))
-			*v |= 0b1111 << off.val;
-	}
-	case 3: {
-		uint64_t mask = 0x0101010101010101llu;
-		off = find_unset((((*v - mask) & !*v) >> 7) & mask);
-		if (result_ok(off))
-			*v |= 0xff << off.val;
-	}
-	case 4: {
-		uint64_t mask = 0x0001000100010001llu;
-		off = find_unset((((*v - mask) & !*v) >> 15) & mask);
-		if (result_ok(off))
-			*v |= 0xffff << off.val;
-	}
-	case 5: {
-		uint64_t mask = 0xffffffffllu;
+	case 0:
+		p = trailing_zeros(~(*v));
+		if (p >= 0)
+			*v |= 1llu << p;
+		break;
+	case 1:
+		mask = 0xaaaaaaaaaaaaaaaallu;
+		p = trailing_zeros(~((*v | (*v >> 1)) | mask));
+		if (p >= 0)
+			*v |= 0b11llu << p;
+		break;
+	case 2:
+		mask = 0x1111111111111111llu;
+		p = trailing_zeros((((*v - mask) & ~*v) >> 3) & mask);
+		if (p >= 0)
+			*v |= 0b1111llu << p;
+		break;
+	case 3:
+		mask = 0x0101010101010101llu;
+		p = trailing_zeros((((*v - mask) & ~*v) >> 7) & mask);
+		if (p >= 0)
+			*v |= 0xffllu << p;
+		break;
+	case 4:
+		mask = 0x0001000100010001llu;
+		p = trailing_zeros((((*v - mask) & ~*v) >> 15) & mask);
+		if (p >= 0)
+			*v |= 0xffffllu << p;
+		break;
+	case 5:
+		mask = 0xffffffffllu;
 		if ((uint32_t)*v == 0) {
-			off = result(0);
+			p = 0;
 			*v |= mask;
 		} else if (*v >> 32 == 0) {
-			off = result(32);
+			p = 32;
 			*v |= mask << 32;
 		}
-	}
-	case 6: {
-		if (v == 0) {
-			off = result(0);
+		break;
+	case 6:
+		if (*v == 0) {
+			p = 0;
 			*v = UINT64_MAX;
 		}
-	}
-	// All other orders are handled differently
+		break;
 	default:
+		// All other orders are handled differently
 		assert(false);
 		break;
 	}
-
-	return off;
+	if (p >= 0) {
+		*pos = p;
+		return true;
+	}
+	return false;
 }
 
 result_t field_set_next(bitfield_t *field, uint64_t start_pfn, size_t order)
@@ -128,10 +102,9 @@ result_t field_set_next(bitfield_t *field, uint64_t start_pfn, size_t order)
 		for_offsetted(row, FIELD_N)
 		{
 			size_t pos = 0;
-			struct f_pair pair = { &pos, order };
 			uint64_t old;
-			if (atom_update(&field->rows[current_i], old, pair,
-					find_in_row)) {
+			if (atom_update(&field->rows[current_i], old,
+					first_zeros_aligned, order, &pos)) {
 				return result(current_i *
 						      (sizeof(uint64_t) * 8) +
 					      pos);
@@ -167,22 +140,51 @@ result_t field_set_next(bitfield_t *field, uint64_t start_pfn, size_t order)
 	return result(ERR_MEMORY);
 }
 
-result_t field_reset_bit(bitfield_t *field, size_t index)
+static bool row_toggle(uint64_t *row, uint64_t mask, bool expected)
+{
+	if (expected) {
+		if ((*row & mask) == mask) {
+			*row &= ~mask;
+			return true;
+		}
+	} else {
+		if ((*row & mask) == 0) {
+			*row |= mask;
+			return true;
+		}
+	}
+	return false;
+}
+
+result_t field_toggle(bitfield_t *field, size_t index, size_t order,
+		      bool expected)
 {
 	assert(0 <= index && index < FIELDSIZE);
 
 	pos_t pos = get_pos(index);
+	size_t num_frames = 1 << order;
 
-	// 11...101...11 -> zero at the bit-position
-	uint64_t mask = ~(1ull << pos.bit_index);
-
-	uint64_t before = atom_and(&field->rows[pos.row_index], mask);
-
-	if ((before & mask) == before) { // bit were already reset
-		return result(ERR_ADDRESS);
+	if (num_frames > ATOMICSIZE) {
+		size_t num_entries = (1 << order) / ATOMICSIZE;
+		for (size_t i = 0; i < num_entries; i++) {
+			uint64_t mask = expected ? UINT64_MAX : 0;
+			uint64_t old = mask;
+			if (atom_cmp_exchange(&field->rows[pos.row + i], &old,
+					      ~mask)) {
+				continue;
+			}
+			return result(ERR_ADDRESS);
+		}
+		return result(ERR_OK);
 	}
 
-	return result(ERR_OK);
+	uint64_t mask = ((UINT64_MAX >> (ATOMICSIZE - num_frames)) << pos.bit);
+	uint64_t old;
+	if (atom_update(&field->rows[pos.row], old, row_toggle, mask,
+			expected)) {
+		return result(ERR_OK);
+	}
+	return result(ERR_ADDRESS);
 }
 
 int field_count_bits(bitfield_t *field)
@@ -202,8 +204,8 @@ bool field_is_free(bitfield_t *self, size_t index)
 	assert(0 <= index && index < FIELDSIZE);
 	pos_t pos = get_pos(index);
 
-	uint64_t row = atom_load(&self->rows[pos.row_index]);
-	uint64_t mask = 1ul << pos.bit_index;
+	uint64_t row = atom_load(&self->rows[pos.row]);
+	uint64_t mask = 1ul << pos.bit;
 
 	return (row & mask) == 0;
 }

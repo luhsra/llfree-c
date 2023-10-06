@@ -5,6 +5,7 @@ SRCDIR = src
 CC = clang
 AR = ar
 CFLAGS = -Wall -Wextra -Werror -fPIE -std=gnu11 -pthread -I $(PWD) -I $(PWD)/$(SRCDIR)
+A ?= ""
 
 # The rust wrapper calls this with DEBUG=1 on debug and DEBUG=0 on release builds
 DEBUG ?= 1
@@ -44,7 +45,7 @@ test_build: $(BUILDDIR)/$(TESTDIR) $(LIB) $(TESTOBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(TESTOBJS) $(LIB) -o $(BUILDDIR)/$(TESTDIR)/tests
 
 test: test_build
-	./$(BUILDDIR)/$(TESTDIR)/tests
+	./$(BUILDDIR)/$(TESTDIR)/tests $(A)
 
 
 clean:

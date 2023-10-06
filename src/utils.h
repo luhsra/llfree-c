@@ -127,19 +127,14 @@ enum {
 #define row_from_pfn(_N) ((_N) >> ATOMIC_SHIFT)
 #define pfn_from_row(_N) ((_N) << ATOMIC_SHIFT)
 
-// #define tree_from_row(_N) ((_N) >> (TREE_SHIFT - ATOMIC_SHIFT))
 #define tree_from_row(_N) tree_from_pfn(pfn_from_row(_N))
 
 // Maximum amount of retry if a atomic operation has failed
 static const size_t MAX_ATOMIC_RETRY = 5;
 
-// alternative is acquire-release: memory_order_seq_cst -> more at stdatomic.h
 static const int ATOM_LOAD_ORDER = memory_order_acquire;
 static const int ATOM_UPDATE_ORDER = memory_order_acq_rel;
 static const int ATOM_STORE_ORDER = memory_order_release;
-// static const int ATOM_LOAD_ORDER = memory_order_seq_cst;
-// static const int ATOM_UPDATE_ORDER = memory_order_seq_cst;
-// static const int ATOM_STORE_ORDER = memory_order_seq_cst;
 
 /// Iterates over a Range between multiples of len starting at idx.
 ///
@@ -203,19 +198,19 @@ static const int ATOM_STORE_ORDER = memory_order_release;
 ///
 /// _Atomic uint64_t my_atomic;
 /// uint64_t old;
-/// if (!atom_update(&my_atomic, old, NULL, my_update)) {
+/// if (!atom_update(&my_atomic, old, my_update, NULL)) {
 /// 	assert(!"here this should never fail!");
 /// }
 /// printf("old value %lu\n", old);
 /// ```
-#define atom_update(atom_ptr, old_val, ctx, fn)                              \
+#define atom_update(atom_ptr, old_val, fn, ...)                              \
 	({                                                                   \
 		debug("update");                                             \
 		bool _ret = false;                                           \
 		(old_val) = atomic_load_explicit(atom_ptr, ATOM_LOAD_ORDER); \
 		while (true) {                                               \
 			typeof(old_val) value = (old_val);                   \
-			if (!(fn)(&value, ctx))                              \
+			if (!(fn)(&value, ##__VA_ARGS__))                    \
 				break;                                       \
 			if (atomic_compare_exchange_weak_explicit(           \
 				    (atom_ptr), &(old_val), value,           \
@@ -226,11 +221,6 @@ static const int ATOM_STORE_ORDER = memory_order_release;
 		}                                                            \
 		_ret;                                                        \
 	})
-
-/// Placeholder for a not-needed parameter.
-typedef struct {
-} _void;
-#define VOID ((_void){})
 
 /// Executes given function up to MAX_ATOMIC_RETRY times or until
 /// it returns anything different than ERR_RETRY.

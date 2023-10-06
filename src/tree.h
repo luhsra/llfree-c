@@ -1,7 +1,7 @@
 #include "utils.h"
 
 typedef struct tree {
-	uint16_t counter : 15;
+	uint16_t free : 15;
 	bool flag : 1;
 } tree_t;
 
@@ -25,16 +25,16 @@ static inline _unused tree_t tree_new(uint16_t counter, bool flag)
 }
 
 /// Increment the free counter if possible
-bool tree_counter_inc(tree_t *self, size_t order);
+bool tree_inc(tree_t *self, size_t order);
 
 /// Decrement the free counter if possible
-bool tree_counter_dec(tree_t *self, size_t order);
+bool tree_dec(tree_t *self, size_t order);
 
 /// Try reserving the tree if the free counter is withing the range
-bool tree_reserve(tree_t *self, range_t free);
+bool tree_reserve(tree_t *self, size_t min, size_t max);
 
 /// Adds the given counter to the existing counter and sets the flag to 0
 bool tree_writeback(tree_t *self, uint16_t free_counter);
 
 // Steals the counter of a reserved tree
-bool tree_steal_counter(tree_t *self, _void v);
+bool tree_steal_counter(tree_t *self);

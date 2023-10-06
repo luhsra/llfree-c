@@ -2,6 +2,7 @@
 #include "assert.h"
 #include "tree.h"
 #include "utils.h"
+#include <stddef.h>
 
 void local_init(local_t *self)
 {
@@ -13,7 +14,7 @@ void local_init(local_t *self)
 result_t local_steal(local_t *const self, reserved_t *const old_reservation)
 {
 	*old_reservation = atom_load(&self->reserved);
-	if (!old_reservation->present || old_reservation->free_counter == 0 ||
+	if (!old_reservation->present || old_reservation->free == 0 ||
 	    old_reservation->reserving)
 		return result(ERR_ADDRESS);
 	reserved_t new = { 0 };
@@ -22,14 +23,14 @@ result_t local_steal(local_t *const self, reserved_t *const old_reservation)
 		       result(ERR_RETRY);
 }
 
-bool local_set_reserved(reserved_t *reserved, reserve_change_t tree)
+bool local_set_reserved(reserved_t *reserved, size_t pfn, size_t free)
 {
 	assert(reserved != NULL);
-	assert(tree.counter <= TREESIZE);
+	assert(free <= TREESIZE);
 
-	const size_t idx = row_from_pfn(tree.pfn);
+	const size_t idx = row_from_pfn(pfn);
 
-	*reserved = (reserved_t){ .free_counter = tree.counter,
+	*reserved = (reserved_t){ .free = free,
 				  .start_idx = idx,
 				  .present = true,
 				  .reserving = true };
@@ -46,7 +47,7 @@ bool local_reserve_index(reserved_t *self, size_t pfn)
 	return true;
 }
 
-bool local_mark_reserving(reserved_t *self, _void _unused v)
+bool local_mark_reserving(reserved_t *self)
 {
 	// no update if reservation is in progress
 	if (self->reserving)
@@ -56,7 +57,7 @@ bool local_mark_reserving(reserved_t *self, _void _unused v)
 	return true;
 }
 
-bool local_unmark_reserving(reserved_t *self, _void _unused v)
+bool local_unmark_reserving(reserved_t *self)
 {
 	// no update if reservation is in progress
 	if (!self->reserving)
@@ -66,28 +67,28 @@ bool local_unmark_reserving(reserved_t *self, _void _unused v)
 	return true;
 }
 
-bool local_inc_counter(reserved_t *self, reserve_change_t change)
+bool local_inc_counter(reserved_t *self, size_t pfn, size_t order)
 {
-	const size_t tree_idx = tree_from_pfn(change.pfn);
+	const size_t tree_idx = tree_from_pfn(pfn);
 
 	// check if reserved tree is a match for given pfn
 	if (!self->present || tree_from_row(self->start_idx) != tree_idx)
 		return false;
 
 	// check if counter has enough space
-	assert(self->free_counter + change.counter <= TREESIZE);
-	self->free_counter += change.counter;
+	assert(self->free + (1 << order) <= TREESIZE);
+	self->free += (1 << order);
 	return true;
 }
 
 bool local_dec_counter(reserved_t *self, size_t order)
 {
-	if (!self->present || self->free_counter < (1 << order)) {
+	if (!self->present || self->free < (1 << order)) {
 		// not enough free frames in this tree
 		return false;
 	}
 
-	self->free_counter -= (1 << order);
+	self->free -= (1 << order);
 	return true;
 }
 
@@ -98,10 +99,10 @@ bool local_inc_last_free(last_free_t *self, uint64_t tree)
 	// if last free was in another tree -> overwrite last reserved Index
 	if (self->last_row != tree) {
 		self->last_row = tree;
-		self->free_counter = 0;
-	} else if (self->free_counter < 3) {
+		self->counter = 0;
+	} else if (self->counter < 3) {
 		// if the same tree -> increase the counter for this
-		self->free_counter += 1;
+		self->counter += 1;
 	}
 
 	return true;

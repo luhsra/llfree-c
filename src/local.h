@@ -7,7 +7,7 @@
 
 /// this struct stores data for the reserved tree
 typedef struct reserved {
-	uint16_t free_counter : 15; // free frames counter of reserved tree
+	uint16_t free : 15; // free frames counter of reserved tree
 	uint64_t start_idx : 47; // atomic index of reserved tree
 	bool present : 1; // true if there is a reserved tree
 	bool reserving : 1; // used for spinlock if reservation is in progress
@@ -15,7 +15,7 @@ typedef struct reserved {
 
 // stores information about the last free
 typedef struct last_free {
-	uint16_t free_counter : 2; // counter of concurrent free in same tree
+	uint16_t counter : 2; // counter of concurrent free in same tree
 	uint64_t last_row : 62; // atomic index of last tree where a frame was freed
 } last_free_t;
 
@@ -28,26 +28,21 @@ typedef struct __attribute__((aligned(CACHESIZE))) local {
 	_Atomic(last_free_t) last_free;
 } local_t;
 
-typedef struct reserve_change {
-	size_t pfn;
-	size_t counter;
-} reserve_change_t;
-
 /// Changes the preferred tree (and free counter) to a new one
-bool local_set_reserved(reserved_t *self, reserve_change_t tree);
+bool local_set_reserved(reserved_t *self, size_t pfn, size_t free);
 
 /// Initialize the per-cpu data
 void local_init(local_t *self);
 
 /// set the flag for searching and returns previous status to check if the reservation_in_progress-flag was already set
-bool local_mark_reserving(reserved_t *self, _void v);
+bool local_mark_reserving(reserved_t *self);
 /// reset the flag for searching
-bool local_unmark_reserving(reserved_t *self, _void v);
+bool local_unmark_reserving(reserved_t *self);
 
 /// Increases the free counter if tree of frame matches the reserved tree
-bool local_inc_counter(reserved_t *self, reserve_change_t change);
+bool local_inc_counter(reserved_t *self, size_t pfn, size_t order);
 
-/// Decrements the  free counter
+/// Decrements the free counter
 bool local_dec_counter(reserved_t *self, size_t order);
 
 // resets the reserved tree and returns the old reservation

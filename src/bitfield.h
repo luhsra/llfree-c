@@ -25,7 +25,7 @@ void field_init(bitfield_t *self);
 result_t field_set_next(bitfield_t *field, uint64_t pfn, size_t order);
 
 /// Atomically resets the bit at index position
-result_t field_reset_bit(bitfield_t *field, size_t index);
+result_t field_toggle(bitfield_t *field, size_t index, size_t order, bool expected);
 
 /// Count the number of bits
 int field_count_bits(bitfield_t *field);

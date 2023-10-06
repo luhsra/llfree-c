@@ -44,9 +44,9 @@
 #define check_equal_m(actual, expected, msg, ...)                     \
 	if ((actual) != (expected)) {                                 \
 		printf("\x1b[91m%s:%d failed: ", __FILE__, __LINE__); \
-		printf(fmt_spec(expected), (expected));               \
-		printf(" == ");                                       \
 		printf(fmt_spec(actual), (actual));                   \
+		printf(" == ");                                       \
+		printf(fmt_spec(expected), (expected));               \
 		if (msg && msg[0])                                    \
 			printf(" (" msg ")", ##__VA_ARGS__);          \
 		printf("\x1b[0m\n");                                  \

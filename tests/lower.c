@@ -210,7 +210,7 @@ declare_test(lower_get)
 
 	child_t child = atom_load(&actual.childs[1]);
 	check_equal(child.huge, true);
-	check_equal(child.counter, 0);
+	check_equal(child.free, 0);
 	check_equal_bitfield(actual.fields[1],
 			     ((bitfield_t){ 0, 0, 0, 0, 0, 0, 0, 0 }));
 

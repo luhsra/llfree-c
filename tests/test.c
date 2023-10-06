@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <regex.h>
 
 #define test_case_n 100
 struct test_case {
@@ -16,13 +17,26 @@ struct test_case {
 static size_t test_case_i;
 static struct test_case TESTS[test_case_n] = { 0 };
 
-int main()
+int main(int argc, char **argv)
 {
 	size_t fail_counter = 0;
 
 	printf("\x1b[92mRunning %lu test cases...\x1b[0m\n", test_case_i);
 
+	regex_t regex;
+	if (argc == 2) {
+		if (regcomp(&regex, argv[1], REG_NEWLINE))
+			exit(EXIT_FAILURE);
+	}
+
 	for (size_t i = 0; i < test_case_i; i++) {
+		regmatch_t pmatch[1];
+		if (argc == 2 && regexec(&regex, TESTS[i].name, 1, pmatch, 0)) {
+			printf("\x1b[90mIgnore test '%s'\x1b[0m\n",
+			       TESTS[i].name);
+			continue;
+		}
+
 		printf("\x1b[92mRunning test '%s'\x1b[0m\n", TESTS[i].name);
 		if (!(TESTS[i].f)()) {
 			fail_counter += 1;
