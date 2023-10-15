@@ -1,7 +1,5 @@
 #include "bitfield.h"
 #include "utils.h"
-#include <stddef.h>
-#include <stdint.h>
 
 /// Helping struct to store the position of a bit in a bitfield.
 typedef struct pos {
@@ -105,9 +103,7 @@ result_t field_set_next(bitfield_t *field, uint64_t start_pfn, size_t order)
 			uint64_t old;
 			if (atom_update(&field->rows[current_i], old,
 					first_zeros_aligned, order, &pos)) {
-				return result(current_i *
-						      (sizeof(uint64_t) * 8) +
-					      pos);
+				return result(current_i * ATOMICSIZE + pos);
 			}
 		}
 		return result(ERR_MEMORY);
@@ -116,6 +112,7 @@ result_t field_set_next(bitfield_t *field, uint64_t start_pfn, size_t order)
 	size_t entries = num_frames / ATOMICSIZE;
 	for_offsetted(row / entries, FIELD_N / entries)
 	{
+		bool failed = false;
 		for (size_t i = 0; i < entries; i++) {
 			size_t idx = current_i * entries + i;
 			uint64_t old = 0;
@@ -133,7 +130,12 @@ result_t field_set_next(bitfield_t *field, uint64_t start_pfn, size_t order)
 					return result(ERR_CORRUPTION);
 				}
 			}
+			failed = true;
 			break; // check next slot
+		}
+		if (!failed) {
+			// Success, we have updated all rows
+			return result(current_i * entries * ATOMICSIZE);
 		}
 	}
 

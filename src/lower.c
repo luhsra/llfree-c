@@ -3,8 +3,6 @@
 #include "child.h"
 #include "llc.h"
 #include "utils.h"
-#include <assert.h>
-#include <stdint.h>
 
 void lower_init(lower_t *const self, uint64_t offset, size_t len, uint8_t init)
 {
@@ -172,10 +170,13 @@ result_t lower_get(lower_t *self, const uint64_t start_pfn, const size_t order)
 				order)) {
 			result_t pos = field_set_next(&self->fields[current_i],
 						      start_pfn, order);
-			if (!result_ok(pos))
-				return result(ERR_CORRUPTION); // TODO: undo
+			if (result_ok(pos)) {
+				return result(pfn_from_child(current_i) + pos.val);
+			}
 
-			return result(pfn_from_child(current_i) + pos.val);
+			if (!atom_update(&self->childs[current_i], old, child_inc, order)) {
+				return result(ERR_CORRUPTION);
+			}
 		}
 	}
 

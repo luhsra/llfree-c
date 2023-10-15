@@ -4,8 +4,6 @@
 #include "local.h"
 #include "lower.h"
 #include "utils.h"
-#include <assert.h>
-#include <stdint.h>
 
 /// magic number to determine on recover if a allocator was previously
 /// initialized
@@ -374,14 +372,15 @@ result_t llc_init(llc_t *self, size_t cores, uint64_t offset, size_t len,
 result_t llc_get(llc_t *self, size_t core, size_t order)
 {
 	assert(self != NULL);
-	assert(order == 0 || order == HP_ORDER);
+	assert(order <= MAX_ORDER);
 
 	local_t *local = get_local(self, core);
 
 	result_t res = alloc_frame(self, local, order);
 	if (!result_ok(res)) {
 		reserved_t reserved = atom_load(&local->reserved);
-		if (reserved.present && sync_with_global(self, local)) {
+		if (reserved.present && reserved.free < (1 << order) &&
+		    sync_with_global(self, local)) {
 			res = alloc_frame(self, local, order);
 		}
 	}
@@ -411,7 +410,7 @@ result_t llc_get(llc_t *self, size_t core, size_t order)
 result_t llc_put(llc_t *self, size_t core, uint64_t frame, size_t order)
 {
 	assert(self != NULL);
-	assert(order == 0 || order == HP_ORDER);
+	assert(order <= MAX_ORDER);
 
 	if (frame < self->lower.offset ||
 	    frame >= self->lower.offset + self->lower.frames)

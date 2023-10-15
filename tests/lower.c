@@ -4,8 +4,6 @@
 #include "check.h"
 #include "utils.h"
 
-#include <stddef.h>
-#include <stdint.h>
 #include <stdlib.h>
 
 #define check_child_number(expect)                 \
@@ -359,6 +357,41 @@ declare_test(lower_is_free)
 	return success;
 }
 
+declare_test(lower_large)
+{
+	bool success = true;
+
+	const size_t FRAMES = 128 * FIELDSIZE;
+
+	lower_t lower;
+	lower_init(&lower, 0, FRAMES, VOLATILE);
+	lower_clear(&lower, true);
+
+	uint64_t frames[MAX_ORDER + 1];
+	size_t tree = 0;
+	for (size_t o = 0; o <= MAX_ORDER; o++) {
+		result_t pfn;
+		do {
+			pfn = lower_get(&lower, tree << TREE_SHIFT, o);
+			if (pfn.val == ERR_MEMORY) {
+				tree += 1;
+				check(tree < FRAMES);
+			}
+		} while (pfn.val == ERR_MEMORY);
+
+		check_m(result_ok(pfn), "%lu -> %ld", o, pfn.val);
+		check_m(pfn.val % (1 << o) == 0, "%lu -> 0x%lx", o, pfn.val);
+		frames[o] = pfn.val;
+	}
+
+	for (size_t o = 0; o <= MAX_ORDER; o++) {
+		result_t ret = lower_put(&lower, frames[o], o);
+		check_m(result_ok(ret), "%lu -> 0x%lx", o, frames[o]);
+	}
+
+	return success;
+}
+
 declare_test(lower_huge)
 {
 	bool success = true;
@@ -436,20 +469,22 @@ declare_test(lower_max)
 {
 	bool success = true;
 
-        const size_t FRAMES = FIELDSIZE * 60;
+	const size_t FRAMES = FIELDSIZE * 60;
 	lower_t lower;
 	lower_init(&lower, 0, FRAMES, VOLATILE);
 	lower_clear(&lower, true);
 
 	for (size_t i = 0; i < FRAMES / (1 << MAX_ORDER); ++i) {
-		result_t pfn = lower_get(&lower, i * (1 << MAX_ORDER), MAX_ORDER);
+		result_t pfn =
+			lower_get(&lower, i * (1 << MAX_ORDER), MAX_ORDER);
 		check_m(result_ok(pfn), "%lu", i);
 	}
 
-        check_equal(lower_free_frames(&lower), 0);
+	check_equal(lower_free_frames(&lower), 0);
 
 	for (size_t i = 0; i < FRAMES / (1 << MAX_ORDER); ++i) {
-		result_t ret = lower_put(&lower, i * (1 << MAX_ORDER), MAX_ORDER);
+		result_t ret =
+			lower_put(&lower, i * (1 << MAX_ORDER), MAX_ORDER);
 		check_m(result_ok(ret), "%lu", i);
 	}
 
@@ -483,7 +518,7 @@ declare_test(lower_free_all)
 		      "all_frames_are_allocated");
 
 	// free all HPs
-        result_t ret;
+	result_t ret;
 	for (int i = 0; i < 15; ++i) {
 		ret = lower_put(&lower, i * 512, HP_ORDER);
 		check(result_ok(ret));
@@ -511,7 +546,7 @@ declare_test(lower_peristent_init)
 	uint64_t len = (16ul << 30) / PAGESIZE; // 16 GiB
 	char *mem = aligned_alloc(1 << HP_ORDER, len * PAGESIZE);
 	assert(mem != NULL);
-        info("mem: %p-%p (%lx)", mem, mem + len * PAGESIZE, len);
+	info("mem: %p-%p (%lx)", mem, mem + len * PAGESIZE, len);
 
 	lower_t lower;
 	lower_init(&lower, (uint64_t)mem / PAGESIZE, len, OVERWRITE);
@@ -529,6 +564,6 @@ declare_test(lower_peristent_init)
 	check((uint64_t)&lower.fields[lower.childs_len] <
 	      (lower.offset + len) * PAGESIZE);
 
-        lower_clear(&lower, true);
+	lower_clear(&lower, true);
 	return success;
 }
