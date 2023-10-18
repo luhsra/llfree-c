@@ -11,23 +11,23 @@
 /// Unused functions and variables
 #define _unused __attribute__((unused))
 
-static const size_t FRAME_BITS = 12;
-static const size_t FRAME_SIZE = 1 << FRAME_BITS;
+#define FRAME_BITS 12
+#define FRAME_SIZE (1 << FRAME_BITS)
 
 /// Order of a huge frame
-static const size_t HP_ORDER = 9;
+#define HP_ORDER 9
 
 /// Maximum order that can be allocated
-static const size_t MAX_ORDER = HP_ORDER + 1;
+#define MAX_ORDER (HP_ORDER + 1)
 
-static const size_t ATOMIC_SHIFT = 6;
-static const size_t CHILD_SHIFT = 9;
-static const size_t TREE_SHIFT = 14;
+#define ATOMIC_SHIFT 6
+#define CHILD_SHIFT 9
+#define TREE_SHIFT 14
 
 /// Minimal size the LLFree can manage
-static const size_t MIN_PAGES = 1ul << MAX_ORDER;
+#define MIN_PAGES (1ul << MAX_ORDER)
 /// 64 Bit Addresses - 12 Bit needed for offset inside the Page
-static const size_t MAX_PAGES = 1ul << (64 - FRAME_BITS);
+#define MAX_PAGES (1ul << (64 - FRAME_BITS))
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) > (b) ? (b) : (a))
@@ -63,7 +63,7 @@ static inline _unused size_t align_up(size_t align, size_t val)
 	return align_down(align, val + align - 1);
 }
 /// Pause CPU
-static inline _unused void spin_wait()
+static inline _unused void spin_wait(void)
 {
 #if defined(__x86_64__) || defined(_M_X64) || defined(i386) || \
 	defined(__i386__) || defined(__i386) || defined(_M_IX86)
@@ -128,6 +128,7 @@ enum {
 #define pfn_from_row(_N) ((_N) << ATOMIC_SHIFT)
 
 #define tree_from_row(_N) tree_from_pfn(pfn_from_row(_N))
+#define row_from_tree(_N) row_from_pfn(pfn_from_tree(_N))
 
 // Maximum amount of retry if a atomic operation has failed
 static const size_t MAX_ATOMIC_RETRY = 5;
@@ -222,22 +223,7 @@ static const int ATOM_STORE_ORDER = memory_order_release;
 		_ret;                                                        \
 	})
 
-/// Executes given function up to MAX_ATOMIC_RETRY times or until
-/// it returns anything different than ERR_RETRY.
-///
-/// Returns the result of given function.
-#define try_update(func)                                              \
-	({                                                            \
-		result_t _ret;                                        \
-		for (size_t _i_ = 0; _i_ < MAX_ATOMIC_RETRY; ++_i_) { \
-			_ret = func;                                  \
-			if (_ret.val != ERR_RETRY)                    \
-				break;                                \
-		}                                                     \
-		result_ok(_ret);                                      \
-	})
-
-// #define VERBOSE
+#define VERBOSE
 
 #ifdef VERBOSE
 #define info(str, ...)                                                \

@@ -82,7 +82,7 @@ static inline _unused bool field_equals(bitfield_t *f1, bitfield_t *f2)
 #define check_equal_bitfield(actual, expected) \
 	check_equal_bitfield_m(actual, expected, "")
 
-void add_test(char *name, bool (*f)());
+void add_test(char *name, bool (*f)(void));
 
 #define declare_test(name)                                   \
 	static bool _test_##name(void);                      \

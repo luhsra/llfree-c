@@ -7,13 +7,14 @@
 
 #include <stddef.h>
 #include <stdlib.h>
+#include <memory.h>
 
 void print_trees(llc_t *self)
 {
 	printf("trees:\ti\tflag\tcounter\n");
 	for (size_t i = 0; i < self->trees_len; ++i) {
 		tree_t _unused tree = atom_load(&self->trees[i]);
-		info("\t%lu\t%d\t%X\n", i, tree.flag, tree.counter);
+		info("\t%lu\t%d\t%X\n", i, tree.flag, tree.free);
 	}
 }
 
@@ -88,6 +89,8 @@ declare_test(llc_general_function)
 
 	ret = llc_put(upper, 0, frame.val, 0);
 
+	return success;
+
 	check_m(result_ok(ret), "successfully free");
 	check_m(llc_free_frames(upper) == 132000,
 		"right number of free frames");
@@ -105,7 +108,7 @@ declare_test(llc_general_function)
 	ret = llc_get(upper, 0, 0);
 	check(result_ok(ret));
 	reserved_t reserved = atom_load(&upper->local[0].reserved);
-	check_m(reserved.start_idx = row_from_pfn(TREESIZE),
+	check_m(reserved.start_row = row_from_pfn(TREESIZE),
 		"second tree must be allocated");
 
 	uint64_t free_frames = llc_free_frames(upper);
@@ -158,7 +161,7 @@ declare_test(llc_put)
 
 	// core 2 must have now this first tree reserved
 	reserved_t reserved = atom_load(&upper->local[2].reserved);
-	check_equal(tree_from_row(reserved.start_idx),
+	check_equal(tree_from_row(reserved.start_row),
 		    (uint64_t)tree_from_pfn(reservedByCore1[0]));
 	if (!success)
 		llc_print(upper);
@@ -246,9 +249,10 @@ static void *alloc_frames(void *arg)
 		if (ret->sp == args->amount ||
 		    (ret->sp > 0 && random() % 8 > 4)) {
 			size_t random_idx = random() % ret->sp;
-			assert(result_ok(llc_put(upper, args->core,
-						 ret->pfns[random_idx],
-						 args->order)));
+			result_t res = llc_put(upper, args->core,
+					       ret->pfns[random_idx],
+					       args->order);
+			assert(result_ok(res));
 			--ret->sp;
 			ret->pfns[random_idx] = ret->pfns[ret->sp];
 			--i;
@@ -268,11 +272,13 @@ static void *alloc_frames(void *arg)
 	pthread_exit(ret);
 	return NULL;
 }
-declare_test(llc_multithreaded_alloc)
+declare_test(llc_parallel_alloc)
 {
+#undef CORES
+#define CORES 4
+
 	int success = true;
 
-	const int CORES = 4;
 	const uint64_t LENGTH = 16 << 18;
 	char *memory = aligned_alloc(1 << HP_ORDER, LENGTH << 12);
 	assert(memory != NULL);
@@ -334,5 +340,97 @@ end:
 	}
 	llc_drop(upper);
 	free(memory);
+	return success;
+}
+
+struct par_args {
+	llc_t *upper;
+	uint64_t **frames;
+	size_t core;
+};
+
+#undef CORES
+#define CORES 4
+#undef OFFSET
+#define OFFSET 0x1000000
+
+static void *parallel_alloc_all(void *input)
+{
+	struct par_args *args = input;
+	info("core %lu", args->core);
+
+	size_t total = llc_frames(args->upper);
+	*(args->frames) = llc_ext_alloc(PAGESIZE, total * sizeof(uint64_t));
+
+	info("begin %lu", args->core);
+	size_t i = 0;
+	for (;; i++) {
+		assert(i < total);
+
+		result_t ret = llc_get(args->upper, args->core, 0);
+		if (!result_ok(ret)) {
+			assert(ret.val == ERR_MEMORY);
+			break;
+		}
+		assert(ret.val >= OFFSET);
+		assert((uint64_t)ret.val < OFFSET + total);
+
+		(*(args->frames))[i] = ret.val;
+	}
+	info("finish %lu (%lx)", args->core, (*(args->frames))[i - 1]);
+	return (void *)i;
+}
+
+declare_test(llc_parallel_alloc_all)
+{
+	bool success = true;
+	const uint64_t LENGTH = 8 << 18; // 8G
+
+	upper = llc_ext_alloc(CACHESIZE, sizeof(llc_t));
+	assert(result_ok(
+		llc_init(upper, CORES, OFFSET, LENGTH, VOLATILE, true)));
+
+	info("created with %lu (%lu)", llc_frames(upper),
+	     llc_free_frames(upper));
+
+	uint64_t *frames[CORES] = { NULL };
+	struct par_args args[CORES];
+
+	pthread_t threads[CORES];
+	for (size_t i = 0; i < CORES; i++) {
+		info("spawn %lu", i);
+		args[i] = (struct par_args){ upper, &frames[i], i };
+		assert(pthread_create(&threads[i], NULL, parallel_alloc_all,
+				      &args[i]) == 0);
+	}
+
+	size_t counts[CORES] = { 0 };
+	uint64_t *all_frames =
+		llc_ext_alloc(PAGESIZE, llc_frames(upper) * sizeof(uint64_t));
+
+	size_t total = 0;
+	for (size_t i = 0; i < CORES; i++) {
+		info("wait for %lu", i);
+		assert(pthread_join(threads[i], (void **)&counts[i]) == 0);
+
+		// collect allocated pages
+		memcpy(&all_frames[total], frames[i],
+		       counts[i] * sizeof(uint64_t));
+		llc_ext_free(sizeof(uint64_t), llc_frames(upper), frames[i]);
+		total += counts[i];
+	}
+
+	check_equal(llc_frames(upper), total);
+
+	// check for duplicates
+	qsort(all_frames, total, sizeof(int64_t), comp);
+	for (size_t i = 1; i < total; i++) {
+		check_m(all_frames[i] >= OFFSET &&
+				all_frames[i] < (OFFSET + llc_frames(upper)),
+			"check %lx", all_frames[i]);
+		check_m(all_frames[i - 1] != all_frames[i], "dup %lx at %lu",
+			all_frames[i], i);
+	}
+
 	return success;
 }

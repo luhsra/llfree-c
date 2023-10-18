@@ -23,27 +23,24 @@ result_t local_steal(local_t *const self, reserved_t *const old_reservation)
 		       result(ERR_RETRY);
 }
 
-bool local_set_reserved(reserved_t *reserved, size_t pfn, size_t free)
+bool local_swap_reserved(reserved_t *self, reserved_t new,
+			 bool expect_reserving)
 {
-	assert(reserved != NULL);
-	assert(free <= TREESIZE);
-
-	const size_t idx = row_from_pfn(pfn);
-
-	*reserved = (reserved_t){ .free = free,
-				  .start_idx = idx,
-				  .present = true,
-				  .reserving = true };
-	return true;
+	assert(self != NULL);
+	if (self->reserving == expect_reserving) {
+		*self = new;
+		return true;
+	}
+	return false;
 }
 
-bool local_reserve_index(reserved_t *self, size_t pfn)
+bool local_reserve_index(reserved_t *self, size_t tree_idx)
 {
 	// no update if reservation is in progress
 	if (self->reserving) {
 		return false;
 	}
-	self->start_idx = row_from_pfn(pfn);
+	self->start_row = row_from_tree(tree_idx);
 	return true;
 }
 
@@ -67,28 +64,26 @@ bool local_unmark_reserving(reserved_t *self)
 	return true;
 }
 
-bool local_inc_counter(reserved_t *self, size_t pfn, size_t order)
+bool local_inc_counter(reserved_t *self, size_t tree_idx, size_t free)
 {
-	const size_t tree_idx = tree_from_pfn(pfn);
-
 	// check if reserved tree is a match for given pfn
-	if (!self->present || tree_from_row(self->start_idx) != tree_idx)
+	if (!self->present || tree_from_row(self->start_row) != tree_idx)
 		return false;
 
 	// check if counter has enough space
-	assert(self->free + (1 << order) <= TREESIZE);
-	self->free += (1 << order);
+	assert(self->free + free <= TREESIZE);
+	self->free += free;
 	return true;
 }
 
-bool local_dec_counter(reserved_t *self, size_t order)
+bool local_dec_counter(reserved_t *self, size_t free)
 {
-	if (!self->present || self->free < (1 << order)) {
+	if (!self->present || self->free < free) {
 		// not enough free frames in this tree
 		return false;
 	}
 
-	self->free -= (1 << order);
+	self->free -= free;
 	return true;
 }
 
@@ -108,7 +103,7 @@ bool local_inc_last_free(last_free_t *self, uint64_t tree)
 	return true;
 }
 
-void local_wait_for_completion(const local_t *const self)
+void local_wait_reserving(const local_t *const self)
 {
 	while (({
 		reserved_t r = atom_load(&self->reserved);

@@ -4,6 +4,7 @@
 #include "local.h"
 #include "lower.h"
 #include "utils.h"
+#include <assert.h>
 
 /// magic number to determine on recover if a allocator was previously
 /// initialized
@@ -25,18 +26,39 @@ struct meta {
  * otherwise the global counter is increased
  */
 static size_t inc_tree_counter(llc_t *self, local_t *const local,
-			       const uint64_t pfn, size_t order)
+			       size_t tree_idx, size_t order)
 {
 	reserved_t old;
-	if (!atom_update(&local->reserved, old, local_inc_counter, pfn,
-			 order)) {
+	if (!atom_update(&local->reserved, old, local_inc_counter, tree_idx,
+			 1 << order)) {
 		// given tree was not the local tree -> increase global counter
 		tree_t old;
-		bool _unused success = atom_update(
-			&self->trees[tree_from_pfn(pfn)], old, tree_inc, order);
+		bool _unused success = atom_update(&self->trees[tree_idx], old,
+						   tree_inc, order);
 		assert(success);
 	}
-	return tree_from_row(old.start_idx);
+	return tree_from_row(old.start_row);
+}
+
+static result_t swap_reserved(llc_t *self, local_t *local, reserved_t new,
+			      bool expect_reserving)
+{
+	reserved_t old;
+	if (!atom_update(&local->reserved, old, local_swap_reserved, new,
+			 expect_reserving)) {
+		return result(ERR_RETRY);
+	}
+
+	if (old.present) {
+		size_t tree_idx = tree_from_row(old.start_row);
+		tree_t t;
+		if (!atom_update(&self->trees[tree_idx], t, tree_writeback,
+				 old.free)) {
+			warn("Failed writeback");
+			return result(ERR_CORRUPTION);
+		}
+	}
+	return result(ERR_OK);
 }
 
 /**
@@ -46,47 +68,33 @@ static size_t inc_tree_counter(llc_t *self, local_t *const local,
  * @param local pointer to local struct
  * @return True if frames were added to the local tree, false otherwise
  */
-static bool sync_with_global(llc_t *self, local_t *const local)
+static bool sync_with_global(llc_t *self, local_t *const local, size_t order)
 {
 	assert(self != NULL);
 	assert(local != NULL);
 
 	// get Index of reserved Tree
 	reserved_t reserved = atom_load(&local->reserved);
-	size_t tree_idx = tree_from_row(reserved.start_idx);
+	size_t tree_idx = tree_from_row(reserved.start_row);
 
-	// get counter value from reserved Tree and set available Frames to 0
 	tree_t old_tree;
 	bool _unused ret = atom_update(&self->trees[tree_idx], old_tree,
 				       tree_steal_counter);
-	size_t free = old_tree.free;
 	assert(ret);
 
-	if (free == 0)
-		// no additional free frames found
+	size_t free = old_tree.free;
+	if (free < (1 << order))
 		return false;
 
-	reserved_t old = atom_load(&local->reserved);
-	while (true) {
-		// check if treeIdx is still the reserved Tree
-		if (tree_from_row(old.start_idx) != tree_idx) {
-			// the tree we stole from is no longer the reserved tree -> writeback
-			// counter to global
-			bool _unused ret = atom_update(&self->trees[tree_idx],
-						       old_tree, tree_writeback,
-						       free);
-			assert(ret);
-			return false;
-		}
-		// add found frames to local counter
-		reserved_t desire = old;
-		assert(old.free + free <= TREESIZE);
-		desire.free += free;
-		if (atom_cmp_exchange(&local->reserved, &old, desire) ==
-		    ERR_OK) {
-			return true;
-		}
+	if (atom_update(&self->local->reserved, reserved, local_inc_counter,
+			tree_idx, free)) {
+		return true;
 	}
+	// undo changes
+	ret = atom_update(&self->trees[tree_idx], old_tree, tree_writeback,
+			  free);
+	assert(ret);
+	return false;
 }
 
 /**
@@ -124,7 +132,7 @@ static void init_trees(llc_t *self)
  *         ERR_ADDRESS if tree could not be reserved
  */
 static result_t reserve_tree(llc_t *self, local_t *local, uint64_t tree_idx,
-			     range_t free)
+			     range_t free, bool expect_reserving)
 {
 	assert(self != NULL);
 	assert(local != NULL);
@@ -134,63 +142,78 @@ static result_t reserve_tree(llc_t *self, local_t *local, uint64_t tree_idx,
 	if (!atom_update(&self->trees[tree_idx], old_tree, tree_reserve,
 			 free.min, free.max))
 		return result(ERR_MEMORY);
-	int64_t counter = old_tree.free;
 
-	reserved_t old_r;
-	bool _unused success = atom_update(&local->reserved, old_r,
-					   local_set_reserved,
-					   pfn_from_tree(tree_idx), counter);
-	assert(success);
-
-	// writeback the old counter to trees
-	if (old_r.present) {
-		_Atomic(tree_t) *tree =
-			&self->trees[tree_from_row(old_r.start_idx)];
-		success =
-			atom_update(tree, old_tree, tree_writeback, old_r.free);
-		assert(success);
-	}
-	return result(ERR_OK);
+	reserved_t new = { old_tree.free, row_from_tree(tree_idx), true,
+			   false };
+	return swap_reserved(self, local, new, expect_reserving);
 }
 
 static result_t alloc_frame(llc_t *self, local_t *local, uint64_t order)
 {
 	reserved_t old;
-	if (!atom_update(&local->reserved, old, local_dec_counter, order))
+	if (!atom_update(&local->reserved, old, local_dec_counter, 1 << order))
 		return result(ERR_MEMORY);
 
-	uint64_t start_pfn = pfn_from_row(old.start_idx);
+	uint64_t start_pfn = pfn_from_row(old.start_row);
 
 	result_t res = lower_get(&self->lower, start_pfn, order);
 	if (result_ok(res)) {
 		// save pfn only if necessary
 		if ((1 << order) < ATOMICSIZE &&
-		    old.start_idx != row_from_pfn(res.val)) {
+		    old.start_row != row_from_pfn(res.val)) {
 			atom_update(&local->reserved, old, local_reserve_index,
-				    res.val);
+				    tree_from_pfn(res.val));
 		}
 	} else {
 		// undo decrement
-		inc_tree_counter(self, local, start_pfn, order);
+		inc_tree_counter(self, local, tree_from_pfn(start_pfn), order);
+	}
+	return res;
+}
+
+static result_t reserve_and_get_tree(llc_t *self, local_t *local, size_t idx,
+				     size_t order, range_t free)
+{
+	tree_t old_tree;
+	if (!atom_update(&self->trees[idx], old_tree, tree_reserve, free.min,
+			 free.max))
+		return result(ERR_MEMORY);
+	assert(old_tree.free >= (1 << order));
+
+	result_t res = lower_get(&self->lower, pfn_from_tree(idx), order);
+
+	if (result_ok(res)) {
+		// write back result
+		reserved_t new = { old_tree.free - (1 << order),
+				   row_from_pfn(res.val), true, false };
+		if (!result_ok(swap_reserved(self, local, new, true))) {
+			warn("Invalid reserve state");
+			return result(ERR_CORRUPTION);
+		}
+	} else {
+		// undo reservation
+		if (!atom_update(&self->trees[idx], old_tree, tree_writeback,
+				 old_tree.free)) {
+			warn("Failed undo");
+			return result(ERR_CORRUPTION);
+		}
 	}
 	return res;
 }
 
 /// searches the whole tree array starting at base_idx for a tree with
 /// saturation status and reserves it for local
-static result_t search_global(llc_t *self, local_t *const local,
-			      uint64_t base_idx, uint64_t order, range_t free)
+static result_t search_global(llc_t *self, local_t *local, uint64_t base_idx,
+			      uint64_t order, range_t free)
 {
 	// search outside of current cacheline for a partial tree
 	for (size_t i = 1; i <= self->trees_len; ++i) {
 		const int64_t toggle = i & 1 ? i / 2 : -i / 2;
 		const uint64_t idx = (base_idx + toggle) % self->trees_len;
-
-		if (result_ok(reserve_tree(self, local, idx, free))) {
-			result_t res = alloc_frame(self, local, order);
-			if (res.val != ERR_MEMORY)
-				return res;
-		}
+		result_t res =
+			reserve_and_get_tree(self, local, idx, order, free);
+		if (res.val != ERR_MEMORY)
+			return res;
 	}
 	return result(ERR_MEMORY);
 }
@@ -201,7 +224,7 @@ static result_t reserve_and_get(llc_t *self, local_t *local, uint64_t core,
 	reserved_t reserved = atom_load(&local->reserved);
 	uint64_t start_idx;
 	if (reserved.present) {
-		start_idx = tree_from_row(reserved.start_idx);
+		start_idx = tree_from_row(reserved.start_row);
 	} else {
 		start_idx =
 			self->trees_len / self->cores * (core % self->cores);
@@ -217,31 +240,14 @@ static result_t reserve_and_get(llc_t *self, local_t *local, uint64_t core,
 		vicinity = CHILDS_PER_TREE;
 
 	// search inside of current cacheline for a partial tree
-	uint64_t free_tree_idx = self->trees_len;
 	for (size_t i = 1; i <= vicinity; ++i) {
 		const int64_t toggle = i & 1 ? i / 2 : -i / 2;
 		const uint64_t idx = (base_idx + toggle) % self->trees_len;
-
-		if (result_ok(reserve_tree(self, local, idx, TREE_PARTIAL))) {
-			result_t res = alloc_frame(self, local, order);
-			if (res.val != ERR_MEMORY)
-				return res;
-		}
-
-		tree_t tree = atom_load(&self->trees[idx]);
-		if (tree.free >= TREE_UPPER_LIM) {
-			free_tree_idx = idx;
-		}
-	}
-
-	// reserve a free tree if no partial in current cacheline found
-	if (free_tree_idx < self->trees_len) {
-		if (result_ok(reserve_tree(self, local, free_tree_idx,
-					   TREE_FREE))) {
-			result_t res = alloc_frame(self, local, order);
-			if (res.val != ERR_MEMORY)
-				return res;
-		}
+		result_t res =
+			reserve_and_get_tree(self, local, idx, order,
+					     (range_t){ 1 << order, TREESIZE });
+		if (res.val != ERR_MEMORY)
+			return res;
 	}
 
 	// search globally for a frame
@@ -254,46 +260,25 @@ static result_t reserve_and_get(llc_t *self, local_t *local, uint64_t core,
 	if (res.val != ERR_MEMORY)
 		return res;
 
+	// drain other cores for a tree
+	uint64_t local_idx = core % self->cores;
+	for (uint64_t i = 1; i < self->cores; ++i) {
+		const uint64_t idx = (local_idx + i) % self->cores;
+		llc_drain(self, idx);
+	}
+
 	// search whole tree for a tree with enough free frames
 	res = search_global(self, local, base_idx, order,
 			    (range_t){ 1 << order, TREESIZE });
-	if (res.val != ERR_MEMORY)
-		return res;
 
-	// drain other cores for a tree
-	uint64_t local_idx = core % self->cores;
-	reserved_t other_reserved;
-	for (uint64_t i = 1; i < self->cores; ++i) {
-		const uint64_t idx = (local_idx + i) % self->cores;
-
-		int64_t ret = try_update(
-			local_steal(&self->local[idx], &other_reserved));
-
-		if (ret != ERR_OK)
-			continue;
-		uint64_t tree_idx = tree_from_row(other_reserved.start_idx);
-
-		tree_t old;
-		bool _unused success = atom_update(&self->trees[tree_idx], old,
-						   tree_steal_counter);
-		assert(success);
-		reserved_t old_reservation;
-		ret = atom_update(&local->reserved, old_reservation,
-				  local_set_reserved,
-				  pfn_from_row(other_reserved.start_idx),
-				  old.free + other_reserved.free);
-
-		if (old_reservation.present) {
-			atom_update(&self->trees[tree_from_row(
-					    old_reservation.start_idx)],
-				    old, tree_writeback, old_reservation.free);
-		}
-
-		result_t res = alloc_frame(self, local, order);
-		if (res.val != ERR_MEMORY)
-			return res;
+	// clear mark reserving
+	if (!result_ok(res)) {
+		reserved_t old;
+		bool _unused res = atom_update(&local->reserved, old,
+					       local_unmark_reserving);
+		assert(res);
 	}
-	return result(ERR_MEMORY);
+	return res;
 }
 
 /// Initializes the allocator for the given memory region, returning 0 on
@@ -380,7 +365,7 @@ result_t llc_get(llc_t *self, size_t core, size_t order)
 	if (!result_ok(res)) {
 		reserved_t reserved = atom_load(&local->reserved);
 		if (reserved.present && reserved.free < (1 << order) &&
-		    sync_with_global(self, local)) {
+		    sync_with_global(self, local, order)) {
 			res = alloc_frame(self, local, order);
 		}
 	}
@@ -389,19 +374,18 @@ result_t llc_get(llc_t *self, size_t core, size_t order)
 		reserved_t old;
 		if (atom_update(&local->reserved, old, local_mark_reserving)) {
 			res = reserve_and_get(self, local, core, order);
-
-			bool _unused success = atom_update(
-				&local->reserved, old, local_unmark_reserving);
-			assert(success);
 		} else {
-			local_wait_for_completion(local);
+			local_wait_reserving(local);
 			res = alloc_frame(self, local, order);
 		}
+		if (res.val != ERR_RETRY)
+			break;
 	}
 
 	if (result_ok(res)) {
 		return result(res.val + self->lower.offset);
 	}
+	warn("OOM!!!");
 
 	return res;
 }
@@ -419,14 +403,16 @@ result_t llc_put(llc_t *self, size_t core, uint64_t frame, size_t order)
 	assert(frame < self->lower.frames);
 
 	result_t res = lower_put(&self->lower, frame, order);
-	if (!result_ok(res))
+	if (!result_ok(res)) {
+		warn("lower err %ld", res.val);
 		return res;
+	}
 
 	// frame is successfully freed in lower allocator
 	local_t *local = get_local(self, core);
 	size_t tree_idx = tree_from_pfn(frame);
 
-	size_t resv_tree = inc_tree_counter(self, local, frame, order);
+	size_t resv_tree = inc_tree_counter(self, local, tree_idx, order);
 
 	// set last reserved in local
 	last_free_t old;
@@ -435,16 +421,27 @@ result_t llc_put(llc_t *self, size_t core, uint64_t frame, size_t order)
 	if (resv_tree != tree_idx && old.counter >= 3) {
 		// this tree was the target of multiple consecutive frees
 		// -> reserve this tree if it is not completely allocated
-		reserved_t old;
-		if (result_ok(reserve_tree(self, local, tree_idx,
-					   (range_t){ TREE_LOWER_LIM,
-						      TREE_UPPER_LIM }))) {
-			bool _unused success = atom_update(
-				&local->reserved, old, local_unmark_reserving);
-			assert(success);
+		result_t ret = reserve_tree(
+			self, local, tree_idx,
+			(range_t){ TREE_LOWER_LIM, TREE_UPPER_LIM }, false);
+
+		if (!result_ok(ret) && ret.val != ERR_MEMORY &&
+		    ret.val != ERR_RETRY) {
+			return ret;
 		}
 	}
 	return result(ERR_OK);
+}
+
+result_t llc_drain(llc_t *self, size_t core)
+{
+	local_t *local = get_local(self, core);
+
+	reserved_t none = { 0, 0, false, false };
+	result_t res = swap_reserved(self, local, none, false);
+	if (result_ok(res) || res.val == ERR_RETRY)
+		return result(ERR_OK);
+	return res;
 }
 
 /// Returns the total number of frames the allocator can allocate
@@ -574,7 +571,7 @@ void llc_print(llc_t *self)
 	printf("\nTreeIDX:\t");
 	for (size_t i = 0; i < self->cores; ++i) {
 		reserved_t reserved = atom_load(&get_local(self, i)->reserved);
-		printf("%lu\t", tree_from_row(reserved.start_idx));
+		printf("%lu\t", tree_from_row(reserved.start_row));
 	}
 	printf("\nFreeFrames:\t");
 	for (size_t i = 0; i < self->cores; ++i) {

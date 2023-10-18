@@ -6,16 +6,16 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <regex.h>
+#include <string.h>
 
-#define test_case_n 100
+#define TEST_CASE_N 100
 struct test_case {
 	char *name;
-	bool (*f)();
+	bool (*f)(void);
 };
 
 static size_t test_case_i;
-static struct test_case TESTS[test_case_n] = { 0 };
+static struct test_case TESTS[TEST_CASE_N] = { 0 };
 
 int main(int argc, char **argv)
 {
@@ -23,15 +23,8 @@ int main(int argc, char **argv)
 
 	printf("\x1b[92mRunning %lu test cases...\x1b[0m\n", test_case_i);
 
-	regex_t regex;
-	if (argc == 2) {
-		if (regcomp(&regex, argv[1], REG_NEWLINE))
-			exit(EXIT_FAILURE);
-	}
-
 	for (size_t i = 0; i < test_case_i; i++) {
-		regmatch_t pmatch[1];
-		if (argc == 2 && regexec(&regex, TESTS[i].name, 1, pmatch, 0)) {
+		if (argc == 2 && strstr(TESTS[i].name, argv[1]) == NULL) {
 			printf("\x1b[90mIgnore test '%s'\x1b[0m\n",
 			       TESTS[i].name);
 			continue;
@@ -62,9 +55,9 @@ declare_test(atomicity)
 	return success;
 }
 
-void add_test(char *name, bool (*f)())
+void add_test(char *name, bool (*f)(void))
 {
-	assert(test_case_i < test_case_n);
+	assert(test_case_i < TEST_CASE_N);
 	TESTS[test_case_i].name = name;
 	TESTS[test_case_i].f = f;
 	test_case_i++;
@@ -73,7 +66,9 @@ void add_test(char *name, bool (*f)())
 void *llc_ext_alloc(size_t align, size_t size)
 {
 	info("alloc a=%lu %lu -> %lu", align, size, align_up(align, size));
-	return aligned_alloc(align, align_up(align, size));
+	void *ret = aligned_alloc(align, align_up(align, size));
+	assert(ret != NULL);
+	return ret;
 }
 
 void llc_ext_free(_unused size_t align, _unused size_t size, void *addr)

@@ -9,9 +9,9 @@ typedef struct range {
 	uint16_t min, max;
 } range_t;
 
-static const size_t TREESIZE = (1 << 9 << 5);
-static const size_t TREE_LOWER_LIM = 2 << HP_ORDER;
-static const size_t TREE_UPPER_LIM = TREESIZE - (8 << HP_ORDER);
+#define TREESIZE  (1 << 9 << 5)
+#define TREE_LOWER_LIM  (2 << HP_ORDER)
+#define TREE_UPPER_LIM  (TREESIZE - (8 << HP_ORDER))
 
 static const range_t TREE_PARTIAL = { TREE_LOWER_LIM, TREE_UPPER_LIM };
 static const range_t TREE_FREE = { TREE_UPPER_LIM, TREESIZE };

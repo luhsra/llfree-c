@@ -41,6 +41,9 @@ result_t llc_get(llc_t *self, size_t core, size_t order);
 /// Frees a frame, returning 0 on success or a negative error code
 result_t llc_put(llc_t *self, size_t core, uint64_t frame, size_t order);
 
+/// Frees a frame, returning 0 on success or a negative error code
+result_t llc_drain(llc_t *self, size_t core);
+
 /// Checks if a frame is allocated, returning 0 if not
 uint8_t llc_is_free(llc_t *self, uint64_t pfn, size_t order);
 
