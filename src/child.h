@@ -2,9 +2,6 @@
 
 #include "utils.h"
 
-// child has 512 entry's
-#define CHILDSIZE CHILD_SIZE
-
 /// Index entry for every bitfield
 typedef struct child {
 	uint16_t free : 15;

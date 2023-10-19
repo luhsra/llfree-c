@@ -27,16 +27,12 @@ void lower_init(lower_t *const self, uint64_t offset, size_t len, uint8_t init)
 		// |-----------------------+----------+-----------+-----------+----------|
 
 		uint64_t bitfield_bytes = self->childs_len * sizeof(bitfield_t);
-
 		uint64_t child_bytes = self->childs_len * sizeof(child_t);
 		// round up to get complete cacheline
-		child_bytes = div_ceil(child_bytes, CACHE_SIZE) * CACHE_SIZE;
+		child_bytes = align_up(CACHE_SIZE, child_bytes);
 
-		uint64_t meta_bytes = CACHE_SIZE;
-
-		uint64_t metadata_bytes =
-			bitfield_bytes + child_bytes + meta_bytes;
-		uint64_t metadata_pages = div_ceil(metadata_bytes, PAGESIZE);
+		uint64_t metadata_bytes = bitfield_bytes + child_bytes;
+		uint64_t metadata_pages = div_ceil(metadata_bytes, FRAME_SIZE);
 
 		assert(metadata_pages < self->frames);
 
@@ -44,20 +40,20 @@ void lower_init(lower_t *const self, uint64_t offset, size_t len, uint8_t init)
 		self->childs_len = div_ceil(self->frames, CHILD_SIZE);
 
 		uint64_t metadata_start =
-			(self->offset + self->frames) * PAGESIZE;
+			(self->offset + self->frames) * FRAME_SIZE;
 
 		self->childs = (_Atomic(child_t) *)metadata_start;
 		self->fields = (bitfield_t *)(metadata_start + child_bytes);
 	}
 }
 
-void lower_clear(lower_t *self, bool all_free)
+void lower_clear(lower_t *self, bool free_all)
 {
 	assert(self != NULL);
 
 	for (size_t i = 0; i < self->childs_len - 1; i++) {
 		self->childs[i] =
-			child_new(all_free ? CHILD_SIZE : 0, !all_free);
+			child_new(free_all ? CHILD_SIZE : 0, !free_all);
 		bitfield_t *field = &self->fields[i];
 		for (uint64_t j = 0; j < FIELD_N; ++j) {
 			*((uint64_t *)&field->rows[j]) = 0;
@@ -69,17 +65,17 @@ void lower_clear(lower_t *self, bool all_free)
 		rest_frames = CHILD_SIZE;
 
 	self->childs[self->childs_len - 1] =
-		all_free ? child_new(rest_frames, false) :
+		free_all ? child_new(rest_frames, false) :
 			   child_new(0, rest_frames == CHILD_SIZE);
 
 	bitfield_t *field = &self->fields[self->childs_len - 1];
-	uint64_t val = all_free ? 0 : UINT64_MAX;
+	uint64_t val = free_all ? 0 : UINT64_MAX;
 	for (uint64_t j = 0; j < FIELD_N; ++j) {
 		if (rest_frames >= ATOMIC_SIZE) {
 			*((uint64_t *)&field->rows[j]) = val;
 			rest_frames -= ATOMIC_SIZE;
 		} else if (rest_frames > 0) {
-			val = all_free ? UINT64_MAX << rest_frames : UINT64_MAX;
+			val = free_all ? UINT64_MAX << rest_frames : UINT64_MAX;
 			*((uint64_t *)&field->rows[j]) = val;
 			rest_frames = 0;
 		} else {
@@ -112,7 +108,7 @@ static result_t get_max(lower_t *self, uint64_t pfn)
 	assert(self != 0);
 
 	size_t idx = child_from_pfn(pfn) / 2;
-	for_offsetted(idx, CHILDS_PER_TREE / 2)
+	for_offsetted(idx, TREE_CHILDREN / 2)
 	{
 		if (current_i * 2 + 1 >= self->childs_len)
 			continue;
@@ -133,7 +129,7 @@ static result_t get_huge(lower_t *self, uint64_t pfn)
 	assert(self != 0);
 
 	size_t idx = child_from_pfn(pfn);
-	for_offsetted(idx, CHILDS_PER_TREE)
+	for_offsetted(idx, TREE_CHILDREN)
 	{
 		if (current_i >= self->childs_len)
 			continue;
@@ -148,19 +144,19 @@ static result_t get_huge(lower_t *self, uint64_t pfn)
 	return result(ERR_MEMORY);
 }
 
-result_t lower_get(lower_t *self, const uint64_t start_pfn, const size_t order)
+result_t lower_get(lower_t *self, const uint64_t start_frame, const size_t order)
 {
 	assert(order <= MAX_ORDER);
-	assert(start_pfn < self->frames);
+	assert(start_frame < self->frames);
 
 	if (order == MAX_ORDER)
-		return get_max(self, start_pfn);
+		return get_max(self, start_frame);
 	if (order == HP_ORDER)
-		return get_huge(self, start_pfn);
+		return get_huge(self, start_frame);
 
-	const size_t start_idx = child_from_pfn(start_pfn);
+	const size_t start_idx = child_from_pfn(start_frame);
 
-	for_offsetted(start_idx, CHILDS_PER_TREE)
+	for_offsetted(start_idx, TREE_CHILDREN)
 	{
 		if (current_i >= self->childs_len)
 			continue;
@@ -169,12 +165,14 @@ result_t lower_get(lower_t *self, const uint64_t start_pfn, const size_t order)
 		if (atom_update(&self->childs[current_i], old, child_dec,
 				order)) {
 			result_t pos = field_set_next(&self->fields[current_i],
-						      start_pfn, order);
+						      start_frame, order);
 			if (result_ok(pos)) {
-				return result(pfn_from_child(current_i) + pos.val);
+				return result(pfn_from_child(current_i) +
+					      pos.val);
 			}
 
-			if (!atom_update(&self->childs[current_i], old, child_inc, order)) {
+			if (!atom_update(&self->childs[current_i], old,
+					 child_inc, order)) {
 				return result(ERR_CORRUPTION);
 			}
 		}
@@ -326,7 +324,7 @@ void lower_drop(lower_t *self)
 {
 	assert(self != NULL);
 	_Atomic(child_t) *start_data =
-		(void *)((self->offset + self->frames) * PAGESIZE);
+		(void *)((self->offset + self->frames) * FRAME_SIZE);
 	if (self->childs != start_data) {
 		llc_ext_free(CACHE_SIZE, sizeof(child_t) * self->childs_len,
 			     self->childs);
@@ -340,7 +338,7 @@ size_t lower_free_huge(lower_t *self)
 	size_t count = 0;
 	for (size_t i = 0; i < self->childs_len; ++i) {
 		child_t child = atom_load(&self->childs[i]);
-		if (child.free == CHILDSIZE)
+		if (child.free == CHILD_SIZE)
 			++count;
 	}
 	return count;

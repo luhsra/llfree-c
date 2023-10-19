@@ -5,7 +5,9 @@
 #include "pthread.h"
 #include "utils.h"
 
+#include <assert.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <memory.h>
 
@@ -18,20 +20,19 @@ void print_trees(llc_t *self)
 	}
 }
 
-bool check_init(llc_t *upper, size_t cores, uint64_t start_frame_adr,
-		size_t len, uint8_t init, uint8_t free_all)
+bool check_init(llc_t *upper, size_t cores, uint64_t offset, size_t len,
+		uint8_t init, uint8_t free_all)
 {
 	bool success = true;
-	result_t ret = llc_init(upper, cores, start_frame_adr / PAGESIZE, len,
-				init, free_all);
+	result_t ret = llc_init(upper, cores, offset, len, init, free_all);
 	size_t num_trees = div_ceil(len, TREESIZE);
-	size_t num_childs = div_ceil(len, CHILDSIZE);
+	size_t num_childs = div_ceil(len, CHILD_SIZE);
 	check_equal((uint64_t)upper->trees % CACHE_SIZE, 0ull);
 
 	check_m(result_ok(ret), "init is success");
 	check_equal(upper->trees_len, num_trees);
 	check_equal(upper->lower.childs_len, num_childs);
-	check_equal(upper->lower.offset, start_frame_adr);
+	check_equal(upper->lower.offset, offset);
 	check_equal(upper->cores, (cores > num_trees ? num_trees : cores));
 	check_equal(llc_frames(upper), len);
 	check_equal(llc_free_frames(upper), free_all ? len : 0);
@@ -51,6 +52,34 @@ declare_test(llc_init)
 	if (!check_init(upper, 4, 0, 1 << 20, VOLATILE, true)) {
 		success = false;
 	}
+
+	llc_drop(upper);
+	return success;
+}
+
+declare_test(llc_alloc_s)
+{
+	int success = true;
+	const size_t SIZE = 8ul << 30; // 1G
+	void *memory = llc_ext_alloc(2 * FRAME_SIZE, SIZE);
+	assert(memory != NULL);
+	llc_t *upper = llc_ext_alloc(CACHE_SIZE, sizeof(llc_t));
+	check_m(upper != NULL, "default init must reserve memory");
+
+	info("Init");
+	result_t res = llc_init(upper, 1, (uint64_t)memory / FRAME_SIZE,
+				SIZE / FRAME_SIZE, OVERWRITE, true);
+	check(result_ok(res));
+
+	info("Alloc");
+	size_t n = 512;
+	for (size_t i = 0; i < n; i++) {
+		check(result_ok(llc_get(upper, 0, 0)));
+		check(result_ok(llc_get(upper, 0, 9)));
+	}
+
+	check_equal(n + n * 512,
+		    llc_frames(upper) - llc_free_frames(upper));
 
 	llc_drop(upper);
 	return success;
@@ -283,7 +312,7 @@ declare_test(llc_parallel_alloc)
 	assert(memory != NULL);
 
 	upper = llc_ext_alloc(CACHE_SIZE, sizeof(llc_t));
-	assert(result_ok(llc_init(upper, CORES, (uint64_t)memory / PAGESIZE,
+	assert(result_ok(llc_init(upper, CORES, (uint64_t)memory / FRAME_SIZE,
 				  LENGTH, OVERWRITE, true)));
 	pthread_t threads[CORES];
 	struct arg args[CORES];
@@ -358,7 +387,7 @@ static void *parallel_alloc_all(void *input)
 	struct par_args *args = input;
 
 	size_t total = llc_frames(args->upper);
-	*(args->frames) = llc_ext_alloc(PAGESIZE, total * sizeof(uint64_t));
+	*(args->frames) = llc_ext_alloc(FRAME_SIZE, total * sizeof(uint64_t));
 
 	size_t i = 0;
 	for (;; i++) {
@@ -400,7 +429,7 @@ declare_test(llc_parallel_alloc_all)
 
 	size_t counts[CORES] = { 0 };
 	uint64_t *all_frames =
-		llc_ext_alloc(PAGESIZE, llc_frames(upper) * sizeof(uint64_t));
+		llc_ext_alloc(FRAME_SIZE, llc_frames(upper) * sizeof(uint64_t));
 
 	size_t total = 0;
 	for (size_t i = 0; i < CORES; i++) {

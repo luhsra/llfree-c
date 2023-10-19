@@ -107,9 +107,8 @@ static void init_trees(llc_t *self)
 
 	for (size_t tree_idx = 0; tree_idx < self->trees_len; ++tree_idx) {
 		uint16_t sum = 0;
-		for (size_t child_idx = CHILDS_PER_TREE * tree_idx;
-		     child_idx < CHILDS_PER_TREE * (tree_idx + 1);
-		     ++child_idx) {
+		for (size_t child_idx = TREE_CHILDREN * tree_idx;
+		     child_idx < TREE_CHILDREN * (tree_idx + 1); ++child_idx) {
 			if (child_idx >= self->lower.childs_len)
 				break;
 			child_t child =
@@ -212,11 +211,11 @@ static result_t reserve_and_get(llc_t *self, local_t *local, uint64_t core,
 	}
 	assert(start_idx < self->trees_len);
 
-	uint64_t offset = start_idx % CHILDS_PER_TREE;
+	uint64_t offset = start_idx % TREE_CHILDREN;
 	uint64_t base_idx = start_idx - offset;
 	uint64_t vicinity = div_ceil(div_ceil(self->trees_len, self->cores), 4);
-	if (vicinity > CHILDS_PER_TREE)
-		vicinity = CHILDS_PER_TREE;
+	if (vicinity > TREE_CHILDREN)
+		vicinity = TREE_CHILDREN;
 
 	// search inside of current cacheline for a partial tree
 	for (int64_t i = 1; i <= (int64_t)vicinity; ++i) {
@@ -271,7 +270,7 @@ result_t llc_init(llc_t *self, size_t cores, uint64_t offset, size_t len,
 		warn("Invalid size %lu", len);
 		return result(ERR_INITIALIZATION);
 	}
-	if ((offset * PAGESIZE) % (1 << MAX_ORDER) != 0) {
+	if ((offset * FRAME_SIZE) % (1 << MAX_ORDER) != 0) {
 		warn("Invalid alignment");
 		return result(ERR_INITIALIZATION);
 	}
@@ -280,11 +279,12 @@ result_t llc_init(llc_t *self, size_t cores, uint64_t offset, size_t len,
 		self->meta = NULL;
 	} else {
 		len -= 1;
-		uint64_t last_page = (offset + len) * PAGESIZE;
+		uint64_t last_page = (offset + len) * FRAME_SIZE;
 		self->meta = (struct meta *)last_page;
 	}
 
 	lower_init(&self->lower, offset, len, init);
+
 	if (init == RECOVER) {
 		if (self->meta->magic != MAGIC) {
 			warn("Invalid magic");
@@ -296,7 +296,7 @@ result_t llc_init(llc_t *self, size_t cores, uint64_t offset, size_t len,
 		lower_clear(&self->lower, free_all);
 	}
 
-	self->trees_len = div_ceil(self->lower.childs_len, CHILDS_PER_TREE);
+	self->trees_len = div_ceil(self->lower.childs_len, TREE_CHILDREN);
 	self->trees =
 		llc_ext_alloc(CACHE_SIZE, sizeof(child_t) * self->trees_len);
 	assert(self->trees != NULL);

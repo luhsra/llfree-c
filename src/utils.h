@@ -32,7 +32,10 @@
 #define CHILD_SIZE (1 << CHILD_ORDER)
 
 /// Number of frames in a tree
-#define TREE_ORDER (HP_ORDER + 5)
+#define TREE_CHILDREN_ORDER 5
+#define TREE_CHILDREN (1 << TREE_CHILDREN_ORDER)
+
+#define TREE_ORDER (HP_ORDER + TREE_CHILDREN_ORDER)
 #define TREE_SIZE (1 << TREE_ORDER)
 
 // conversion functions

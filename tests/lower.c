@@ -41,10 +41,10 @@ bool init_lower_test(uint8_t init)
 	lower_t actual;
 	if (init != VOLATILE) {
 		memory = aligned_alloc(CACHE_SIZE,
-				       sizeof(char) * frames * PAGESIZE);
+				       sizeof(char) * frames * FRAME_SIZE);
 		assert(memory != NULL);
 	}
-	lower_init(&actual, (uint64_t)memory / PAGESIZE, frames, init);
+	lower_init(&actual, (uint64_t)memory / FRAME_SIZE, frames, init);
 	lower_clear(&actual, true);
 	check_child_number(2ul);
 	bitfield_is_free(actual.fields[0]);
@@ -57,10 +57,10 @@ bool init_lower_test(uint8_t init)
 	if (init != VOLATILE) {
 		free(memory);
 		memory = aligned_alloc(CACHE_SIZE,
-				       sizeof(char) * frames * PAGESIZE);
+				       sizeof(char) * frames * FRAME_SIZE);
 		assert(memory != NULL);
 	}
-	lower_init(&actual, (uint64_t)memory / PAGESIZE, frames, init);
+	lower_init(&actual, (uint64_t)memory / FRAME_SIZE, frames, init);
 	lower_clear(&actual, true);
 	check_child_number(2ul);
 	check_equal_bitfield(actual.fields[1],
@@ -77,10 +77,10 @@ bool init_lower_test(uint8_t init)
 	if (init != VOLATILE) {
 		free(memory);
 		memory = aligned_alloc(CACHE_SIZE,
-				       sizeof(char) * frames * PAGESIZE);
+				       sizeof(char) * frames * FRAME_SIZE);
 		assert(memory != NULL);
 	}
-	lower_init(&actual, (uint64_t)memory / PAGESIZE, frames, init);
+	lower_init(&actual, (uint64_t)memory / FRAME_SIZE, frames, init);
 	lower_clear(&actual, false);
 	check_child_number(2ul);
 	check_equal(actual.frames, init == VOLATILE ? 632ul : 631ul);
@@ -93,10 +93,10 @@ bool init_lower_test(uint8_t init)
 	if (init != VOLATILE) {
 		free(memory);
 		memory = aligned_alloc(CACHE_SIZE,
-				       sizeof(char) * frames * PAGESIZE);
+				       sizeof(char) * frames * FRAME_SIZE);
 		assert(memory != NULL);
 	}
-	lower_init(&actual, (uint64_t)memory / PAGESIZE, frames, init);
+	lower_init(&actual, (uint64_t)memory / FRAME_SIZE, frames, init);
 	lower_clear(&actual, true);
 	check_m(((uint64_t)&actual.fields[actual.childs_len] -
 		 (uint64_t)&actual.fields[0]) /
@@ -505,9 +505,9 @@ declare_test(lower_free_all)
 {
 	bool success = true;
 	const uint64_t len = (1 << 13) + 35; // 16 HP + 35 regular frames
-	char *memory = aligned_alloc(CACHE_SIZE, PAGESIZE * len);
+	char *memory = aligned_alloc(CACHE_SIZE, FRAME_SIZE * len);
 	assert(memory != NULL);
-	const uint64_t offset = (uint64_t)memory / PAGESIZE;
+	const uint64_t offset = (uint64_t)memory / FRAME_SIZE;
 
 	lower_t lower;
 	lower_init(&lower, offset, len, OVERWRITE);
@@ -543,26 +543,26 @@ declare_test(lower_free_all)
 declare_test(lower_peristent_init)
 {
 	bool success = true;
-	uint64_t len = (16ul << 30) / PAGESIZE; // 16 GiB
-	char *mem = aligned_alloc(1 << HP_ORDER, len * PAGESIZE);
+	uint64_t len = (16ul << 30) / FRAME_SIZE; // 16 GiB
+	char *mem = aligned_alloc(1 << HP_ORDER, len * FRAME_SIZE);
 	assert(mem != NULL);
-	info("mem: %p-%p (%lx)", mem, mem + len * PAGESIZE, len);
+	info("mem: %p-%p (%lx)", mem, mem + len * FRAME_SIZE, len);
 
 	lower_t lower;
-	lower_init(&lower, (uint64_t)mem / PAGESIZE, len, OVERWRITE);
+	lower_init(&lower, (uint64_t)mem / FRAME_SIZE, len, OVERWRITE);
 
 	info("childs %p, fields %p", lower.childs, lower.fields);
 
 	check_equal((uint64_t)lower.childs % CACHE_SIZE, 0ul);
 	check_equal((uint64_t)lower.fields % CACHE_SIZE, 0ul);
 
-	check((uint64_t)lower.childs > lower.offset * PAGESIZE);
+	check((uint64_t)lower.childs > lower.offset * FRAME_SIZE);
 	check((uint64_t)&lower.childs[lower.childs_len] <
-	      (lower.offset + len) * PAGESIZE);
+	      (lower.offset + len) * FRAME_SIZE);
 
-	check((uint64_t)lower.fields > lower.offset * PAGESIZE);
-	check((uint64_t)&lower.fields[lower.childs_len] <
-	      (lower.offset + len) * PAGESIZE);
+	check((uint64_t)lower.fields > lower.offset * FRAME_SIZE);
+	check((uint64_t)&lower.fields[lower.childs_len] <=
+	      (lower.offset + len) * FRAME_SIZE);
 
 	lower_clear(&lower, true);
 	return success;

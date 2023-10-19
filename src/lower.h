@@ -4,9 +4,6 @@
 #include "child.h"
 #include "utils.h"
 
-#define CHILDS_PER_TREE 32
-#define PAGESIZE (1 << 12)
-
 typedef struct lower {
 	/// first pfn of managed space
 	uint64_t offset;
@@ -39,7 +36,7 @@ void lower_clear(lower_t *self, bool free_all);
 result_t lower_recover(lower_t *self);
 
 /// Allocates the given frame, returning its number or an error
-result_t lower_get(lower_t *self, uint64_t frame, size_t order);
+result_t lower_get(lower_t *self, uint64_t start_frame, size_t order);
 
 /// Deallocates the given frame
 result_t lower_put(lower_t *self, uint64_t frame, size_t order);
