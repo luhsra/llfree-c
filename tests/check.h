@@ -3,10 +3,6 @@
 #include "utils.h"
 #include "bitfield.h"
 
-#include <stdio.h>
-#include <stdbool.h>
-#include <assert.h>
-
 #define run_test(test_func)        \
 	(*test_counter)++;         \
 	printf(#test_func ":\n");  \

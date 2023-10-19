@@ -9,15 +9,15 @@ void lower_init(lower_t *const self, uint64_t offset, size_t len, uint8_t init)
 	self->offset = offset;
 	self->frames = len;
 
-	self->childs_len = div_ceil(self->frames, FIELDSIZE);
+	self->childs_len = div_ceil(self->frames, CHILD_SIZE);
 
 	if (init == VOLATILE) {
 		self->fields = llc_ext_alloc(
-			CACHESIZE, sizeof(bitfield_t) * self->childs_len);
+			CACHE_SIZE, sizeof(bitfield_t) * self->childs_len);
 		assert(self->fields != NULL);
 
 		self->childs = llc_ext_alloc(
-			CACHESIZE, sizeof(child_t) * self->childs_len);
+			CACHE_SIZE, sizeof(child_t) * self->childs_len);
 		assert(self->childs != NULL);
 
 	} else {
@@ -30,9 +30,9 @@ void lower_init(lower_t *const self, uint64_t offset, size_t len, uint8_t init)
 
 		uint64_t child_bytes = self->childs_len * sizeof(child_t);
 		// round up to get complete cacheline
-		child_bytes = div_ceil(child_bytes, CACHESIZE) * CACHESIZE;
+		child_bytes = div_ceil(child_bytes, CACHE_SIZE) * CACHE_SIZE;
 
-		uint64_t meta_bytes = CACHESIZE;
+		uint64_t meta_bytes = CACHE_SIZE;
 
 		uint64_t metadata_bytes =
 			bitfield_bytes + child_bytes + meta_bytes;
@@ -41,7 +41,7 @@ void lower_init(lower_t *const self, uint64_t offset, size_t len, uint8_t init)
 		assert(metadata_pages < self->frames);
 
 		self->frames -= metadata_pages;
-		self->childs_len = div_ceil(self->frames, FIELDSIZE);
+		self->childs_len = div_ceil(self->frames, CHILD_SIZE);
 
 		uint64_t metadata_start =
 			(self->offset + self->frames) * PAGESIZE;
@@ -57,27 +57,27 @@ void lower_clear(lower_t *self, bool all_free)
 
 	for (size_t i = 0; i < self->childs_len - 1; i++) {
 		self->childs[i] =
-			child_new(all_free ? FIELDSIZE : 0, !all_free);
+			child_new(all_free ? CHILD_SIZE : 0, !all_free);
 		bitfield_t *field = &self->fields[i];
 		for (uint64_t j = 0; j < FIELD_N; ++j) {
 			*((uint64_t *)&field->rows[j]) = 0;
 		}
 	}
 
-	uint64_t rest_frames = self->frames % FIELDSIZE;
+	uint64_t rest_frames = self->frames % CHILD_SIZE;
 	if (rest_frames == 0)
-		rest_frames = FIELDSIZE;
+		rest_frames = CHILD_SIZE;
 
 	self->childs[self->childs_len - 1] =
 		all_free ? child_new(rest_frames, false) :
-			   child_new(0, rest_frames == FIELDSIZE);
+			   child_new(0, rest_frames == CHILD_SIZE);
 
 	bitfield_t *field = &self->fields[self->childs_len - 1];
 	uint64_t val = all_free ? 0 : UINT64_MAX;
 	for (uint64_t j = 0; j < FIELD_N; ++j) {
-		if (rest_frames >= ATOMICSIZE) {
+		if (rest_frames >= ATOMIC_SIZE) {
 			*((uint64_t *)&field->rows[j]) = val;
-			rest_frames -= ATOMICSIZE;
+			rest_frames -= ATOMIC_SIZE;
 		} else if (rest_frames > 0) {
 			val = all_free ? UINT64_MAX << rest_frames : UINT64_MAX;
 			*((uint64_t *)&field->rows[j]) = val;
@@ -99,7 +99,7 @@ result_t lower_recover(lower_t *self)
 		} else {
 			// not a Huge Page -> count free Frames and set as counter
 			uint16_t counter =
-				FIELDSIZE - field_count_bits(&self->fields[i]);
+				CHILD_SIZE - field_count_bits(&self->fields[i]);
 			atom_store(&self->childs[i], child_new(counter, false));
 		}
 	}
@@ -222,8 +222,8 @@ result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 
 	if (order == MAX_ORDER) {
 		child_pair_t old = { child_new(0, true), child_new(0, true) };
-		child_pair_t new = { child_new(FIELDSIZE, false),
-				     child_new(FIELDSIZE, false) };
+		child_pair_t new = { child_new(CHILD_SIZE, false),
+				     child_new(CHILD_SIZE, false) };
 		return atom_cmp_exchange((_Atomic(child_pair_t) *)child, &old,
 					 new) ?
 			       result(ERR_OK) :
@@ -231,7 +231,7 @@ result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 	}
 	if (order == HP_ORDER) {
 		child_t old = child_new(0, true);
-		child_t new = child_new(FIELDSIZE, false);
+		child_t new = child_new(CHILD_SIZE, false);
 		return atom_cmp_exchange(child, &old, new) ?
 			       result(ERR_OK) :
 			       result(ERR_ADDRESS);
@@ -244,7 +244,7 @@ result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 		split_huge(child, field);
 	}
 
-	size_t field_index = frame % FIELDSIZE;
+	size_t field_index = frame % CHILD_SIZE;
 	result_t ret = field_toggle(field, field_index, order, true);
 	if (!result_ok(ret))
 		return ret;
@@ -269,10 +269,10 @@ bool lower_is_free(lower_t *self, uint64_t frame, size_t order)
 	child_t child = atom_load(&self->childs[child_index]);
 
 	if (order == HP_ORDER) {
-		return (!child.huge && child.free == FIELDSIZE);
+		return (!child.huge && child.free == CHILD_SIZE);
 	}
 
-	size_t field_index = frame % FIELDSIZE;
+	size_t field_index = frame % CHILD_SIZE;
 
 	if (child.free < (1 << order))
 		return false;
@@ -328,9 +328,9 @@ void lower_drop(lower_t *self)
 	_Atomic(child_t) *start_data =
 		(void *)((self->offset + self->frames) * PAGESIZE);
 	if (self->childs != start_data) {
-		llc_ext_free(CACHESIZE, sizeof(child_t) * self->childs_len,
+		llc_ext_free(CACHE_SIZE, sizeof(child_t) * self->childs_len,
 			     self->childs);
-		llc_ext_free(CACHESIZE, sizeof(bitfield_t) * self->childs_len,
+		llc_ext_free(CACHE_SIZE, sizeof(bitfield_t) * self->childs_len,
 			     self->fields);
 	}
 }

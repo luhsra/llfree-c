@@ -4,7 +4,7 @@
 
 #define equal_trees(actual, expect)            \
 	check_equal(actual.free, expect.free); \
-	check_equal(actual.flag, expect.flag)
+	check_equal(actual.reserved, expect.reserved)
 
 declare_test(tree_atomic)
 {
@@ -19,23 +19,23 @@ declare_test(tree_init)
 	int success = true;
 
 	int free = 498;
-	bool flag = false;
+	bool reserved = false;
 
-	tree_t actual = tree_new(free, flag);
+	tree_t actual = tree_new(free, reserved);
 	check_equal(actual.free, free);
-	check_equal(actual.flag, flag);
+	check_equal(actual.reserved, reserved);
 
 	free = 0x3fff; // maximum value
-	flag = false;
-	actual = tree_new(free, flag);
+	reserved = false;
+	actual = tree_new(free, reserved);
 	check_equal(actual.free, free);
-	check_equal(actual.flag, flag);
+	check_equal(actual.reserved, reserved);
 
 	free = 0; // minimum value
-	flag = true; // check if flag is set
-	actual = tree_new(free, flag);
+	reserved = true; // check if reserved is set
+	actual = tree_new(free, reserved);
 	check_equal(actual.free, free);
-	check_equal(actual.flag, flag);
+	check_equal(actual.reserved, reserved);
 
 	return success;
 }
@@ -48,28 +48,28 @@ declare_test(tree_reserve)
 	tree_t actual = tree_new(7645, false);
 	tree_t expect = tree_new(0, true);
 
-	ret = tree_reserve(&actual, 0, (1 << TREE_SHIFT));
+	ret = tree_reserve(&actual, 0, (1 << TREE_ORDER));
 	check(ret);
 	equal_trees(actual, expect);
 
 	// chek min counter value
 	actual = tree_new(0, false);
 	expect = tree_new(0, true);
-	ret = tree_reserve(&actual, 0, (1 << TREE_SHIFT));
+	ret = tree_reserve(&actual, 0, (1 << TREE_ORDER));
 	check(ret);
 	equal_trees(actual, expect);
 
 	// if already reserved
 	actual = tree_new(456, true);
 	expect = actual; // no change expected
-	ret = tree_reserve(&actual, 0, (1 << TREE_SHIFT));
+	ret = tree_reserve(&actual, 0, (1 << TREE_ORDER));
 	check_m(!ret, "already reserved");
 	equal_trees(actual, expect);
 
 	// max counter value
 	actual = tree_new(0x3fff, false);
 	expect = tree_new(0, true);
-	ret = tree_reserve(&actual, 0, (1 << TREE_SHIFT));
+	ret = tree_reserve(&actual, 0, (1 << TREE_ORDER));
 	check(ret);
 	equal_trees(actual, expect);
 
@@ -119,7 +119,7 @@ declare_test(tree_inc)
 	free = 0;
 	actual = tree_new(free, false);
 	expect = tree_new(free + (1 << order), false);
-	ret = tree_inc(&actual, order);
+	ret = tree_inc(&actual, 1 << order);
 	check(ret);
 	equal_trees(actual, expect);
 
@@ -127,16 +127,16 @@ declare_test(tree_inc)
 	free = 16383; // max free for success
 	actual = tree_new(free, false);
 	expect = tree_new(free + (1 << order), false);
-	ret = tree_inc(&actual, order);
+	ret = tree_inc(&actual, 1 << order);
 	check(ret);
 	equal_trees(actual, expect);
 
 	order = 0;
 	free = 3456;
-	// should be no difference if flag is true
+	// should be no difference if reserved is true
 	actual = tree_new(free, true);
 	expect = tree_new(free + (1 << order), true);
-	ret = tree_inc(&actual, order);
+	ret = tree_inc(&actual, 1 << order);
 	check(ret);
 	equal_trees(actual, expect);
 
@@ -144,7 +144,7 @@ declare_test(tree_inc)
 	free = 3456;
 	actual = tree_new(free, true);
 	expect = tree_new(free + (1 << order), true);
-	ret = tree_inc(&actual, order);
+	ret = tree_inc(&actual, 1 << order);
 	check(ret);
 	equal_trees(actual, expect);
 
@@ -152,61 +152,7 @@ declare_test(tree_inc)
 	free = (1 << 14) - (1 << 9); // max free
 	actual = tree_new(free, true);
 	expect = tree_new(free + (1 << order), true);
-	ret = tree_inc(&actual, order);
-	check(ret);
-	equal_trees(actual, expect);
-
-	return success;
-}
-
-declare_test(tree_dec)
-{
-	bool success = true;
-
-	tree_t actual;
-	tree_t expect;
-	size_t order;
-	int free;
-	bool ret = false;
-
-	order = 0;
-	free = 1 << 14;
-	actual = tree_new(free, false);
-	expect = tree_new(free - (1 << order), false);
-	ret = tree_dec(&actual, order);
-	check(ret);
-	equal_trees(actual, expect);
-
-	order = 0;
-	free = 1; // min free for success
-	actual = tree_new(free, false);
-	expect = tree_new(free - (1 << order), false);
-	ret = tree_dec(&actual, order);
-	check(ret);
-	equal_trees(actual, expect);
-
-	order = 0;
-	free = 3456;
-	// should be no difference if flag is true
-	actual = tree_new(free, true);
-	expect = tree_new(free - (1 << order), true);
-	ret = tree_dec(&actual, order);
-	check(ret);
-	equal_trees(actual, expect);
-
-	order = HP_ORDER;
-	free = 13370;
-	actual = tree_new(free, true);
-	expect = tree_new(free - (1 << order), true);
-	ret = tree_dec(&actual, order);
-	check(ret);
-	equal_trees(actual, expect);
-
-	order = HP_ORDER;
-	free = (1 << 9); // min free
-	actual = tree_new(free, true);
-	expect = tree_new(free - (1 << order), true);
-	ret = tree_dec(&actual, order);
+	ret = tree_inc(&actual, 1 << order);
 	check(ret);
 	equal_trees(actual, expect);
 

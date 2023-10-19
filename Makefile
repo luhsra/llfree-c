@@ -4,7 +4,7 @@ SRCDIR = src
 # Compiler and flags
 CC = clang
 AR = ar
-CFLAGS = -Werror -Wunused-variable -Wundef -Werror=strict-prototypes -Wno-trigraphs -Werror=implicit-function-declaration -Werror=implicit-int -Werror=return-type -Wno-format-security -std=gnu11 -Werror=unknown-warning-option -Werror=ignored-optimization-argument -Wno-sign-compare -Wno-frame-address -Wno-address-of-packed-member -Wno-gnu -Wno-unused-but-set-variable -Wno-unused-const-variable -Wvla -Wno-pointer-sign -Wcast-function-type -Wimplicit-fallthrough -Werror=date-time -Werror=incompatible-pointer-types -Wno-initializer-overrides -Wno-sign-compare -Wno-pointer-to-enum-cast -Wno-tautological-constant-out-of-range-compare -Wno-unaligned-access -Wno-cast-function-type-strict -fPIE -pthread -I $(PWD) -I $(PWD)/$(SRCDIR)
+CFLAGS = -std=c11 -Werror -Wunused-variable -Wundef -Werror=strict-prototypes -Wno-trigraphs -Werror=implicit-function-declaration -Werror=implicit-int -Werror=return-type -Wno-format-security -Werror=unknown-warning-option -Werror=ignored-optimization-argument -Wno-sign-compare -Wno-frame-address -Wno-address-of-packed-member -Wno-gnu -Wno-unused-but-set-variable -Wno-unused-const-variable -Wvla -Wno-pointer-sign -Wcast-function-type -Wimplicit-fallthrough -Werror=date-time -Werror=incompatible-pointer-types -Wno-initializer-overrides -Wno-sign-compare -Wno-pointer-to-enum-cast -Wno-tautological-constant-out-of-range-compare -Wno-unaligned-access -Wno-cast-function-type-strict -fPIE -pthread -I $(PWD) -I $(PWD)/$(SRCDIR)
 
 A ?= ""
 

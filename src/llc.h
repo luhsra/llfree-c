@@ -7,15 +7,15 @@
 
 /// The llc metadata
 typedef struct llc {
-        /// Persistent metadata, used for recovery
+	/// Persistent metadata, used for recovery
 	struct meta *meta;
-        /// Lower allocator
+	/// Lower allocator
 	lower_t lower;
-        /// Cpu-local data
+	/// Cpu-local data
 	struct local *local;
-        /// Length of local
+	/// Length of local
 	size_t cores;
-        /// Array of tree entries
+	/// Array of tree entries
 	_Atomic(tree_t) *trees;
 	size_t trees_len;
 } llc_t;
@@ -33,7 +33,7 @@ typedef struct llc {
 /// `all_free` determins whether the region is initalized as entirely free
 /// or entirely allocated.
 result_t llc_init(llc_t *self, size_t cores, uint64_t offset, size_t len,
-		  uint8_t init, uint8_t all_free);
+		  uint8_t init, uint8_t free_all);
 
 /// Allocates a frame and returns its number, or a negative error code
 result_t llc_get(llc_t *self, size_t core, size_t order);
@@ -45,7 +45,7 @@ result_t llc_put(llc_t *self, size_t core, uint64_t frame, size_t order);
 result_t llc_drain(llc_t *self, size_t core);
 
 /// Checks if a frame is allocated, returning 0 if not
-uint8_t llc_is_free(llc_t *self, uint64_t pfn, size_t order);
+uint8_t llc_is_free(llc_t *self, uint64_t frame, size_t order);
 
 /// Returns the total number of frames the allocator can allocate
 uint64_t llc_frames(llc_t *self);

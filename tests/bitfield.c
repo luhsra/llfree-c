@@ -1,8 +1,6 @@
 #include "check.h"
 #include "bitfield.h"
 #include "utils.h"
-#include <stddef.h>
-#include <stdint.h>
 
 static inline bitfield_t bf(uint64_t b0, uint64_t b1, uint64_t b2, uint64_t b3,
 			    uint64_t b4, uint64_t b5, uint64_t b6, uint64_t b7)

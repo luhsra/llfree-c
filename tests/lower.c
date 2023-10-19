@@ -40,7 +40,7 @@ bool init_lower_test(uint8_t init)
 	int frames = 1024;
 	lower_t actual;
 	if (init != VOLATILE) {
-		memory = aligned_alloc(CACHESIZE,
+		memory = aligned_alloc(CACHE_SIZE,
 				       sizeof(char) * frames * PAGESIZE);
 		assert(memory != NULL);
 	}
@@ -56,7 +56,7 @@ bool init_lower_test(uint8_t init)
 	frames = 1023;
 	if (init != VOLATILE) {
 		free(memory);
-		memory = aligned_alloc(CACHESIZE,
+		memory = aligned_alloc(CACHE_SIZE,
 				       sizeof(char) * frames * PAGESIZE);
 		assert(memory != NULL);
 	}
@@ -76,7 +76,7 @@ bool init_lower_test(uint8_t init)
 	frames = 632;
 	if (init != VOLATILE) {
 		free(memory);
-		memory = aligned_alloc(CACHESIZE,
+		memory = aligned_alloc(CACHE_SIZE,
 				       sizeof(char) * frames * PAGESIZE);
 		assert(memory != NULL);
 	}
@@ -92,7 +92,7 @@ bool init_lower_test(uint8_t init)
 	frames = 685161;
 	if (init != VOLATILE) {
 		free(memory);
-		memory = aligned_alloc(CACHESIZE,
+		memory = aligned_alloc(CACHE_SIZE,
 				       sizeof(char) * frames * PAGESIZE);
 		assert(memory != NULL);
 	}
@@ -100,7 +100,7 @@ bool init_lower_test(uint8_t init)
 	lower_clear(&actual, true);
 	check_m(((uint64_t)&actual.fields[actual.childs_len] -
 		 (uint64_t)&actual.fields[0]) /
-				CACHESIZE ==
+				CACHE_SIZE ==
 			actual.childs_len,
 		"no padding");
 	check_child_number(1339ul);
@@ -117,9 +117,9 @@ bool init_lower_test(uint8_t init)
 
 	// check alignment
 
-	check_equal_m((uint64_t)actual.childs % CACHESIZE, 0ul,
+	check_equal_m((uint64_t)actual.childs % CACHE_SIZE, 0ul,
 		      "array must be aligned to cachesize");
-	check_equal_m((uint64_t)actual.fields % CACHESIZE, 0ul,
+	check_equal_m((uint64_t)actual.fields % CACHE_SIZE, 0ul,
 		      "array must be aligned to cachesize");
 
 	if (init == VOLATILE) {
@@ -361,7 +361,7 @@ declare_test(lower_large)
 {
 	bool success = true;
 
-	const size_t FRAMES = 128 * FIELDSIZE;
+	const size_t FRAMES = 128 * CHILD_SIZE;
 
 	lower_t lower;
 	lower_init(&lower, 0, FRAMES, VOLATILE);
@@ -372,7 +372,7 @@ declare_test(lower_large)
 	for (size_t o = 0; o <= MAX_ORDER; o++) {
 		result_t pfn;
 		do {
-			pfn = lower_get(&lower, tree << TREE_SHIFT, o);
+			pfn = lower_get(&lower, tree << TREE_ORDER, o);
 			if (pfn.val == ERR_MEMORY) {
 				tree += 1;
 				check(tree < FRAMES);
@@ -397,20 +397,20 @@ declare_test(lower_huge)
 	bool success = true;
 
 	lower_t actual;
-	lower_init(&actual, 0, FIELDSIZE * 60, VOLATILE);
+	lower_init(&actual, 0, CHILD_SIZE * 60, VOLATILE);
 	lower_clear(&actual, true);
 
 	result_t pfn1 = lower_get(&actual, 0, HP_ORDER);
 	check(result_ok(pfn1));
-	uint64_t offset = pfn1.val % FIELDSIZE;
+	uint64_t offset = pfn1.val % CHILD_SIZE;
 	check_equal(offset, 0ul);
 	result_t pfn2 = lower_get(&actual, 0, HP_ORDER);
 	check(result_ok(pfn2));
-	offset = pfn2.val % FIELDSIZE;
+	offset = pfn2.val % CHILD_SIZE;
 	check_equal(offset, 0ul);
 	check(pfn1.val != pfn2.val);
 	check_equal(actual.frames - lower_free_frames(&actual),
-		    2ul * FIELDSIZE);
+		    2ul * CHILD_SIZE);
 
 	// request a regular frame
 	result_t regular = lower_get(&actual, 0, 0);
@@ -421,9 +421,9 @@ declare_test(lower_huge)
 	// this HF must be in another child than the regular frame.
 	result_t pfn3 = lower_get(&actual, pfn_from_row(10), HP_ORDER);
 	check(result_ok(pfn3));
-	offset = pfn3.val % FIELDSIZE;
+	offset = pfn3.val % CHILD_SIZE;
 	check_equal(offset, 0ul);
-	check_equal((uint64_t)pfn3.val, 3 * FIELDSIZE + actual.offset);
+	check_equal((uint64_t)pfn3.val, 3 * CHILD_SIZE + actual.offset);
 
 	// free regular page und try get this child as complete HP
 	assert(result_ok(lower_put(&actual, regular.val, 0)));
@@ -437,7 +437,7 @@ declare_test(lower_huge)
 	// allocate the complete memory with HPs
 	for (int i = 3; i < 60; ++i) {
 		// get allocates only in chunks of 32 children. if there is no free HP in given chung it returns ERR_MEMORY
-		result_t pfn = lower_get(&actual, i < 32 ? 0 : 32 * FIELDSIZE,
+		result_t pfn = lower_get(&actual, i < 32 ? 0 : 32 * CHILD_SIZE,
 					 HP_ORDER);
 		check(result_ok(pfn));
 	}
@@ -457,7 +457,7 @@ declare_test(lower_huge)
 	check(result_ok(lower_put(&actual, pfn1.val, HP_ORDER)));
 
 	// check if right amout of free regular frames are present
-	check_equal(lower_free_frames(&actual), FIELDSIZE + 1ul);
+	check_equal(lower_free_frames(&actual), CHILD_SIZE + 1ul);
 
 	// new acquired frame should be in same positon as the old no 1
 	check(lower_get(&actual, 0, HP_ORDER).val == pfn1.val);
@@ -469,7 +469,7 @@ declare_test(lower_max)
 {
 	bool success = true;
 
-	const size_t FRAMES = FIELDSIZE * 60;
+	const size_t FRAMES = CHILD_SIZE * 60;
 	lower_t lower;
 	lower_init(&lower, 0, FRAMES, VOLATILE);
 	lower_clear(&lower, true);
@@ -505,7 +505,7 @@ declare_test(lower_free_all)
 {
 	bool success = true;
 	const uint64_t len = (1 << 13) + 35; // 16 HP + 35 regular frames
-	char *memory = aligned_alloc(CACHESIZE, PAGESIZE * len);
+	char *memory = aligned_alloc(CACHE_SIZE, PAGESIZE * len);
 	assert(memory != NULL);
 	const uint64_t offset = (uint64_t)memory / PAGESIZE;
 
@@ -553,8 +553,8 @@ declare_test(lower_peristent_init)
 
 	info("childs %p, fields %p", lower.childs, lower.fields);
 
-	check_equal((uint64_t)lower.childs % CACHESIZE, 0ul);
-	check_equal((uint64_t)lower.fields % CACHESIZE, 0ul);
+	check_equal((uint64_t)lower.childs % CACHE_SIZE, 0ul);
+	check_equal((uint64_t)lower.fields % CACHE_SIZE, 0ul);
 
 	check((uint64_t)lower.childs > lower.offset * PAGESIZE);
 	check((uint64_t)&lower.childs[lower.childs_len] <

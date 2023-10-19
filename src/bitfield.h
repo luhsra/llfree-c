@@ -2,18 +2,11 @@
 
 #include "utils.h"
 
-/// Amount of Bits in a Field
-#define FIELDSIZE (1 << 9)
-/// Number of Bytes in cacheline
-#define CACHESIZE (1 << 6)
-/// Bits in uint64_t -> biggest atomic size
-#define ATOMICSIZE (sizeof(uint64_t) * 8)
-/// number of uint64 in the Bitfield.
-#define FIELD_N (FIELDSIZE / ATOMICSIZE)
+#define FIELD_N (CHILD_SIZE / ATOMIC_SIZE)
 
 /// Atomic bitfield
 typedef struct bitfield {
-	alignas(CACHESIZE) _Atomic(uint64_t) rows[FIELD_N];
+	alignas(CACHE_SIZE) _Atomic(uint64_t) rows[FIELD_N];
 } bitfield_t;
 
 /// Initializes the Bitfield of 512 Bit size with all 0

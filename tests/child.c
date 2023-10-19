@@ -1,7 +1,5 @@
-#include "check.h"
-
 #include "child.h"
-#include "bitfield.h"
+#include "check.h"
 
 #define check_counter(actual, expect)                \
 	check_equal(actual.counter, expect.counter); \
@@ -64,8 +62,8 @@ declare_test(child_counter_dec)
 	check_equal(actual.free, expect.free);
 	check_equal(actual.huge, expect.huge);
 
-	actual = child_new(FIELDSIZE, false);
-	expect = child_new(FIELDSIZE - 1, false);
+	actual = child_new(CHILD_SIZE, false);
+	expect = child_new(CHILD_SIZE - 1, false);
 	ret = child_dec(&actual, 0);
 	check(ret);
 	check_equal(actual.free, expect.free);

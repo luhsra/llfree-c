@@ -2,8 +2,6 @@
 #include "local.h"
 #include "utils.h"
 
-#include <stdint.h>
-
 declare_test(local_atomic)
 {
 	bool success = true;
@@ -24,7 +22,7 @@ declare_test(local_init)
 	reserved_t reserved = atom_load(&actual.reserved);
 
 	check_equal(lf.counter, 0);
-	check_equal(lf.last_row, 0ul);
+	check_equal(lf.tree_idx, 0ul);
 	check_equal(reserved.free, 0);
 	check_equal(reserved.reserving, false);
 	check_equal(reserved.present, false);

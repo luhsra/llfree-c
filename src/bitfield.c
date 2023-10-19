@@ -12,8 +12,8 @@ typedef struct pos {
 /// Translates the index of the bit to the position in the field.
 static pos_t get_pos(uint64_t index)
 {
-	index = index & (FIELDSIZE - 1);
-	pos_t pos = { index / ATOMICSIZE, index % ATOMICSIZE };
+	index = index % CHILD_SIZE;
+	pos_t pos = { index / ATOMIC_SIZE, index % ATOMIC_SIZE };
 	return pos;
 }
 
@@ -92,24 +92,24 @@ bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos)
 result_t field_set_next(bitfield_t *field, uint64_t start_pfn, size_t order)
 {
 	size_t num_frames = 1 << order;
-	assert(num_frames < FIELDSIZE);
+	assert(num_frames < CHILD_SIZE);
 
 	uint64_t row = row_from_pfn(start_pfn) % FIELD_N;
 
-	if (num_frames <= ATOMICSIZE) {
+	if (num_frames <= ATOMIC_SIZE) {
 		for_offsetted(row, FIELD_N)
 		{
 			size_t pos = 0;
 			uint64_t old;
 			if (atom_update(&field->rows[current_i], old,
 					first_zeros_aligned, order, &pos)) {
-				return result(current_i * ATOMICSIZE + pos);
+				return result(current_i * ATOMIC_SIZE + pos);
 			}
 		}
 		return result(ERR_MEMORY);
 	}
 
-	size_t entries = num_frames / ATOMICSIZE;
+	size_t entries = num_frames / ATOMIC_SIZE;
 	for_offsetted(row / entries, FIELD_N / entries)
 	{
 		bool failed = false;
@@ -135,7 +135,7 @@ result_t field_set_next(bitfield_t *field, uint64_t start_pfn, size_t order)
 		}
 		if (!failed) {
 			// Success, we have updated all rows
-			return result(current_i * entries * ATOMICSIZE);
+			return result(current_i * entries * ATOMIC_SIZE);
 		}
 	}
 
@@ -161,13 +161,13 @@ static bool row_toggle(uint64_t *row, uint64_t mask, bool expected)
 result_t field_toggle(bitfield_t *field, size_t index, size_t order,
 		      bool expected)
 {
-	assert(0 <= index && index < FIELDSIZE);
+	assert(0 <= index && index < CHILD_SIZE);
 
 	pos_t pos = get_pos(index);
 	size_t num_frames = 1 << order;
 
-	if (num_frames > ATOMICSIZE) {
-		size_t num_entries = (1 << order) / ATOMICSIZE;
+	if (num_frames > ATOMIC_SIZE) {
+		size_t num_entries = (1 << order) / ATOMIC_SIZE;
 		for (size_t i = 0; i < num_entries; i++) {
 			uint64_t mask = expected ? UINT64_MAX : 0;
 			uint64_t old = mask;
@@ -180,7 +180,7 @@ result_t field_toggle(bitfield_t *field, size_t index, size_t order,
 		return result(ERR_OK);
 	}
 
-	uint64_t mask = ((UINT64_MAX >> (ATOMICSIZE - num_frames)) << pos.bit);
+	uint64_t mask = ((UINT64_MAX >> (ATOMIC_SIZE - num_frames)) << pos.bit);
 	uint64_t old;
 	if (atom_update(&field->rows[pos.row], old, row_toggle, mask,
 			expected)) {
@@ -197,13 +197,13 @@ int field_count_bits(bitfield_t *field)
 		counter += count_ones(row);
 	}
 
-	assert(0 <= counter && counter <= FIELDSIZE);
+	assert(0 <= counter && counter <= CHILD_SIZE);
 	return counter;
 }
 
 bool field_is_free(bitfield_t *self, size_t index)
 {
-	assert(0 <= index && index < FIELDSIZE);
+	assert(0 <= index && index < CHILD_SIZE);
 	pos_t pos = get_pos(index);
 
 	uint64_t row = atom_load(&self->rows[pos.row]);

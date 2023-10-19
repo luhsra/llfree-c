@@ -1,13 +1,11 @@
 #include "tree.h"
-#include "utils.h"
-#include <assert.h>
 
 bool tree_reserve(tree_t *self, size_t min, size_t max)
 {
 	assert(min < max);
 
 	// tree is already reserved
-	if (self->flag || !(min <= self->free && self->free <= max))
+	if (self->reserved || !(min <= self->free && self->free <= max))
 		return false;
 
 	*self = tree_new(0, true);
@@ -20,28 +18,19 @@ bool tree_steal_counter(tree_t *self)
 	return true;
 }
 
-bool tree_writeback(tree_t *self, uint16_t free_counter)
+bool tree_writeback(tree_t *self, uint16_t free)
 {
-	if (free_counter + self->free <= TREESIZE) {
-		*self = tree_new(free_counter + self->free, false);
+	if (self->free + free <= TREESIZE) {
+		*self = tree_new(free + self->free, false);
 		return true;
 	}
 	return false;
 }
 
-bool tree_inc(tree_t *self, size_t order)
+bool tree_inc(tree_t *self, size_t free)
 {
-	if (self->free + (1 << order) <= TREESIZE) {
-		self->free += 1 << order;
-		return true;
-	}
-	return false;
-}
-
-bool tree_dec(tree_t *self, size_t order)
-{
-	if (self->free >= 1 << order) {
-		self->free -= 1 << order;
+	if (self->free + free <= TREESIZE) {
+		self->free += free;
 		return true;
 	}
 	return false;
