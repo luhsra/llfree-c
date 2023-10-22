@@ -379,14 +379,14 @@ declare_test(lower_large)
 			}
 		} while (pfn.val == ERR_MEMORY);
 
-		check_m(result_ok(pfn), "%lu -> %ld", o, pfn.val);
-		check_m(pfn.val % (1 << o) == 0, "%lu -> 0x%lx", o, pfn.val);
+		check_m(result_ok(pfn), "%ju -> %"PRId64, o, pfn.val);
+		check_m(pfn.val % (1 << o) == 0, "%ju -> 0x%"PRIx64, o, pfn.val);
 		frames[o] = pfn.val;
 	}
 
 	for (size_t o = 0; o <= MAX_ORDER; o++) {
 		result_t ret = lower_put(&lower, frames[o], o);
-		check_m(result_ok(ret), "%lu -> 0x%lx", o, frames[o]);
+		check_m(result_ok(ret), "%ju -> 0x%"PRIx64, o, frames[o]);
 	}
 
 	return success;
@@ -477,7 +477,7 @@ declare_test(lower_max)
 	for (size_t i = 0; i < FRAMES / (1 << MAX_ORDER); ++i) {
 		result_t pfn =
 			lower_get(&lower, i * (1 << MAX_ORDER), MAX_ORDER);
-		check_m(result_ok(pfn), "%lu", i);
+		check_m(result_ok(pfn), "%ju", i);
 	}
 
 	check_equal(lower_free_frames(&lower), 0);
@@ -485,7 +485,7 @@ declare_test(lower_max)
 	for (size_t i = 0; i < FRAMES / (1 << MAX_ORDER); ++i) {
 		result_t ret =
 			lower_put(&lower, i * (1 << MAX_ORDER), MAX_ORDER);
-		check_m(result_ok(ret), "%lu", i);
+		check_m(result_ok(ret), "%ju", i);
 	}
 
 	return success;
@@ -543,7 +543,7 @@ declare_test(lower_free_all)
 declare_test(lower_peristent_init)
 {
 	bool success = true;
-	uint64_t len = (16ul << 30) / FRAME_SIZE; // 16 GiB
+	size_t len = (16ul << 30) / FRAME_SIZE; // 16 GiB
 	char *mem = aligned_alloc(1 << HP_ORDER, len * FRAME_SIZE);
 	assert(mem != NULL);
 	info("mem: %p-%p (%lx)", mem, mem + len * FRAME_SIZE, len);

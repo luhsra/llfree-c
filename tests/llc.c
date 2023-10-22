@@ -16,7 +16,7 @@ void print_trees(llc_t *self)
 	printf("trees:\ti\tflag\tcounter\n");
 	for (size_t i = 0; i < self->trees_len; ++i) {
 		tree_t _unused tree = atom_load(&self->trees[i]);
-		info("\t%lu\t%d\t%X\n", i, tree.reserved, tree.free);
+		info("\t%ju\t%d\t%X\n", i, tree.reserved, tree.free);
 	}
 }
 
@@ -78,8 +78,7 @@ declare_test(llc_alloc_s)
 		check(result_ok(llc_get(upper, 0, 9)));
 	}
 
-	check_equal(n + n * 512,
-		    llc_frames(upper) - llc_free_frames(upper));
+	check_equal(n + n * 512, llc_frames(upper) - llc_free_frames(upper));
 
 	llc_drop(upper);
 	return success;
@@ -348,8 +347,9 @@ declare_test(llc_parallel_alloc)
 					continue;
 
 				success = false;
-				printf("\tFound duplicate reserved Frame\n both core %lu and %lu "
-				       "reserved frame %ld in tree %lu\n",
+				printf("\tFound duplicate reserved Frame\n both core %ju and %ju "
+				       "reserved frame %" PRId64
+				       " in tree %" PRId64 "\n",
 				       core, i, frame, tree_from_pfn(frame));
 				// leave all loops
 				goto end;
@@ -360,7 +360,7 @@ end:
 
 	if (!success) {
 		llc_print(upper);
-		printf("%lu times ERR_MEMORY was returned\n", err);
+		printf("%ju times ERR_MEMORY was returned\n", err);
 	}
 	for (size_t i = 0; i < CORES; ++i) {
 		free(rets[i]->pfns);
@@ -403,7 +403,7 @@ static void *parallel_alloc_all(void *input)
 
 		(*(args->frames))[i] = ret.val;
 	}
-	info("finish %lu (%lu)", args->core, i);
+	info("finish %ju (%ju)", args->core, i);
 	return (void *)i;
 }
 
@@ -421,7 +421,7 @@ declare_test(llc_parallel_alloc_all)
 
 	pthread_t threads[CORES];
 	for (size_t i = 0; i < CORES; i++) {
-		info("spawn %lu", i);
+		info("spawn %ju", i);
 		args[i] = (struct par_args){ upper, &frames[i], i };
 		assert(pthread_create(&threads[i], NULL, parallel_alloc_all,
 				      &args[i]) == 0);
@@ -433,7 +433,7 @@ declare_test(llc_parallel_alloc_all)
 
 	size_t total = 0;
 	for (size_t i = 0; i < CORES; i++) {
-		info("wait for %lu", i);
+		info("wait for %ju", i);
 		assert(pthread_join(threads[i], (void **)&counts[i]) == 0);
 
 		// collect allocated pages
@@ -450,9 +450,9 @@ declare_test(llc_parallel_alloc_all)
 	for (size_t i = 1; i < total; i++) {
 		check_m(all_frames[i] >= OFFSET &&
 				all_frames[i] < (OFFSET + llc_frames(upper)),
-			"check %lx", all_frames[i]);
-		check_m(all_frames[i - 1] != all_frames[i], "dup %lx at %lu",
-			all_frames[i], i);
+			"check %" PRIx64, all_frames[i]);
+		check_m(all_frames[i - 1] != all_frames[i],
+			"dup %" PRIx64 " at %ju", all_frames[i], i);
 	}
 
 	return success;

@@ -291,7 +291,7 @@ size_t lower_free_frames(lower_t *self)
 void lower_print(lower_t *self)
 {
 	printf("\n-------------------------------------\nLOWER ALLOCATOR\n"
-	       "childs\n%lu/%lu frames are allocated\n%lu/%lu Huge Frames are "
+	       "childs\n%ju/%ju frames are allocated\n%ju/%ju Huge Frames are "
 	       "free\nChilds:\n",
 	       lower_free_frames(self), self->frames, lower_free_huge(self),
 	       self->childs_len);
@@ -301,7 +301,7 @@ void lower_print(lower_t *self)
 	printf("Nr:\t\t");
 	for (size_t i = 0; i < self->childs_len; ++i) {
 		if (i < 10 || i >= self->childs_len - 10)
-			printf("%lu\t", i);
+			printf("%ju\t", i);
 	}
 	printf("\nHp?:\t\t");
 	for (size_t i = 0; i < self->childs_len; ++i) {
