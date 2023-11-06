@@ -1,8 +1,5 @@
 #include "local.h"
-#include "assert.h"
 #include "tree.h"
-#include "utils.h"
-#include <stddef.h>
 
 void local_init(local_t *self)
 {
@@ -79,15 +76,4 @@ bool last_free_inc(last_free_t *self, uint64_t tree_idx)
 	}
 
 	return true;
-}
-
-void reserved_wait_reserving(const local_t *const self)
-{
-	info("spin wait");
-	while (({
-		reserved_t r = atom_load(&self->reserved);
-		r.reserving;
-	})) {
-		spin_wait();
-	}
 }

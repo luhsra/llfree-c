@@ -12,10 +12,13 @@ bool tree_reserve(tree_t *self, size_t min, size_t max)
 	return true;
 }
 
-bool tree_steal_counter(tree_t *self)
+bool tree_steal_counter(tree_t *self, size_t min)
 {
-	*self = tree_new(0, true);
-	return true;
+        if (self->reserved && self->free >= min) {
+	        *self = tree_new(0, true);
+	        return true;
+        }
+        return false;
 }
 
 bool tree_writeback(tree_t *self, uint16_t free)

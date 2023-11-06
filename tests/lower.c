@@ -39,7 +39,7 @@ bool init_lower_test(uint8_t init)
 	char *memory = NULL;
 	int frames = 1024;
 	lower_t actual;
-	if (init != VOLATILE) {
+	if (init != INIT_VOLATILE) {
 		memory = aligned_alloc(CACHE_SIZE,
 				       sizeof(char) * frames * FRAME_SIZE);
 		assert(memory != NULL);
@@ -49,12 +49,12 @@ bool init_lower_test(uint8_t init)
 	check_child_number(2ul);
 	bitfield_is_free(actual.fields[0]);
 	check_equal(lower_free_frames(&actual), actual.frames);
-	if (init == VOLATILE) {
+	if (init == INIT_VOLATILE) {
 		free_lower(actual);
 	}
 
 	frames = 1023;
-	if (init != VOLATILE) {
+	if (init != INIT_VOLATILE) {
 		free(memory);
 		memory = aligned_alloc(CACHE_SIZE,
 				       sizeof(char) * frames * FRAME_SIZE);
@@ -65,16 +65,16 @@ bool init_lower_test(uint8_t init)
 	check_child_number(2ul);
 	check_equal_bitfield(actual.fields[1],
 			     ((bitfield_t){ 0, 0, 0, 0, 0, 0, 0,
-					    init == VOLATILE ?
+					    init == INIT_VOLATILE ?
 						    0x8000000000000000 :
 						    0xC000000000000000 }));
 	check_equal(lower_free_frames(&actual), actual.frames);
-	if (init == VOLATILE) {
+	if (init == INIT_VOLATILE) {
 		free_lower(actual);
 	}
 
 	frames = 632;
-	if (init != VOLATILE) {
+	if (init != INIT_VOLATILE) {
 		free(memory);
 		memory = aligned_alloc(CACHE_SIZE,
 				       sizeof(char) * frames * FRAME_SIZE);
@@ -83,14 +83,14 @@ bool init_lower_test(uint8_t init)
 	lower_init(&actual, (uint64_t)memory / FRAME_SIZE, frames, init);
 	lower_clear(&actual, false);
 	check_child_number(2ul);
-	check_equal(actual.frames, init == VOLATILE ? 632ul : 631ul);
+	check_equal(actual.frames, init == INIT_VOLATILE ? 632ul : 631ul);
 	check_equal(lower_free_frames(&actual), 0);
-	if (init == VOLATILE) {
+	if (init == INIT_VOLATILE) {
 		free_lower(actual);
 	}
 
 	frames = 685161;
-	if (init != VOLATILE) {
+	if (init != INIT_VOLATILE) {
 		free(memory);
 		memory = aligned_alloc(CACHE_SIZE,
 				       sizeof(char) * frames * FRAME_SIZE);
@@ -108,12 +108,12 @@ bool init_lower_test(uint8_t init)
 	check_equal_bitfield(
 		actual.fields[1338],
 		((bitfield_t){ 0x0,
-			       init == VOLATILE ? 0xfffffe0000000000 :
+			       init == INIT_VOLATILE ? 0xfffffe0000000000 :
 						  0xfffffffffff80000,
 			       UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
 			       UINT64_MAX, UINT64_MAX }));
 	check_equal(lower_free_frames(&actual),
-		    init == VOLATILE ? 685161 : 685139);
+		    init == INIT_VOLATILE ? 685161 : 685139);
 
 	// check alignment
 
@@ -122,7 +122,7 @@ bool init_lower_test(uint8_t init)
 	check_equal_m((uint64_t)actual.fields % CACHE_SIZE, 0ul,
 		      "array must be aligned to cachesize");
 
-	if (init == VOLATILE) {
+	if (init == INIT_VOLATILE) {
 		free_lower(actual);
 	}
 
@@ -134,7 +134,7 @@ declare_test(lower_get)
 	bool success = true;
 
 	lower_t actual;
-	lower_init(&actual, 0, 1360, VOLATILE);
+	lower_init(&actual, 0, 1360, INIT_VOLATILE);
 	lower_clear(&actual, true);
 
 	result_t ret;
@@ -173,7 +173,7 @@ declare_test(lower_get)
 					    0x1fffffffffffffff, 0x0 }));
 
 	free_lower(actual);
-	lower_init(&actual, 0, 2, VOLATILE);
+	lower_init(&actual, 0, 2, INIT_VOLATILE);
 	lower_clear(&actual, true);
 
 	ret = lower_get(&actual, 0, order);
@@ -199,7 +199,7 @@ declare_test(lower_get)
 					    UINT64_MAX, UINT64_MAX }));
 
 	free_lower(actual);
-	lower_init(&actual, 0, 166120, VOLATILE);
+	lower_init(&actual, 0, 166120, INIT_VOLATILE);
 	lower_clear(&actual, true);
 
 	ret = lower_get(&actual, 0, 0);
@@ -222,7 +222,7 @@ declare_test(lower_put)
 	bool success = true;
 
 	lower_t actual;
-	lower_init(&actual, 0, 1360, VOLATILE);
+	lower_init(&actual, 0, 1360, INIT_VOLATILE);
 	lower_clear(&actual, true);
 
 	uint64_t pfn;
@@ -320,7 +320,7 @@ declare_test(lower_is_free)
 	bool success = true;
 
 	lower_t actual;
-	lower_init(&actual, 0, 1360, VOLATILE);
+	lower_init(&actual, 0, 1360, INIT_VOLATILE);
 	lower_clear(&actual, true);
 
 	int ret;
@@ -336,7 +336,7 @@ declare_test(lower_is_free)
 
 	free_lower(actual);
 
-	lower_init(&actual, 0, 1360, VOLATILE);
+	lower_init(&actual, 0, 1360, INIT_VOLATILE);
 	lower_clear(&actual, false);
 
 	ret = lower_is_free(&actual, pfn, order);
@@ -364,7 +364,7 @@ declare_test(lower_large)
 	const size_t FRAMES = 128 * CHILD_SIZE;
 
 	lower_t lower;
-	lower_init(&lower, 0, FRAMES, VOLATILE);
+	lower_init(&lower, 0, FRAMES, INIT_VOLATILE);
 	lower_clear(&lower, true);
 
 	uint64_t frames[MAX_ORDER + 1];
@@ -397,7 +397,7 @@ declare_test(lower_huge)
 	bool success = true;
 
 	lower_t actual;
-	lower_init(&actual, 0, CHILD_SIZE * 60, VOLATILE);
+	lower_init(&actual, 0, CHILD_SIZE * 60, INIT_VOLATILE);
 	lower_clear(&actual, true);
 
 	result_t pfn1 = lower_get(&actual, 0, HP_ORDER);
@@ -471,7 +471,7 @@ declare_test(lower_max)
 
 	const size_t FRAMES = CHILD_SIZE * 60;
 	lower_t lower;
-	lower_init(&lower, 0, FRAMES, VOLATILE);
+	lower_init(&lower, 0, FRAMES, INIT_VOLATILE);
 	lower_clear(&lower, true);
 
 	for (size_t i = 0; i < FRAMES / (1 << MAX_ORDER); ++i) {
@@ -493,12 +493,12 @@ declare_test(lower_max)
 
 declare_test(lower_init_persistent)
 {
-	return init_lower_test(OVERWRITE);
+	return init_lower_test(INIT_OVERWRITE);
 }
 
 declare_test(lower_init_volatile)
 {
-	return init_lower_test(VOLATILE);
+	return init_lower_test(INIT_VOLATILE);
 }
 
 declare_test(lower_free_all)
@@ -510,7 +510,7 @@ declare_test(lower_free_all)
 	const uint64_t offset = (uint64_t)memory / FRAME_SIZE;
 
 	lower_t lower;
-	lower_init(&lower, offset, len, OVERWRITE);
+	lower_init(&lower, offset, len, INIT_OVERWRITE);
 	lower_clear(&lower, false);
 	check_equal_m(lower.frames, len - 1,
 		      "one frame for management structures");
@@ -549,7 +549,7 @@ declare_test(lower_peristent_init)
 	info("mem: %p-%p (%lx)", mem, mem + len * FRAME_SIZE, len);
 
 	lower_t lower;
-	lower_init(&lower, (uint64_t)mem / FRAME_SIZE, len, OVERWRITE);
+	lower_init(&lower, (uint64_t)mem / FRAME_SIZE, len, INIT_OVERWRITE);
 
 	info("childs %p, fields %p", lower.childs, lower.fields);
 

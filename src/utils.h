@@ -2,41 +2,13 @@
 
 #include <stdbool.h>
 #include <stdatomic.h>
-#include <stddef.h>
 #include <inttypes.h>
 #include <stdalign.h>
-#include <assert.h>
-#include <stdio.h>
+
+#include "llc.h"
 
 /// Unused functions and variables
 #define _unused __attribute__((unused))
-
-/// Number of Bytes in cacheline
-#define CACHE_SIZE 64
-
-#define FRAME_BITS 12
-/// Size of a base frame
-#define FRAME_SIZE (1 << FRAME_BITS)
-
-/// Order of a huge frame
-#define HP_ORDER 9
-/// Maximum order that can be allocated
-#define MAX_ORDER (HP_ORDER + 1)
-
-/// Num of bits of the larges atomic type of the architecture
-#define ATOMIC_ORDER 6
-#define ATOMIC_SIZE (1 << ATOMIC_ORDER)
-
-/// Number of frames in a child
-#define CHILD_ORDER HP_ORDER
-#define CHILD_SIZE (1 << CHILD_ORDER)
-
-/// Number of frames in a tree
-#define TREE_CHILDREN_ORDER 5
-#define TREE_CHILDREN (1 << TREE_CHILDREN_ORDER)
-
-#define TREE_ORDER (HP_ORDER + TREE_CHILDREN_ORDER)
-#define TREE_SIZE (1 << TREE_ORDER)
 
 // conversion functions
 #define tree_from_pfn(_N) ((_N) >> TREE_ORDER)
@@ -126,12 +98,6 @@ enum {
 	ERR_CORRUPTION = -5,
 };
 
-/// Result type, to distinguish between normal integers
-///
-/// Errors are negative and the actual values are zero or positive.
-typedef struct result {
-	int64_t val;
-} result_t;
 /// Create a new result
 static inline result_t _unused result(int64_t v)
 {
@@ -146,11 +112,11 @@ static inline bool _unused result_ok(result_t r)
 /// Init modes
 enum {
 	/// Not persistent
-	VOLATILE = 0,
+	INIT_VOLATILE = 0,
 	/// Persistent and try recovery
-	RECOVER = 1,
+	INIT_RECOVER = 1,
 	/// Overwrite the persistent memory
-	OVERWRITE = 2,
+	INIT_OVERWRITE = 2,
 };
 
 // Maximum amount of retry if a atomic operation has failed
@@ -248,27 +214,3 @@ static const int ATOM_STORE_ORDER = memory_order_release;
 		_ret;                                                        \
 		/*NOLINTEND*/                                                \
 	})
-
-#define VERBOSE
-
-#ifdef VERBOSE
-#define info(str, ...)                                                \
-	printf("\x1b[90m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
-	       ##__VA_ARGS__)
-#else
-#define info(str, ...)
-#endif
-
-#define warn(str, ...)                                                \
-	printf("\x1b[93m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
-	       ##__VA_ARGS__)
-
-// #define DEBUG
-
-#ifdef DEBUG
-#define debug(str, ...)                                               \
-	printf("\x1b[90m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
-	       ##__VA_ARGS__)
-#else
-#define debug(str, ...)
-#endif

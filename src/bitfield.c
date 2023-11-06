@@ -1,5 +1,4 @@
 #include "bitfield.h"
-#include "utils.h"
 
 /// Helping struct to store the position of a bit in a bitfield.
 typedef struct pos {

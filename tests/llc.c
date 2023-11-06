@@ -1,15 +1,14 @@
-#include "check.h"
 #include "llc.h"
+#include "llc_inner.h"
+
+#include "check.h"
 #include "local.h"
 #include "lower.h"
-#include "pthread.h"
 #include "utils.h"
 
-#include <assert.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdlib.h>
 #include <memory.h>
+#include <pthread.h>
+#include <stdlib.h>
 
 void print_trees(llc_t *self)
 {
@@ -49,7 +48,7 @@ declare_test(llc_init)
 	llc_t *upper = llc_ext_alloc(CACHE_SIZE, sizeof(llc_t));
 	check_m(upper != NULL, "default init must reserve memory");
 
-	if (!check_init(upper, 4, 0, 1 << 20, VOLATILE, true)) {
+	if (!check_init(upper, 4, 0, 1 << 20, INIT_VOLATILE, true)) {
 		success = false;
 	}
 
@@ -68,7 +67,7 @@ declare_test(llc_alloc_s)
 
 	info("Init");
 	result_t res = llc_init(upper, 1, (uint64_t)memory / FRAME_SIZE,
-				SIZE / FRAME_SIZE, OVERWRITE, true);
+				SIZE / FRAME_SIZE, INIT_OVERWRITE, true);
 	check(result_ok(res));
 
 	info("Alloc");
@@ -89,7 +88,7 @@ declare_test(llc_general_function)
 	bool success = true;
 
 	llc_t *upper = llc_ext_alloc(CACHE_SIZE, sizeof(llc_t));
-	result_t ret = llc_init(upper, 4, 0, 132000, VOLATILE, true);
+	result_t ret = llc_init(upper, 4, 0, 132000, INIT_VOLATILE, true);
 	check_m(result_ok(ret), "init is success");
 	check(upper->trees_len == 9);
 	check(upper->cores == 4);
@@ -155,7 +154,8 @@ declare_test(llc_put)
 {
 	bool success = true;
 	llc_t *upper = (llc_t *)llc_ext_alloc(CACHE_SIZE, sizeof(llc_t));
-	result_t ret = llc_init(upper, 4, 0, TREESIZE << 4, VOLATILE, true);
+	result_t ret =
+		llc_init(upper, 4, 0, TREESIZE << 4, INIT_VOLATILE, true);
 	assert(result_ok(ret));
 
 	int64_t reserved[TREESIZE + 5];
@@ -312,7 +312,7 @@ declare_test(llc_parallel_alloc)
 
 	upper = llc_ext_alloc(CACHE_SIZE, sizeof(llc_t));
 	assert(result_ok(llc_init(upper, CORES, (uint64_t)memory / FRAME_SIZE,
-				  LENGTH, OVERWRITE, true)));
+				  LENGTH, INIT_OVERWRITE, true)));
 	pthread_t threads[CORES];
 	struct arg args[CORES];
 	for (int i = 0; i < CORES; ++i) {
@@ -414,7 +414,7 @@ declare_test(llc_parallel_alloc_all)
 
 	upper = llc_ext_alloc(CACHE_SIZE, sizeof(llc_t));
 	assert(result_ok(
-		llc_init(upper, CORES, OFFSET, LENGTH, VOLATILE, true)));
+		llc_init(upper, CORES, OFFSET, LENGTH, INIT_VOLATILE, true)));
 
 	uint64_t *frames[CORES] = { NULL };
 	struct par_args args[CORES];
@@ -454,6 +454,25 @@ declare_test(llc_parallel_alloc_all)
 		check_m(all_frames[i - 1] != all_frames[i],
 			"dup %" PRIx64 " at %ju", all_frames[i], i);
 	}
+
+	return success;
+}
+
+declare_test(llc_get_huge)
+{
+	bool success = true;
+
+	llc_t llc;
+	result_t res = llc_init(&llc, 1, 0, TREESIZE, INIT_VOLATILE, true);
+	check(result_ok(res));
+
+	info("get");
+	res = llc_get(&llc, 0, HP_ORDER);
+	check(result_ok(res));
+
+	info("get");
+	res = llc_get(&llc, 0, HP_ORDER);
+	check(result_ok(res));
 
 	return success;
 }

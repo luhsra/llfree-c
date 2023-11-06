@@ -50,9 +50,6 @@ bool reserved_set_start(reserved_t *self, size_t pfn);
 /// Set the reserving flag, returning false if it already has the specified value
 bool reserved_set_reserving(reserved_t *self, bool reserving);
 
-/// spin-wait until in-reservation flag becomes false
-void reserved_wait_reserving(const local_t *const self);
-
 /// Updates the last-frees heuristic, returning true if the corresponding
 /// tree should be reserved
 bool last_free_inc(last_free_t *self, uint64_t tree_idx);

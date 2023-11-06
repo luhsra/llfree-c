@@ -1,17 +1,15 @@
 #include "lower.h"
 #include "bitfield.h"
 #include "child.h"
-#include "llc.h"
-#include "utils.h"
 
-void lower_init(lower_t *const self, uint64_t offset, size_t len, uint8_t init)
+void lower_init(lower_t *self, uint64_t offset, size_t len, uint8_t init)
 {
 	self->offset = offset;
 	self->frames = len;
 
 	self->childs_len = div_ceil(self->frames, CHILD_SIZE);
 
-	if (init == VOLATILE) {
+	if (init == INIT_VOLATILE) {
 		self->fields = llc_ext_alloc(
 			CACHE_SIZE, sizeof(bitfield_t) * self->childs_len);
 		assert(self->fields != NULL);
@@ -144,7 +142,8 @@ static result_t get_huge(lower_t *self, uint64_t pfn)
 	return result(ERR_MEMORY);
 }
 
-result_t lower_get(lower_t *self, const uint64_t start_frame, const size_t order)
+result_t lower_get(lower_t *self, const uint64_t start_frame,
+		   const size_t order)
 {
 	assert(order <= MAX_ORDER);
 	assert(start_frame < self->frames);

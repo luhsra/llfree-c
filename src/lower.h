@@ -2,7 +2,6 @@
 
 #include "bitfield.h"
 #include "child.h"
-#include "utils.h"
 
 typedef struct lower {
 	/// first pfn of managed space
@@ -20,10 +19,10 @@ typedef struct lower {
 /// Allocate and initialize the data structures of the lower allocator.
 ///
 /// The `init` parameter determins which memory is used:
-/// - VOLATILE:  allocator uses volatile memory for its own data structures
-/// - OVERWRITE: allocator uses parts of the persistent managed memory for its data structures
-/// - RECOVER:   similar to OVERWRITE, but tries to recover from persistent memory.
-void lower_init(lower_t *const self, uint64_t offset, size_t len, uint8_t init);
+/// - INIT_VOLATILE:  allocator uses volatile memory for its own data structures
+/// - INIT_OVERWRITE: allocator uses parts of the persistent managed memory for its data structures
+/// - INIT_RECOVER:   similar to INIT_OVERWRITE, but tries to recover from persistent memory.
+void lower_init(lower_t *self, uint64_t offset, size_t len, uint8_t init);
 
 /// Resets the contents of the lower allocator to everything allocated or free based on `free_all`.
 ///

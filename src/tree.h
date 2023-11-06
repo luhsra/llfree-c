@@ -1,3 +1,5 @@
+#pragma once
+
 #include "utils.h"
 
 /// Tree entry
@@ -40,4 +42,4 @@ bool tree_reserve(tree_t *self, size_t min, size_t max);
 bool tree_writeback(tree_t *self, uint16_t free);
 
 // Steals the counter of a reserved tree
-bool tree_steal_counter(tree_t *self);
+bool tree_steal_counter(tree_t *self, size_t min);
