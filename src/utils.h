@@ -58,16 +58,15 @@ static inline _unused size_t count_ones(uint64_t val)
 	return __builtin_popcountll(val);
 }
 /// Returns the largest multiple of align, less or equal to val
-static inline _unused size_t align_down(size_t align, size_t val)
+static inline _unused size_t align_down(size_t val, size_t align)
 {
-	assert(align > 0);
-	assert(1 << trailing_zeros(align) == align);
+	assert(align > 0 && (1 << trailing_zeros(align) == align));
 	return val & ~(align - 1);
 }
 /// Returns the smallest multiple of align, greater or equal to val
-static inline _unused size_t align_up(size_t align, size_t val)
+static inline _unused size_t align_up(size_t val, size_t align)
 {
-	return align_down(align, val + align - 1);
+	return align_down(val + align - 1, align);
 }
 /// Pause CPU for polling
 static inline _unused void spin_wait(void)

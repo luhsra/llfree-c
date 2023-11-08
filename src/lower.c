@@ -14,22 +14,25 @@ void lower_init(lower_t *self, uint64_t offset, size_t len, uint8_t init)
 			CACHE_SIZE, sizeof(bitfield_t) * self->childs_len);
 		assert(self->fields != NULL);
 
-		self->childs = llc_ext_alloc(
+		self->children = llc_ext_alloc(
 			CACHE_SIZE, sizeof(child_t) * self->childs_len);
-		assert(self->childs != NULL);
+		assert(self->children != NULL);
 
 	} else {
 		// Layout in persistent Memory:
-		// |-----------------------+----------+-----------+-----------+----------|
-		// |     Managed Frames    | children | bitfields | (padding) | metadata |
-		// |-----------------------+----------+-----------+-----------+----------|
+		// |---------------+----------+-----------+----------|
+		// |     Frames    | children | bitfields | metadata |
+		// |---------------+----------+-----------+----------|
 
-		uint64_t bitfield_bytes = self->childs_len * sizeof(bitfield_t);
-		uint64_t child_bytes = self->childs_len * sizeof(child_t);
+		uint64_t size_bitfields = self->childs_len * sizeof(bitfield_t);
+		size_bitfields = align_up(size_bitfields,
+					  TREE_CHILDREN * sizeof(child_t));
+		uint64_t size_children = self->childs_len * sizeof(child_t);
 		// round up to get complete cacheline
-		child_bytes = align_up(CACHE_SIZE, child_bytes);
+		size_children = align_up(size_children,
+					 MAX(CACHE_SIZE, sizeof(bitfield_t)));
 
-		uint64_t metadata_bytes = bitfield_bytes + child_bytes;
+		uint64_t metadata_bytes = size_bitfields + size_children;
 		uint64_t metadata_pages = div_ceil(metadata_bytes, FRAME_SIZE);
 
 		assert(metadata_pages < self->frames);
@@ -40,8 +43,8 @@ void lower_init(lower_t *self, uint64_t offset, size_t len, uint8_t init)
 		uint64_t metadata_start =
 			(self->offset + self->frames) * FRAME_SIZE;
 
-		self->childs = (_Atomic(child_t) *)metadata_start;
-		self->fields = (bitfield_t *)(metadata_start + child_bytes);
+		self->children = (_Atomic(child_t) *)metadata_start;
+		self->fields = (bitfield_t *)(metadata_start + size_children);
 	}
 }
 
@@ -50,7 +53,7 @@ void lower_clear(lower_t *self, bool free_all)
 	assert(self != NULL);
 
 	for (size_t i = 0; i < self->childs_len - 1; i++) {
-		self->childs[i] =
+		self->children[i] =
 			child_new(free_all ? CHILD_SIZE : 0, !free_all);
 		bitfield_t *field = &self->fields[i];
 		for (uint64_t j = 0; j < FIELD_N; ++j) {
@@ -62,7 +65,7 @@ void lower_clear(lower_t *self, bool free_all)
 	if (rest_frames == 0)
 		rest_frames = CHILD_SIZE;
 
-	self->childs[self->childs_len - 1] =
+	self->children[self->childs_len - 1] =
 		free_all ? child_new(rest_frames, false) :
 			   child_new(0, rest_frames == CHILD_SIZE);
 
@@ -85,16 +88,17 @@ void lower_clear(lower_t *self, bool free_all)
 result_t lower_recover(lower_t *self)
 {
 	for (size_t i = 0; i < self->childs_len; ++i) {
-		child_t child = atom_load(&self->childs[i]);
+		child_t child = atom_load(&self->children[i]);
 		if (child.huge) {
 			// if this was reserved as Huge Page set counter and all frames to 0
-			atom_store(&self->childs[i], child_new(0, true));
+			atom_store(&self->children[i], child_new(0, true));
 			field_init(&self->fields[i]);
 		} else {
 			// not a Huge Page -> count free Frames and set as counter
 			uint16_t counter =
 				CHILD_SIZE - field_count_bits(&self->fields[i]);
-			atom_store(&self->childs[i], child_new(counter, false));
+			atom_store(&self->children[i],
+				   child_new(counter, false));
 		}
 	}
 
@@ -113,7 +117,7 @@ static result_t get_max(lower_t *self, uint64_t pfn)
 
 		child_pair_t old;
 		if (atom_update((_Atomic(child_pair_t) *)&self
-					->childs[current_i * 2],
+					->children[current_i * 2],
 				old, child_reserve_max)) {
 			return result(pfn_from_child(current_i * 2));
 		}
@@ -133,7 +137,7 @@ static result_t get_huge(lower_t *self, uint64_t pfn)
 			continue;
 
 		child_t old;
-		if (atom_update(&self->childs[current_i], old,
+		if (atom_update(&self->children[current_i], old,
 				child_reserve_huge)) {
 			return result(pfn_from_child(current_i));
 		}
@@ -161,7 +165,7 @@ result_t lower_get(lower_t *self, const uint64_t start_frame,
 			continue;
 
 		child_t old;
-		if (atom_update(&self->childs[current_i], old, child_dec,
+		if (atom_update(&self->children[current_i], old, child_dec,
 				order)) {
 			result_t pos = field_set_next(&self->fields[current_i],
 						      start_frame, order);
@@ -170,7 +174,7 @@ result_t lower_get(lower_t *self, const uint64_t start_frame,
 					      pos.val);
 			}
 
-			if (!atom_update(&self->childs[current_i], old,
+			if (!atom_update(&self->children[current_i], old,
 					 child_inc, order)) {
 				return result(ERR_CORRUPTION);
 			}
@@ -215,7 +219,7 @@ result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 		return result(ERR_ADDRESS);
 
 	const size_t child_idx = child_from_pfn(frame);
-	_Atomic(child_t) *child = &self->childs[child_idx];
+	_Atomic(child_t) *child = &self->children[child_idx];
 
 	if (order == MAX_ORDER) {
 		child_pair_t old = { child_new(0, true), child_new(0, true) };
@@ -263,7 +267,7 @@ bool lower_is_free(lower_t *self, uint64_t frame, size_t order)
 
 	size_t child_index = child_from_pfn(frame);
 
-	child_t child = atom_load(&self->childs[child_index]);
+	child_t child = atom_load(&self->children[child_index]);
 
 	if (order == HP_ORDER) {
 		return (!child.huge && child.free == CHILD_SIZE);
@@ -281,7 +285,7 @@ size_t lower_free_frames(lower_t *self)
 {
 	size_t counter = 0;
 	for (size_t i = 0; i < self->childs_len; i++) {
-		child_t child = atom_load(&self->childs[i]);
+		child_t child = atom_load(&self->children[i]);
 		counter += child.free;
 	}
 	return counter;
@@ -305,14 +309,14 @@ void lower_print(lower_t *self)
 	printf("\nHp?:\t\t");
 	for (size_t i = 0; i < self->childs_len; ++i) {
 		if (i < 10 || i >= self->childs_len - 10) {
-			child_t child = atom_load(&self->childs[i]);
+			child_t child = atom_load(&self->children[i]);
 			printf("%d\t", child.huge);
 		}
 	}
 	printf("\nfree:\t\t");
 	for (size_t i = 0; i < self->childs_len; ++i) {
 		if (i < 10 || i >= self->childs_len - 10) {
-			child_t child = atom_load(&self->childs[i]);
+			child_t child = atom_load(&self->children[i]);
 			printf("%d\t", child.free);
 		}
 	}
@@ -324,9 +328,9 @@ void lower_drop(lower_t *self)
 	assert(self != NULL);
 	_Atomic(child_t) *start_data =
 		(void *)((self->offset + self->frames) * FRAME_SIZE);
-	if (self->childs != start_data) {
+	if (self->children != start_data) {
 		llc_ext_free(CACHE_SIZE, sizeof(child_t) * self->childs_len,
-			     self->childs);
+			     self->children);
 		llc_ext_free(CACHE_SIZE, sizeof(bitfield_t) * self->childs_len,
 			     self->fields);
 	}
@@ -336,7 +340,7 @@ size_t lower_free_huge(lower_t *self)
 {
 	size_t count = 0;
 	for (size_t i = 0; i < self->childs_len; ++i) {
-		child_t child = atom_load(&self->childs[i]);
+		child_t child = atom_load(&self->children[i]);
 		if (child.free == CHILD_SIZE)
 			++count;
 	}
@@ -347,7 +351,7 @@ void lower_for_each_child(const lower_t *self, void *context,
 			  void f(void *, uint64_t, uint64_t))
 {
 	for (uint64_t i = 0; i < self->childs_len; ++i) {
-		child_t child = atom_load(&self->childs[i]);
+		child_t child = atom_load(&self->children[i]);
 		f(context, self->offset + i * (1 << HP_ORDER), child.free);
 	}
 }

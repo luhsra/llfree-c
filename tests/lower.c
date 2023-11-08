@@ -1,6 +1,4 @@
 #include "lower.h"
-#include "bitfield.h"
-#include "lower.h"
 #include "check.h"
 #include "utils.h"
 
@@ -30,7 +28,7 @@
 
 #define free_lower(lower)   \
 	free(lower.fields); \
-	free(lower.childs)
+	free(lower.children)
 
 bool init_lower_test(uint8_t init)
 {
@@ -117,7 +115,7 @@ bool init_lower_test(uint8_t init)
 
 	// check alignment
 
-	check_equal_m((uint64_t)actual.childs % CACHE_SIZE, 0ul,
+	check_equal_m((uint64_t)actual.children % CACHE_SIZE, 0ul,
 		      "array must be aligned to cachesize");
 	check_equal_m((uint64_t)actual.fields % CACHE_SIZE, 0ul,
 		      "array must be aligned to cachesize");
@@ -206,7 +204,7 @@ declare_test(lower_get)
 	check(ret.val == 0);
 	ret = lower_get(&actual, 0, HP_ORDER);
 
-	child_t child = atom_load(&actual.childs[1]);
+	child_t child = atom_load(&actual.children[1]);
 	check_equal(child.huge, true);
 	check_equal(child.free, 0);
 	check_equal_bitfield(actual.fields[1],
@@ -551,13 +549,13 @@ declare_test(lower_peristent_init)
 	lower_t lower;
 	lower_init(&lower, (uint64_t)mem / FRAME_SIZE, len, INIT_OVERWRITE);
 
-	info("childs %p, fields %p", lower.childs, lower.fields);
+	info("childs %p, fields %p", lower.children, lower.fields);
 
-	check_equal((uint64_t)lower.childs % CACHE_SIZE, 0ul);
+	check_equal((uint64_t)lower.children % CACHE_SIZE, 0ul);
 	check_equal((uint64_t)lower.fields % CACHE_SIZE, 0ul);
 
-	check((uint64_t)lower.childs > lower.offset * FRAME_SIZE);
-	check((uint64_t)&lower.childs[lower.childs_len] <
+	check((uint64_t)lower.children > lower.offset * FRAME_SIZE);
+	check((uint64_t)&lower.children[lower.childs_len] <
 	      (lower.offset + len) * FRAME_SIZE);
 
 	check((uint64_t)lower.fields > lower.offset * FRAME_SIZE);

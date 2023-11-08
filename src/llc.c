@@ -36,7 +36,7 @@ static void init_trees(llc_t *self)
 			if (child_idx >= self->lower.childs_len)
 				break;
 			child_t child =
-				atom_load(&self->lower.childs[child_idx]);
+				atom_load(&self->lower.children[child_idx]);
 			sum += child.free;
 		}
 		self->trees[tree_idx] = tree_new(sum, false);

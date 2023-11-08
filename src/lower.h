@@ -13,7 +13,7 @@ typedef struct lower {
 	/// bitfields storing the allocation states of the pages
 	bitfield_t *fields;
 	/// index per bitfield
-	_Atomic(child_t) *childs;
+	_Atomic(child_t) *children;
 } lower_t;
 
 /// Allocate and initialize the data structures of the lower allocator.
