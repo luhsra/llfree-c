@@ -11,7 +11,7 @@ typedef struct result {
 	int64_t val;
 } result_t;
 
-typedef struct llc llc_t;
+typedef struct llfree llfree_t;
 
 /// Allocate and initialize the data structures of the allocator.
 ///
@@ -25,45 +25,45 @@ typedef struct llc llc_t;
 ///
 /// `all_free` determins whether the region is initalized as entirely free
 /// or entirely allocated.
-result_t llc_init(llc_t *self, size_t cores, uint64_t offset, size_t len,
+result_t llfree_init(llfree_t *self, size_t cores, uint64_t offset, size_t len,
 		  uint8_t init, uint8_t free_all);
 
 /// Allocates a frame and returns its number, or a negative error code
-result_t llc_get(llc_t *self, size_t core, size_t order);
+result_t llfree_get(llfree_t *self, size_t core, size_t order);
 
 /// Frees a frame, returning 0 on success or a negative error code
-result_t llc_put(llc_t *self, size_t core, uint64_t frame, size_t order);
+result_t llfree_put(llfree_t *self, size_t core, uint64_t frame, size_t order);
 
 /// Frees a frame, returning 0 on success or a negative error code
-result_t llc_drain(llc_t *self, size_t core);
+result_t llfree_drain(llfree_t *self, size_t core);
 
 /// Checks if a frame is allocated, returning 0 if not
-bool llc_is_free(llc_t *self, uint64_t frame, size_t order);
+bool llfree_is_free(llfree_t *self, uint64_t frame, size_t order);
 
 /// Returns the total number of frames the allocator can allocate
-uint64_t llc_frames(llc_t *self);
+uint64_t llfree_frames(llfree_t *self);
 
 /// Returns number of currently free frames
-uint64_t llc_free_frames(llc_t *self);
+uint64_t llfree_free_frames(llfree_t *self);
 
 /// Destructs the allocator
-void llc_drop(llc_t *self);
+void llfree_drop(llfree_t *self);
 
 // == Debugging ==
 
 /// Prints the allocators state for debugging with given Rust printer
-void llc_debug(llc_t *self, void (*writer)(void *, char *), void *arg);
+void llfree_debug(llfree_t *self, void (*writer)(void *, char *), void *arg);
 
 /// Prints detailed stats about the allocator state
-void llc_print(llc_t *self);
+void llfree_print(llfree_t *self);
 
 /// Calls f for each Huge Frame. f will receive the context the current pfn
 /// and the free counter as arguments
 /// - used by some rust benchmarks like frag.rs
-void llc_for_each_huge(llc_t *self, void *context,
+void llfree_for_each_huge(llfree_t *self, void *context,
 		       void f(void *, uint64_t, uint64_t));
 
 /// Allocate metadata function
-extern void *llc_ext_alloc(size_t align, size_t size);
+extern void *llfree_ext_alloc(size_t align, size_t size);
 /// Free metadata function
-extern void llc_ext_free(size_t align, size_t size, void *addr);
+extern void llfree_ext_free(size_t align, size_t size, void *addr);

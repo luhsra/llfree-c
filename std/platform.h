@@ -27,8 +27,8 @@
 #define TREE_ORDER (HUGE_ORDER + TREE_CHILDREN_ORDER)
 #define TREE_SIZE (1u << TREE_ORDER)
 
-/// Minimal alignment the llc requires for its memory range
-#define LLC_ALIGN (1u << MAX_ORDER << FRAME_BITS)
+/// Minimal alignment the llfree requires for its memory range
+#define LLFREE_ALIGN (1u << MAX_ORDER << FRAME_BITS)
 
 #define warn(str, ...)                                                \
 	printf("\x1b[93m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \

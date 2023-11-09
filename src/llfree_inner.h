@@ -1,9 +1,11 @@
+#include "llfree.h"
+
 #include "tree.h"
 #include "local.h"
 #include "lower.h"
 
-/// The llc metadata
-typedef struct llc {
+/// The llfree metadata
+typedef struct llfree {
 	/// Persistent metadata, used for recovery
 	struct meta *meta;
 	/// Lower allocator
@@ -15,4 +17,4 @@ typedef struct llc {
 	/// Array of tree entries
 	_Atomic(tree_t) *trees;
 	size_t trees_len;
-} llc_t;
+} llfree_t;

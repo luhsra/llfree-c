@@ -21,7 +21,7 @@ bool init_lower_test(uint8_t init)
 	size_t frames = 1024;
 	lower_t actual;
 	if (init != INIT_VOLATILE) {
-		memory = llc_ext_alloc(LLC_ALIGN, frames * FRAME_SIZE);
+		memory = llfree_ext_alloc(LLFREE_ALIGN, frames * FRAME_SIZE);
 		assert(memory != NULL);
 	}
 	lower_init(&actual, (uint64_t)memory / FRAME_SIZE, frames, init);
@@ -32,12 +32,12 @@ bool init_lower_test(uint8_t init)
 	check_equal(lower_free_frames(&actual), actual.frames);
 	if (init == INIT_VOLATILE) {
 		lower_drop(&actual);
-		llc_ext_free(LLC_ALIGN, frames, memory);
+		llfree_ext_free(LLFREE_ALIGN, frames, memory);
 	}
 
 	frames = 1023;
 	if (init != INIT_VOLATILE) {
-		memory = llc_ext_alloc(LLC_ALIGN, frames * FRAME_SIZE);
+		memory = llfree_ext_alloc(LLFREE_ALIGN, frames * FRAME_SIZE);
 		assert(memory != NULL);
 	}
 	lower_init(&actual, (uint64_t)memory / FRAME_SIZE, frames, init);
@@ -51,12 +51,12 @@ bool init_lower_test(uint8_t init)
 	check_equal(lower_free_frames(&actual), actual.frames);
 	if (init == INIT_VOLATILE) {
 		lower_drop(&actual);
-		llc_ext_free(LLC_ALIGN, frames, memory);
+		llfree_ext_free(LLFREE_ALIGN, frames, memory);
 	}
 
 	frames = 632;
 	if (init != INIT_VOLATILE) {
-		memory = llc_ext_alloc(LLC_ALIGN, frames * FRAME_SIZE);
+		memory = llfree_ext_alloc(LLFREE_ALIGN, frames * FRAME_SIZE);
 		assert(memory != NULL);
 	}
 	lower_init(&actual, (uint64_t)memory / FRAME_SIZE, frames, init);
@@ -66,12 +66,12 @@ bool init_lower_test(uint8_t init)
 	check_equal(lower_free_frames(&actual), 0);
 	if (init == INIT_VOLATILE) {
 		lower_drop(&actual);
-		llc_ext_free(LLC_ALIGN, frames, memory);
+		llfree_ext_free(LLFREE_ALIGN, frames, memory);
 	}
 
 	frames = 685161;
 	if (init != INIT_VOLATILE) {
-		memory = llc_ext_alloc(LLC_ALIGN, frames * FRAME_SIZE);
+		memory = llfree_ext_alloc(LLFREE_ALIGN, frames * FRAME_SIZE);
 		assert(memory != NULL);
 	}
 	lower_init(&actual, (uint64_t)memory / FRAME_SIZE, frames, init);
@@ -97,7 +97,7 @@ bool init_lower_test(uint8_t init)
 
 	if (init == INIT_VOLATILE) {
 		lower_drop(&actual);
-		llc_ext_free(LLC_ALIGN, frames, memory);
+		llfree_ext_free(LLFREE_ALIGN, frames, memory);
 	}
 
 	return success;
@@ -480,7 +480,7 @@ declare_test(lower_free_all)
 {
 	bool success = true;
 	const uint64_t len = (1 << 13) + 35; // 16 HP + 35 regular frames
-	char *memory = llc_ext_alloc(LLC_ALIGN, FRAME_SIZE * len);
+	char *memory = llfree_ext_alloc(LLFREE_ALIGN, FRAME_SIZE * len);
 	assert(memory != NULL);
 	const uint64_t offset = (uint64_t)memory / FRAME_SIZE;
 
@@ -511,7 +511,7 @@ declare_test(lower_free_all)
 	check_equal_m(lower_free_frames(&lower), lower.frames,
 		      "lower should be completely free");
 
-	llc_ext_free(LLC_ALIGN, FRAME_SIZE * len, memory);
+	llfree_ext_free(LLFREE_ALIGN, FRAME_SIZE * len, memory);
 	return success;
 }
 
@@ -519,7 +519,7 @@ declare_test(lower_persistent_init)
 {
 	bool success = true;
 	size_t len = (1ul << 30) / FRAME_SIZE; // 1GiB
-	char *mem = llc_ext_alloc(LLC_ALIGN, len * FRAME_SIZE);
+	char *mem = llfree_ext_alloc(LLFREE_ALIGN, len * FRAME_SIZE);
 	assert(mem != NULL);
 	info("mem: %p-%p (%lx)", mem, mem + len * FRAME_SIZE, len);
 
@@ -561,6 +561,6 @@ declare_test(lower_persistent_init)
 	check_equal(n + n * 512, lower.frames - lower_free_frames(&lower));
 
 	lower_drop(&lower);
-	llc_ext_free(LLC_ALIGN, len * FRAME_SIZE, mem);
+	llfree_ext_free(LLFREE_ALIGN, len * FRAME_SIZE, mem);
 	return success;
 }

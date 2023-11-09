@@ -1,6 +1,6 @@
-#include "llc_inner.h"
+#include "llfree_inner.h"
 
-#include "llc.h"
+#include "llfree.h"
 #include "child.h"
 #include "tree.h"
 #include "local.h"
@@ -19,13 +19,13 @@ struct meta {
 };
 
 /// Returns the local data of given core
-static inline local_t *get_local(llc_t *self, size_t core)
+static inline local_t *get_local(llfree_t *self, size_t core)
 {
 	return &self->local[core % self->cores];
 }
 
 /// Initializes the Tree array by reading the child counters
-static void init_trees(llc_t *self)
+static void init_trees(llfree_t *self)
 {
 	assert(self != NULL);
 
@@ -43,7 +43,7 @@ static void init_trees(llc_t *self)
 	}
 }
 
-result_t llc_init(llc_t *self, size_t cores, uint64_t offset, size_t len,
+result_t llfree_init(llfree_t *self, size_t cores, uint64_t offset, size_t len,
 		  uint8_t init, uint8_t free_all)
 {
 	assert(self != NULL);
@@ -84,7 +84,7 @@ result_t llc_init(llc_t *self, size_t cores, uint64_t offset, size_t len,
 
 	self->trees_len = div_ceil(self->lower.childs_len, TREE_CHILDREN);
 	self->trees =
-		llc_ext_alloc(CACHE_SIZE, sizeof(child_t) * self->trees_len);
+		llfree_ext_alloc(CACHE_SIZE, sizeof(child_t) * self->trees_len);
 	assert(self->trees != NULL);
 	if (self->trees == NULL)
 		return result(ERR_INITIALIZATION);
@@ -92,7 +92,7 @@ result_t llc_init(llc_t *self, size_t cores, uint64_t offset, size_t len,
 	// check if more cores than trees -> if not shared locale data
 	size_t local_len = MIN(cores, self->trees_len);
 	self->cores = local_len;
-	self->local = llc_ext_alloc(CACHE_SIZE, sizeof(local_t) * local_len);
+	self->local = llfree_ext_alloc(CACHE_SIZE, sizeof(local_t) * local_len);
 
 	assert(self->local != NULL);
 	if (self->trees == NULL)
@@ -117,7 +117,7 @@ result_t llc_init(llc_t *self, size_t cores, uint64_t offset, size_t len,
 ///
 /// This checks first if the reserving flag has the expected value
 /// returning ERR_RETRY if not.
-static result_t swap_reserved(llc_t *self, local_t *local, reserved_t new,
+static result_t swap_reserved(llfree_t *self, local_t *local, reserved_t new,
 			      bool expect_reserving)
 {
 	reserved_t old;
@@ -145,7 +145,7 @@ static result_t swap_reserved(llc_t *self, local_t *local, reserved_t new,
 /// Reserves a new tree and allocates with it.
 /// Only if the allocation succeeds, the tree is fully reserved.
 /// Otherwise the reservation is reverted.
-static result_t reserve_tree_and_get(llc_t *self, local_t *local, size_t idx,
+static result_t reserve_tree_and_get(llfree_t *self, local_t *local, size_t idx,
 				     size_t order, range_t free)
 {
 	tree_t old_tree;
@@ -180,7 +180,7 @@ static result_t reserve_tree_and_get(llc_t *self, local_t *local, size_t idx,
 
 /// Searches the whole tree array starting at base_idx for a tree with
 /// a free counter in the provided range, reserves it, and allocates from it.
-static result_t search_global(llc_t *self, local_t *local, uint64_t base_idx,
+static result_t search_global(llfree_t *self, local_t *local, uint64_t base_idx,
 			      uint64_t order, range_t free)
 {
 	// search outside of current cacheline for a partial tree
@@ -198,7 +198,7 @@ static result_t search_global(llc_t *self, local_t *local, uint64_t base_idx,
 /// Reserves a new tree and allocates from it.
 ///
 /// The search for a new tree aims to be both fast and avoid fragmentation.
-static result_t reserve_and_get(llc_t *self, local_t *local, uint64_t core,
+static result_t reserve_and_get(llfree_t *self, local_t *local, uint64_t core,
 				uint64_t order)
 {
 	reserved_t reserved = atom_load(&local->reserved);
@@ -240,7 +240,7 @@ static result_t reserve_and_get(llc_t *self, local_t *local, uint64_t core,
 	// drain other cores for a tree
 	uint64_t local_idx = core % self->cores;
 	for (uint64_t i = 1; i < self->cores; ++i) {
-		llc_drain(self, (local_idx + i) % self->cores);
+		llfree_drain(self, (local_idx + i) % self->cores);
 	}
 
 	// search whole tree for a tree with enough free frames
@@ -257,7 +257,7 @@ static result_t reserve_and_get(llc_t *self, local_t *local, uint64_t core,
 	return res;
 }
 
-static result_t reserve_or_wait(llc_t *self, size_t core, size_t order)
+static result_t reserve_or_wait(llfree_t *self, size_t core, size_t order)
 {
 	local_t *local = get_local(self, core);
 	reserved_t reserved;
@@ -276,7 +276,7 @@ static result_t reserve_or_wait(llc_t *self, size_t core, size_t order)
 }
 
 /// Synchronizes the free_counter of given local with the global counter.
-static bool sync_with_global(llc_t *self, local_t *local, size_t order,
+static bool sync_with_global(llfree_t *self, local_t *local, size_t order,
 			     reserved_t reserved)
 {
 	assert(self != NULL);
@@ -308,7 +308,7 @@ static bool sync_with_global(llc_t *self, local_t *local, size_t order,
 	return false;
 }
 
-static result_t get_inner(llc_t *self, size_t core, size_t order)
+static result_t get_inner(llfree_t *self, size_t core, size_t order)
 {
 	assert(self != NULL);
 	assert(order <= MAX_ORDER);
@@ -356,7 +356,7 @@ static result_t get_inner(llc_t *self, size_t core, size_t order)
 	return res;
 }
 
-result_t llc_get(llc_t *self, size_t core, size_t order)
+result_t llfree_get(llfree_t *self, size_t core, size_t order)
 {
 	assert(self != NULL);
 	assert(order <= MAX_ORDER);
@@ -374,7 +374,7 @@ result_t llc_get(llc_t *self, size_t core, size_t order)
 	return result(ERR_MEMORY);
 }
 
-result_t llc_put(llc_t *self, size_t core, uint64_t frame, size_t order)
+result_t llfree_put(llfree_t *self, size_t core, uint64_t frame, size_t order)
 {
 	assert(self != NULL);
 	assert(order <= MAX_ORDER);
@@ -441,7 +441,7 @@ result_t llc_put(llc_t *self, size_t core, uint64_t frame, size_t order)
 	return result(ERR_OK);
 }
 
-result_t llc_drain(llc_t *self, size_t core)
+result_t llfree_drain(llfree_t *self, size_t core)
 {
 	local_t *local = get_local(self, core);
 
@@ -454,13 +454,13 @@ result_t llc_drain(llc_t *self, size_t core)
 	return res;
 }
 
-uint64_t llc_frames(llc_t *self)
+uint64_t llfree_frames(llfree_t *self)
 {
 	assert(self != NULL);
 	return self->lower.frames;
 }
 
-uint64_t llc_free_frames(llc_t *self)
+uint64_t llfree_free_frames(llfree_t *self)
 {
 	assert(self != NULL);
 	uint64_t free = 0;
@@ -475,26 +475,26 @@ uint64_t llc_free_frames(llc_t *self)
 	return free;
 }
 
-bool llc_is_free(llc_t *self, uint64_t frame, size_t order)
+bool llfree_is_free(llfree_t *self, uint64_t frame, size_t order)
 {
 	assert(self != NULL);
 	return lower_is_free(&self->lower, frame, order);
 }
 
-void llc_for_each_huge(llc_t *self, void *context,
+void llfree_for_each_huge(llfree_t *self, void *context,
 		       void f(void *, uint64_t, uint64_t))
 {
 	assert(self != NULL);
 	lower_for_each_child(&self->lower, context, f);
 }
 
-void llc_debug(llc_t *self, void (*writer)(void *, char *), void *arg)
+void llfree_debug(llfree_t *self, void (*writer)(void *, char *), void *arg)
 {
 	assert(self != NULL);
 
-	char *msg = llc_ext_alloc(1, 200 * sizeof(char));
+	char *msg = llfree_ext_alloc(1, 200 * sizeof(char));
 	snprintf(msg, 200, "LLC { frames: %" PRIu64 "/%jd, huge: %ju/%ju }",
-		 llc_free_frames(self), self->lower.frames,
+		 llfree_free_frames(self), self->lower.frames,
 		 lower_free_huge(&self->lower), self->lower.childs_len);
 	writer(arg, msg);
 }
@@ -505,16 +505,16 @@ void count_huge(void *acc, uint64_t frame, uint64_t free)
 	sum += free;
 }
 
-void llc_print(llc_t *self)
+void llfree_print(llfree_t *self)
 {
-	printf("llc_t {\n");
+	printf("llfree_t {\n");
 	printf("    memory: %" PRIx64 "..%" PRIx64 " (%ju)\n",
 	       self->lower.offset, self->lower.offset + self->lower.frames,
 	       self->lower.frames);
 
 	printf("    trees: %ju (%u) {\n", self->trees_len, TREE_SIZE);
 	size_t free_huge = 0;
-	llc_for_each_huge(self, &free_huge, count_huge);
+	llfree_for_each_huge(self, &free_huge, count_huge);
 	size_t free_trees = 0;
 	for (size_t i = 0; i < self->trees_len; i++) {
 		tree_t tree = atom_load(&self->trees[i]);
@@ -526,7 +526,7 @@ void llc_print(llc_t *self)
 	printf("    }\n");
 
 	printf("    free: { frames: %ju, huge: %ju, trees: %ju }\n",
-	       llc_free_frames(self), free_huge, free_trees);
+	       llfree_free_frames(self), free_huge, free_trees);
 
 	for (size_t i = 0; i < self->cores; i++) {
 		reserved_t reserved = atom_load(&self->local[i].reserved);
@@ -538,7 +538,7 @@ void llc_print(llc_t *self)
 	printf("}\n");
 }
 
-void llc_drop(llc_t *self)
+void llfree_drop(llfree_t *self)
 {
 	assert(self != NULL);
 
@@ -548,9 +548,9 @@ void llc_drop(llc_t *self)
 	// if initialized
 	if (self->local != NULL) {
 		lower_drop(&self->lower);
-		llc_ext_free(CACHE_SIZE, self->trees_len * sizeof(tree_t),
+		llfree_ext_free(CACHE_SIZE, self->trees_len * sizeof(tree_t),
 			     self->trees);
-		llc_ext_free(CACHE_SIZE, self->cores * sizeof(local_t),
+		llfree_ext_free(CACHE_SIZE, self->cores * sizeof(local_t),
 			     self->local);
 	}
 }

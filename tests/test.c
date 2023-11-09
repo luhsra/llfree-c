@@ -1,4 +1,4 @@
-#include "llc.h"
+#include "llfree.h"
 #include "check.h"
 #include "utils.h"
 
@@ -60,7 +60,7 @@ void add_test(char *name, bool (*f)(void))
 	test_case_i++;
 }
 
-void *llc_ext_alloc(size_t align, size_t size)
+void *llfree_ext_alloc(size_t align, size_t size)
 {
 	info("alloc a=%ju %ju", align, size);
 	void *ret = aligned_alloc(align, align_up(size, align));
@@ -68,7 +68,7 @@ void *llc_ext_alloc(size_t align, size_t size)
 	return ret;
 }
 
-void llc_ext_free(_unused size_t align, _unused size_t size, void *addr)
+void llfree_ext_free(_unused size_t align, _unused size_t size, void *addr)
 {
 	return free(addr);
 }

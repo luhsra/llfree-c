@@ -12,11 +12,11 @@ void lower_init(lower_t *self, uint64_t offset, size_t len, uint8_t init)
 	self->childs_len = div_ceil(self->frames, CHILD_SIZE);
 
 	if (init == INIT_VOLATILE) {
-		self->fields = llc_ext_alloc(
+		self->fields = llfree_ext_alloc(
 			CACHE_SIZE, sizeof(bitfield_t) * self->childs_len);
 		assert(self->fields != NULL);
 
-		self->children = llc_ext_alloc(
+		self->children = llfree_ext_alloc(
 			CACHE_SIZE, sizeof(child_t) * self->childs_len);
 		assert(self->children != NULL);
 
@@ -314,9 +314,9 @@ void lower_drop(lower_t *self)
 	_Atomic(child_t) *start_data =
 		(void *)((self->offset + self->frames) * FRAME_SIZE);
 	if (self->children != start_data) {
-		llc_ext_free(CACHE_SIZE, sizeof(child_t) * self->childs_len,
+		llfree_ext_free(CACHE_SIZE, sizeof(child_t) * self->childs_len,
 			     self->children);
-		llc_ext_free(CACHE_SIZE, sizeof(bitfield_t) * self->childs_len,
+		llfree_ext_free(CACHE_SIZE, sizeof(bitfield_t) * self->childs_len,
 			     self->fields);
 	}
 }
