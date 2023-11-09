@@ -62,7 +62,7 @@ void add_test(char *name, bool (*f)(void))
 
 void *llfree_ext_alloc(size_t align, size_t size)
 {
-	info("alloc a=%ju %ju", align, size);
+	llfree_info("alloc a=%ju %ju", align, size);
 	void *ret = aligned_alloc(align, align_up(size, align));
 	assert(ret != NULL);
 	return ret;

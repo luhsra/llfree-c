@@ -27,7 +27,7 @@ typedef struct last_free {
 } last_free_t;
 
 /// This represents the local CPU data
-typedef struct __attribute__((aligned(CACHE_SIZE))) local {
+typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) local {
 	_Atomic(reserved_t) reserved;
 	_Atomic(last_free_t) last_free;
 } local_t;

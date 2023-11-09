@@ -45,7 +45,7 @@ bool reserved_inc(reserved_t *self, size_t tree_idx, size_t free)
 		return false;
 
 	// check if counter has enough space
-	assert(self->free + free <= TREE_SIZE);
+	assert(self->free + free <= LLFREE_TREE_SIZE);
 	self->free += free;
 	return true;
 }

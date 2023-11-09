@@ -19,9 +19,9 @@ typedef struct lower {
 /// Allocate and initialize the data structures of the lower allocator.
 ///
 /// The `init` parameter determins which memory is used:
-/// - INIT_VOLATILE:  allocator uses volatile memory for its own data structures
-/// - INIT_OVERWRITE: allocator uses parts of the persistent managed memory for its data structures
-/// - INIT_RECOVER:   similar to INIT_OVERWRITE, but tries to recover from persistent memory.
+/// - LLFREE_INIT_VOLATILE:  allocator uses volatile memory for its own data structures
+/// - LLFREE_INIT_OVERWRITE: allocator uses parts of the persistent managed memory for its data structures
+/// - LLFREE_INIT_RECOVER:   similar to LLFREE_INIT_OVERWRITE, but tries to recover from persistent memory.
 void lower_init(lower_t *self, uint64_t offset, size_t len, uint8_t init);
 
 /// Resets the contents of the lower allocator to everything allocated or free based on `free_all`.
@@ -32,13 +32,13 @@ void lower_clear(lower_t *self, bool free_all);
 /// Recovers the state from persistent memory
 ///
 /// Checks and possibly corrects the free counter in childs
-result_t lower_recover(lower_t *self);
+llfree_result_t lower_recover(lower_t *self);
 
 /// Allocates the given frame, returning its number or an error
-result_t lower_get(lower_t *self, uint64_t start_frame, size_t order);
+llfree_result_t lower_get(lower_t *self, uint64_t start_frame, size_t order);
 
 /// Deallocates the given frame
-result_t lower_put(lower_t *self, uint64_t frame, size_t order);
+llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order);
 
 /// Checks if the frame is free
 bool lower_is_free(lower_t *self, uint64_t frame, size_t order);
@@ -49,8 +49,10 @@ size_t lower_free_frames(lower_t *self);
 /// Returns the number of free huge frames
 size_t lower_free_huge(lower_t *self);
 
-/// Print debug info
+#ifdef STD
+/// Print llfree_debug llfree_info
 void lower_print(lower_t *self);
+#endif
 
 /// Destructs the allocator, freeing its metadata
 void lower_drop(lower_t *self);

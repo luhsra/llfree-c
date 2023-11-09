@@ -1,3 +1,5 @@
+#pragma once
+
 #include "llfree.h"
 
 #include "tree.h"

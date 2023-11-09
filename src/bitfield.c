@@ -11,8 +11,8 @@ typedef struct pos {
 /// Translates the index of the bit to the position in the field.
 static pos_t get_pos(uint64_t index)
 {
-	index = index % CHILD_SIZE;
-	pos_t pos = { index / ATOMIC_SIZE, index % ATOMIC_SIZE };
+	index = index % LLFREE_CHILD_SIZE;
+	pos_t pos = { index / LLFREE_ATOMIC_SIZE, index % LLFREE_ATOMIC_SIZE };
 	return pos;
 }
 
@@ -88,29 +88,29 @@ bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos)
 	return false;
 }
 
-result_t field_set_next(bitfield_t *field, uint64_t start_pfn, size_t order)
+llfree_result_t field_set_next(bitfield_t *field, uint64_t start_pfn,
+			       size_t order)
 {
 	size_t num_frames = 1 << order;
-	assert(num_frames < CHILD_SIZE);
+	assert(num_frames < LLFREE_CHILD_SIZE);
 
 	uint64_t row = row_from_pfn(start_pfn) % FIELD_N;
 
-	if (num_frames <= ATOMIC_SIZE) {
-		for_offsetted(row, FIELD_N)
-		{
+	if (num_frames <= LLFREE_ATOMIC_SIZE) {
+		for_offsetted(row, FIELD_N) {
 			size_t pos = 0;
 			uint64_t old;
 			if (atom_update(&field->rows[current_i], old,
 					first_zeros_aligned, order, &pos)) {
-				return result(current_i * ATOMIC_SIZE + pos);
+				return llfree_result(
+					current_i * LLFREE_ATOMIC_SIZE + pos);
 			}
 		}
-		return result(ERR_MEMORY);
+		return llfree_result(LLFREE_ERR_MEMORY);
 	}
 
-	size_t entries = num_frames / ATOMIC_SIZE;
-	for_offsetted(row / entries, FIELD_N / entries)
-	{
+	size_t entries = num_frames / LLFREE_ATOMIC_SIZE;
+	for_offsetted(row / entries, FIELD_N / entries) {
 		bool failed = false;
 		for (size_t i = 0; i < entries; i++) {
 			size_t idx = current_i * entries + i;
@@ -126,7 +126,8 @@ result_t field_set_next(bitfield_t *field, uint64_t start_pfn, size_t order)
 				uint64_t old = UINT64_MAX;
 				if (!atom_cmp_exchange(&field->rows[idx], &old,
 						       0)) {
-					return result(ERR_CORRUPTION);
+					return llfree_result(
+						LLFREE_ERR_CORRUPT);
 				}
 			}
 			failed = true;
@@ -134,11 +135,12 @@ result_t field_set_next(bitfield_t *field, uint64_t start_pfn, size_t order)
 		}
 		if (!failed) {
 			// Success, we have updated all rows
-			return result(current_i * entries * ATOMIC_SIZE);
+			return llfree_result(current_i * entries *
+					     LLFREE_ATOMIC_SIZE);
 		}
 	}
 
-	return result(ERR_MEMORY);
+	return llfree_result(LLFREE_ERR_MEMORY);
 }
 
 static bool row_toggle(uint64_t *row, uint64_t mask, bool expected)
@@ -157,16 +159,16 @@ static bool row_toggle(uint64_t *row, uint64_t mask, bool expected)
 	return false;
 }
 
-result_t field_toggle(bitfield_t *field, size_t index, size_t order,
-		      bool expected)
+llfree_result_t field_toggle(bitfield_t *field, size_t index, size_t order,
+			     bool expected)
 {
-	assert(0 <= index && index < CHILD_SIZE);
+	assert(0 <= index && index < LLFREE_CHILD_SIZE);
 
 	pos_t pos = get_pos(index);
 	size_t num_frames = 1 << order;
 
-	if (num_frames > ATOMIC_SIZE) {
-		size_t num_entries = (1 << order) / ATOMIC_SIZE;
+	if (num_frames > LLFREE_ATOMIC_SIZE) {
+		size_t num_entries = (1 << order) / LLFREE_ATOMIC_SIZE;
 		for (size_t i = 0; i < num_entries; i++) {
 			uint64_t mask = expected ? UINT64_MAX : 0;
 			uint64_t old = mask;
@@ -174,18 +176,19 @@ result_t field_toggle(bitfield_t *field, size_t index, size_t order,
 					      ~mask)) {
 				continue;
 			}
-			return result(ERR_ADDRESS);
+			return llfree_result(LLFREE_ERR_ADDRESS);
 		}
-		return result(ERR_OK);
+		return llfree_result(LLFREE_ERR_OK);
 	}
 
-	uint64_t mask = ((UINT64_MAX >> (ATOMIC_SIZE - num_frames)) << pos.bit);
+	uint64_t mask =
+		((UINT64_MAX >> (LLFREE_ATOMIC_SIZE - num_frames)) << pos.bit);
 	uint64_t old;
 	if (atom_update(&field->rows[pos.row], old, row_toggle, mask,
 			expected)) {
-		return result(ERR_OK);
+		return llfree_result(LLFREE_ERR_OK);
 	}
-	return result(ERR_ADDRESS);
+	return llfree_result(LLFREE_ERR_ADDRESS);
 }
 
 size_t field_count_ones(bitfield_t *field)
@@ -195,13 +198,13 @@ size_t field_count_ones(bitfield_t *field)
 		uint64_t row = atom_load(&field->rows[i]);
 		counter += count_ones(row);
 	}
-	assert(0 <= counter && counter <= CHILD_SIZE);
+	assert(0 <= counter && counter <= LLFREE_CHILD_SIZE);
 	return counter;
 }
 
 bool field_is_free(bitfield_t *self, size_t index)
 {
-	assert(0 <= index && index < CHILD_SIZE);
+	assert(0 <= index && index < LLFREE_CHILD_SIZE);
 	pos_t pos = get_pos(index);
 
 	uint64_t row = atom_load(&self->rows[pos.row]);
@@ -210,11 +213,13 @@ bool field_is_free(bitfield_t *self, size_t index)
 	return (row & mask) == 0;
 }
 
+#ifdef STD
 void field_print(bitfield_t *field)
 {
-	printf("Field in HEX: MSB to LSB\n");
+	llfree_info("Field in HEX: MSB to LSB\n");
 	for (size_t i = 0; i < FIELD_N; i++) {
 		uint16_t *s = (uint16_t *)&(field->rows[i]);
-		printf("%04X %04X %04X %04X\n", s[3], s[2], s[1], s[0]);
+		llfree_info("%04X %04X %04X %04X\n", s[3], s[2], s[1], s[0]);
 	}
 }
+#endif

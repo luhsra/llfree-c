@@ -15,7 +15,7 @@ void print_trees(llfree_t *self)
 	printf("trees:\ti\tflag\tcounter\n");
 	for (size_t i = 0; i < self->trees_len; ++i) {
 		tree_t _unused tree = atom_load(&self->trees[i]);
-		info("\t%ju\t%d\t%X\n", i, tree.reserved, tree.free);
+		llfree_info("\t%ju\t%d\t%X\n", i, tree.reserved, tree.free);
 	}
 }
 
@@ -23,12 +23,13 @@ bool check_init(llfree_t *upper, size_t cores, uint64_t offset, size_t len,
 		uint8_t init, uint8_t free_all)
 {
 	bool success = true;
-	result_t ret = llfree_init(upper, cores, offset, len, init, free_all);
-	size_t num_trees = div_ceil(len, TREE_SIZE);
-	size_t num_childs = div_ceil(len, CHILD_SIZE);
-	check_equal((uint64_t)upper->trees % CACHE_SIZE, 0ull);
+	llfree_result_t ret =
+		llfree_init(upper, cores, offset, len, init, free_all);
+	size_t num_trees = div_ceil(len, LLFREE_TREE_SIZE);
+	size_t num_childs = div_ceil(len, LLFREE_CHILD_SIZE);
+	check_equal((uint64_t)upper->trees % LLFREE_CACHE_SIZE, 0ull);
 
-	check_m(result_ok(ret), "init is success");
+	check_m(llfree_result_ok(ret), "init is success");
 	check_equal(upper->trees_len, num_trees);
 	check_equal(upper->lower.childs_len, num_childs);
 	check_equal(upper->lower.offset, offset);
@@ -45,10 +46,10 @@ declare_test(llfree_init)
 {
 	int success = true;
 
-	llfree_t *upper = llfree_ext_alloc(CACHE_SIZE, sizeof(llfree_t));
+	llfree_t *upper = llfree_ext_alloc(LLFREE_CACHE_SIZE, sizeof(llfree_t));
 	check_m(upper != NULL, "default init must reserve memory");
 
-	if (!check_init(upper, 4, 0, 1 << 20, INIT_VOLATILE, true)) {
+	if (!check_init(upper, 4, 0, 1 << 20, LLFREE_INIT_VOLATILE, true)) {
 		success = false;
 	}
 
@@ -62,33 +63,38 @@ declare_test(llfree_alloc_s)
 	const size_t SIZE = (1ul << 30); // 8G
 	void *memory = llfree_ext_alloc(LLFREE_ALIGN, SIZE);
 	assert(memory != NULL);
-	llfree_t *upper = llfree_ext_alloc(CACHE_SIZE, sizeof(llfree_t));
+	llfree_t *upper = llfree_ext_alloc(LLFREE_CACHE_SIZE, sizeof(llfree_t));
 	check_m(upper != NULL, "default init must reserve memory");
 
-	info("Init");
-	result_t res = llfree_init(upper, 1, (uint64_t)memory / FRAME_SIZE,
-				SIZE / FRAME_SIZE, INIT_OVERWRITE, true);
-	check(result_ok(res));
+	llfree_info("Init");
+	llfree_result_t res = llfree_init(upper, 1,
+					  (uint64_t)memory / LLFREE_FRAME_SIZE,
+					  SIZE / LLFREE_FRAME_SIZE,
+					  LLFREE_INIT_OVERWRITE, true);
+	check(llfree_result_ok(res));
 
-	info("Alloc");
+	llfree_info("Alloc");
 	size_t n = 128;
 	for (size_t i = 0; i < n; i++) {
-		check(result_ok(llfree_get(upper, 0, 0)));
-		check(result_ok(llfree_get(upper, 0, HUGE_ORDER)));
+		check(llfree_result_ok(llfree_get(upper, 0, 0)));
+		check(llfree_result_ok(
+			llfree_get(upper, 0, LLFREE_HUGE_ORDER)));
 	}
 
-	check_equal(n + (n << HUGE_ORDER),
+	check_equal(n + (n << LLFREE_HUGE_ORDER),
 		    llfree_frames(upper) - llfree_free_frames(upper));
-	check_equal(n + (n << HUGE_ORDER),
+	check_equal(n + (n << LLFREE_HUGE_ORDER),
 		    upper->lower.frames - lower_free_frames(&upper->lower));
 
-	check_equal(llfree_free_frames(upper), lower_free_frames(&upper->lower));
+	check_equal(llfree_free_frames(upper),
+		    lower_free_frames(&upper->lower));
 
 	for (size_t i = 0; i < upper->trees_len; i++) {
 		size_t free = 0;
-		for (size_t j = 0; j < TREE_CHILDREN; j++) {
-			size_t idx = i * TREE_CHILDREN + j;
-			if (idx > upper->lower.childs_len) break;
+		for (size_t j = 0; j < LLFREE_TREE_CHILDREN; j++) {
+			size_t idx = i * LLFREE_TREE_CHILDREN + j;
+			if (idx > upper->lower.childs_len)
+				break;
 			child_t child = atom_load(&upper->lower.children[idx]);
 			free += child.free;
 		}
@@ -105,9 +111,10 @@ declare_test(llfree_general_function)
 {
 	bool success = true;
 
-	llfree_t *upper = llfree_ext_alloc(CACHE_SIZE, sizeof(llfree_t));
-	result_t ret = llfree_init(upper, 4, 0, 132000, INIT_VOLATILE, true);
-	check_m(result_ok(ret), "init is success");
+	llfree_t *upper = llfree_ext_alloc(LLFREE_CACHE_SIZE, sizeof(llfree_t));
+	llfree_result_t ret =
+		llfree_init(upper, 4, 0, 132000, LLFREE_INIT_VOLATILE, true);
+	check_m(llfree_result_ok(ret), "init is success");
 	check(upper->trees_len == 9);
 	check(upper->cores == 4);
 	check(llfree_frames(upper) == 132000);
@@ -115,28 +122,29 @@ declare_test(llfree_general_function)
 		"right number of free frames");
 
 	// check allignment
-	check_m((uint64_t)upper->trees % CACHE_SIZE == 0, "Alignment of trees");
+	check_m((uint64_t)upper->trees % LLFREE_CACHE_SIZE == 0,
+		"Alignment of trees");
 	for (unsigned i = 0; i < upper->cores; ++i) {
-		check_equal_m((uint64_t)&upper->local[i] % CACHE_SIZE, 0ul,
-			      "Alignment of local");
+		check_equal_m((uint64_t)&upper->local[i] % LLFREE_CACHE_SIZE,
+			      0ul, "Alignment of local");
 	}
 
-	info("Before get");
+	llfree_info("Before get");
 
-	result_t frame = llfree_get(upper, 0, 0);
-	check_m(result_ok(frame), "reservation must be success");
+	llfree_result_t frame = llfree_get(upper, 0, 0);
+	check_m(llfree_result_ok(frame), "reservation must be success");
 
 	check(llfree_frames(upper) == 132000);
 	check_m(llfree_free_frames(upper) == 131999,
 		"right number of free frames");
 
-	info("After get mit core 0\n");
+	llfree_info("After get mit core 0\n");
 
 	ret = llfree_put(upper, 0, frame.val, 0);
 
 	return success;
 
-	check_m(result_ok(ret), "successfully free");
+	check_m(llfree_result_ok(ret), "successfully free");
 	check_m(llfree_free_frames(upper) == 132000,
 		"right number of free frames");
 
@@ -144,24 +152,25 @@ declare_test(llfree_general_function)
 	check_equal(lf.tree_idx, row_from_pfn(frame.val));
 
 	// reserve all frames in first tree
-	for (size_t i = 0; i < TREE_SIZE; ++i) {
+	for (size_t i = 0; i < LLFREE_TREE_SIZE; ++i) {
 		ret = llfree_get(upper, 0, 0);
-		check(result_ok(ret));
+		check(llfree_result_ok(ret));
 	}
 
 	// reserve first frame in new tree
 	ret = llfree_get(upper, 0, 0);
-	check(result_ok(ret));
+	check(llfree_result_ok(ret));
 	reserved_t reserved = atom_load(&upper->local[0].reserved);
-	check_m(reserved.start_row == row_from_pfn(TREE_SIZE),
+	check_m(reserved.start_row == row_from_pfn(LLFREE_TREE_SIZE),
 		"second tree must be allocated");
 
 	uint64_t free_frames = llfree_free_frames(upper);
 	// reserve and free a HugeFrame
-	frame = llfree_get(upper, 0, HUGE_ORDER);
-	check(result_ok(frame));
-	check_equal(llfree_free_frames(upper), free_frames - CHILD_SIZE);
-	check(result_ok(llfree_put(upper, 0, frame.val, HUGE_ORDER)));
+	frame = llfree_get(upper, 0, LLFREE_HUGE_ORDER);
+	check(llfree_result_ok(frame));
+	check_equal(llfree_free_frames(upper), free_frames - LLFREE_CHILD_SIZE);
+	check(llfree_result_ok(
+		llfree_put(upper, 0, frame.val, LLFREE_HUGE_ORDER)));
 	check_equal(llfree_free_frames(upper), free_frames);
 
 	llfree_drop(upper);
@@ -171,36 +180,39 @@ declare_test(llfree_general_function)
 declare_test(llfree_put)
 {
 	bool success = true;
-	llfree_t *upper = (llfree_t *)llfree_ext_alloc(CACHE_SIZE, sizeof(llfree_t));
-	result_t ret =
-		llfree_init(upper, 4, 0, TREE_SIZE << 4, INIT_VOLATILE, true);
-	assert(result_ok(ret));
+	llfree_t *upper = (llfree_t *)llfree_ext_alloc(LLFREE_CACHE_SIZE,
+						       sizeof(llfree_t));
+	llfree_result_t ret = llfree_init(upper, 4, 0, LLFREE_TREE_SIZE << 4,
+					  LLFREE_INIT_VOLATILE, true);
+	assert(llfree_result_ok(ret));
 
-	int64_t reserved[TREE_SIZE + 5];
+	int64_t reserved[LLFREE_TREE_SIZE + 5];
 
 	// reserve more frames than one tree
-	for (size_t i = 0; i < TREE_SIZE + 5; ++i) {
+	for (size_t i = 0; i < LLFREE_TREE_SIZE + 5; ++i) {
 		ret = llfree_get(upper, 1, 0);
-		check(result_ok(ret));
+		check(llfree_result_ok(ret));
 		reserved[i] = ret.val;
 	}
 
 	check_equal(tree_from_pfn(reserved[0]),
-		    tree_from_pfn(reserved[TREE_SIZE - 1]));
-	check(tree_from_pfn(reserved[0]) != tree_from_pfn(reserved[TREE_SIZE]));
+		    tree_from_pfn(reserved[LLFREE_TREE_SIZE - 1]));
+	check(tree_from_pfn(reserved[0]) !=
+	      tree_from_pfn(reserved[LLFREE_TREE_SIZE]));
 
-	result_t ret2 = llfree_get(upper, 2, 0);
-	check(result_ok(ret2));
-	check_m(tree_from_pfn(ret2.val) != tree_from_pfn(reserved[TREE_SIZE]),
+	llfree_result_t ret2 = llfree_get(upper, 2, 0);
+	check(llfree_result_ok(ret2));
+	check_m(tree_from_pfn(ret2.val) !=
+			tree_from_pfn(reserved[LLFREE_TREE_SIZE]),
 		"second get must be in different tree");
 
 	if (!success)
 		llfree_print(upper);
 
 	// free half the frames from old tree with core 2
-	for (size_t i = 0; i < TREE_SIZE / 2; ++i) {
+	for (size_t i = 0; i < LLFREE_TREE_SIZE / 2; ++i) {
 		ret = llfree_put(upper, 2, reserved[i], 0);
-		check(result_ok(ret));
+		check(llfree_result_ok(ret));
 	}
 
 	// core 2 must have now this first tree reserved
@@ -216,31 +228,32 @@ declare_test(llfree_put)
 declare_test(llfree_alloc_all)
 {
 	const uint64_t MEMORYSIZE = (8ul << 30); // 8GiB
-	const uint64_t LENGTH = (MEMORYSIZE / FRAME_SIZE);
+	const uint64_t LENGTH = (MEMORYSIZE / LLFREE_FRAME_SIZE);
 	const int CORES = 8;
 	int success = true;
-	llfree_t *upper = llfree_ext_alloc(CACHE_SIZE, sizeof(llfree_t));
-	result_t ret = llfree_init(upper, CORES, 1024, LENGTH, 0, true);
-	assert(result_ok(ret));
+	llfree_t *upper = llfree_ext_alloc(LLFREE_CACHE_SIZE, sizeof(llfree_t));
+	llfree_result_t ret = llfree_init(upper, CORES, 1024, LENGTH, 0, true);
+	assert(llfree_result_ok(ret));
 
 	int64_t *pfns = malloc(sizeof(int64_t) * LENGTH);
 	assert(pfns != NULL);
 
 	for (size_t i = 0; i < LENGTH; ++i) {
-		result_t ret = llfree_get(upper, i % CORES, 0);
-		check_m(result_ok(ret),
+		llfree_result_t ret = llfree_get(upper, i % CORES, 0);
+		check_m(llfree_result_ok(ret),
 			"must be able to alloc the whole memory");
-		if (!result_ok(ret)) {
+		if (!llfree_result_ok(ret)) {
 			llfree_print(upper);
 			break;
 		}
 		pfns[i] = ret.val;
 	}
 	ret = llfree_get(upper, 0, 0);
-	check(ret.val == ERR_MEMORY);
+	check(ret.val == LLFREE_ERR_MEMORY);
 
 	check_equal(llfree_free_frames(upper), 0ul);
-	check_equal(llfree_free_frames(upper), lower_free_frames(&upper->lower));
+	check_equal(llfree_free_frames(upper),
+		    lower_free_frames(&upper->lower));
 
 	return success;
 }
@@ -297,18 +310,19 @@ static void *alloc_frames(void *arg)
 		if (ret->sp == args->amount ||
 		    (ret->sp > 0 && rand() % 8 > 4)) {
 			size_t random_idx = rand() % ret->sp;
-			result_t res = llfree_put(upper, args->core,
-					       ret->pfns[random_idx],
-					       args->order);
-			assert(result_ok(res));
+			llfree_result_t res = llfree_put(upper, args->core,
+							 ret->pfns[random_idx],
+							 args->order);
+			assert(llfree_result_ok(res));
 			--ret->sp;
 			ret->pfns[random_idx] = ret->pfns[ret->sp];
 			--i;
 		} else {
-			result_t res = llfree_get(upper, args->core, args->order);
-			assert(result_ok(res));
+			llfree_result_t res =
+				llfree_get(upper, args->core, args->order);
+			assert(llfree_result_ok(res));
 			ret->pfns[ret->sp] = res.val;
-			if (ret->pfns[ret->sp] == ERR_MEMORY)
+			if (ret->pfns[ret->sp] == LLFREE_ERR_MEMORY)
 				++ret->amount_ENOMEM;
 			else
 				++ret->sp;
@@ -326,16 +340,18 @@ declare_test(llfree_parallel_alloc)
 	int success = true;
 
 	const uint64_t LENGTH = 16 << 18;
-	char *memory = llfree_ext_alloc(LLFREE_ALIGN, LENGTH << FRAME_BITS);
+	char *memory =
+		llfree_ext_alloc(LLFREE_ALIGN, LENGTH << LLFREE_FRAME_BITS);
 	assert(memory != NULL);
 
-	upper = llfree_ext_alloc(CACHE_SIZE, sizeof(llfree_t));
-	assert(result_ok(llfree_init(upper, CORES, (uint64_t)memory / FRAME_SIZE,
-				  LENGTH, INIT_OVERWRITE, true)));
+	upper = llfree_ext_alloc(LLFREE_CACHE_SIZE, sizeof(llfree_t));
+	assert(llfree_result_ok(
+		llfree_init(upper, CORES, (uint64_t)memory / LLFREE_FRAME_SIZE,
+			    LENGTH, LLFREE_INIT_OVERWRITE, true)));
 	pthread_t threads[CORES];
 	struct arg args[CORES];
 	for (int i = 0; i < CORES; ++i) {
-		args[i] = (struct arg){ i, 0, (TREE_SIZE + 500), 40000 };
+		args[i] = (struct arg){ i, 0, (LLFREE_TREE_SIZE + 500), 40000 };
 		assert(pthread_create(&threads[i], NULL, alloc_frames,
 				      &args[i]) == 0);
 	}
@@ -353,8 +369,10 @@ declare_test(llfree_parallel_alloc)
 		err += rets[i]->amount_ENOMEM;
 	}
 	// now all threads are terminated
-	check_equal(llfree_frames(upper) - llfree_free_frames(upper), still_reserved);
-	check_equal(llfree_free_frames(upper), lower_free_frames(&upper->lower));
+	check_equal(llfree_frames(upper) - llfree_free_frames(upper),
+		    still_reserved);
+	check_equal(llfree_free_frames(upper),
+		    lower_free_frames(&upper->lower));
 
 	// duplicate check
 	for (size_t core = 0; core < CORES; ++core) {
@@ -380,14 +398,14 @@ end:
 
 	if (!success) {
 		llfree_print(upper);
-		printf("%ju times ERR_MEMORY was returned\n", err);
+		printf("%ju times LLFREE_ERR_MEMORY was returned\n", err);
 	}
 	for (size_t i = 0; i < CORES; ++i) {
 		free(rets[i]->pfns);
 		free(rets[i]);
 	}
 	llfree_drop(upper);
-	llfree_ext_free(LLFREE_ALIGN, LENGTH << FRAME_BITS, memory);
+	llfree_ext_free(LLFREE_ALIGN, LENGTH << LLFREE_FRAME_BITS, memory);
 	return success;
 }
 
@@ -407,15 +425,16 @@ static void *parallel_alloc_all(void *input)
 	struct par_args *args = input;
 
 	size_t total = llfree_frames(args->upper);
-	*(args->frames) = llfree_ext_alloc(FRAME_SIZE, total * sizeof(uint64_t));
+	*(args->frames) =
+		llfree_ext_alloc(LLFREE_FRAME_SIZE, total * sizeof(uint64_t));
 
 	size_t i = 0;
 	for (;; i++) {
 		assert(i < total);
 
-		result_t ret = llfree_get(args->upper, args->core, 0);
-		if (!result_ok(ret)) {
-			assert(ret.val == ERR_MEMORY);
+		llfree_result_t ret = llfree_get(args->upper, args->core, 0);
+		if (!llfree_result_ok(ret)) {
+			assert(ret.val == LLFREE_ERR_MEMORY);
 			break;
 		}
 		assert(ret.val >= OFFSET);
@@ -423,7 +442,7 @@ static void *parallel_alloc_all(void *input)
 
 		(*(args->frames))[i] = ret.val;
 	}
-	info("finish %ju (%ju)", args->core, i);
+	llfree_info("finish %ju (%ju)", args->core, i);
 	return (void *)i;
 }
 
@@ -432,39 +451,41 @@ declare_test(llfree_parallel_alloc_all)
 	bool success = true;
 	const uint64_t LENGTH = 8 << 18; // 8G
 
-	upper = llfree_ext_alloc(CACHE_SIZE, sizeof(llfree_t));
-	assert(result_ok(
-		llfree_init(upper, CORES, OFFSET, LENGTH, INIT_VOLATILE, true)));
+	upper = llfree_ext_alloc(LLFREE_CACHE_SIZE, sizeof(llfree_t));
+	assert(llfree_result_ok(llfree_init(upper, CORES, OFFSET, LENGTH,
+					    LLFREE_INIT_VOLATILE, true)));
 
 	uint64_t *frames[CORES] = { NULL };
 	struct par_args args[CORES];
 
 	pthread_t threads[CORES];
 	for (size_t i = 0; i < CORES; i++) {
-		info("spawn %ju", i);
+		llfree_info("spawn %ju", i);
 		args[i] = (struct par_args){ upper, &frames[i], i };
 		assert(pthread_create(&threads[i], NULL, parallel_alloc_all,
 				      &args[i]) == 0);
 	}
 
 	size_t counts[CORES] = { 0 };
-	uint64_t *all_frames =
-		llfree_ext_alloc(FRAME_SIZE, llfree_frames(upper) * sizeof(uint64_t));
+	uint64_t *all_frames = llfree_ext_alloc(
+		LLFREE_FRAME_SIZE, llfree_frames(upper) * sizeof(uint64_t));
 
 	size_t total = 0;
 	for (size_t i = 0; i < CORES; i++) {
-		info("wait for %ju", i);
+		llfree_info("wait for %ju", i);
 		assert(pthread_join(threads[i], (void **)&counts[i]) == 0);
 
 		// collect allocated pages
 		memcpy(&all_frames[total], frames[i],
 		       counts[i] * sizeof(uint64_t));
-		llfree_ext_free(sizeof(uint64_t), llfree_frames(upper), frames[i]);
+		llfree_ext_free(sizeof(uint64_t), llfree_frames(upper),
+				frames[i]);
 		total += counts[i];
 	}
 
 	check_equal(llfree_frames(upper), total);
-	check_equal(llfree_free_frames(upper), lower_free_frames(&upper->lower));
+	check_equal(llfree_free_frames(upper),
+		    lower_free_frames(&upper->lower));
 
 	// check for duplicates
 	qsort(all_frames, total, sizeof(int64_t), comp);
@@ -484,16 +505,17 @@ declare_test(llfree_get_huge)
 	bool success = true;
 
 	llfree_t llfree;
-	result_t res = llfree_init(&llfree, 1, 0, TREE_SIZE, INIT_VOLATILE, true);
-	check(result_ok(res));
+	llfree_result_t res = llfree_init(&llfree, 1, 0, LLFREE_TREE_SIZE,
+					  LLFREE_INIT_VOLATILE, true);
+	check(llfree_result_ok(res));
 
-	info("get");
-	res = llfree_get(&llfree, 0, HUGE_ORDER);
-	check(result_ok(res));
+	llfree_info("get");
+	res = llfree_get(&llfree, 0, LLFREE_HUGE_ORDER);
+	check(llfree_result_ok(res));
 
-	info("get");
-	res = llfree_get(&llfree, 0, HUGE_ORDER);
-	check(result_ok(res));
+	llfree_info("get");
+	res = llfree_get(&llfree, 0, LLFREE_HUGE_ORDER);
+	check(llfree_result_ok(res));
 
 	return success;
 }

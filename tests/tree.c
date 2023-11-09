@@ -48,28 +48,28 @@ declare_test(tree_reserve)
 	tree_t actual = tree_new(7645, false);
 	tree_t expect = tree_new(0, true);
 
-	ret = tree_reserve(&actual, 0, (1 << TREE_ORDER));
+	ret = tree_reserve(&actual, 0, (1 << LLFREE_TREE_ORDER));
 	check(ret);
 	equal_trees(actual, expect);
 
 	// chek min counter value
 	actual = tree_new(0, false);
 	expect = tree_new(0, true);
-	ret = tree_reserve(&actual, 0, (1 << TREE_ORDER));
+	ret = tree_reserve(&actual, 0, (1 << LLFREE_TREE_ORDER));
 	check(ret);
 	equal_trees(actual, expect);
 
 	// if already reserved
 	actual = tree_new(456, true);
 	expect = actual; // no change expected
-	ret = tree_reserve(&actual, 0, (1 << TREE_ORDER));
+	ret = tree_reserve(&actual, 0, (1 << LLFREE_TREE_ORDER));
 	check_m(!ret, "already reserved");
 	equal_trees(actual, expect);
 
 	// max counter value
 	actual = tree_new(0x3fff, false);
 	expect = tree_new(0, true);
-	ret = tree_reserve(&actual, 0, (1 << TREE_ORDER));
+	ret = tree_reserve(&actual, 0, (1 << LLFREE_TREE_ORDER));
 	check(ret);
 	equal_trees(actual, expect);
 
@@ -140,7 +140,7 @@ declare_test(tree_inc)
 	check(ret);
 	equal_trees(actual, expect);
 
-	order = HUGE_ORDER;
+	order = LLFREE_HUGE_ORDER;
 	free = 3456;
 	actual = tree_new(free, true);
 	expect = tree_new(free + (1 << order), true);
@@ -148,7 +148,7 @@ declare_test(tree_inc)
 	check(ret);
 	equal_trees(actual, expect);
 
-	order = HUGE_ORDER;
+	order = LLFREE_HUGE_ORDER;
 	free = (1 << 14) - (1 << 9); // max free
 	actual = tree_new(free, true);
 	expect = tree_new(free + (1 << order), true);

@@ -628,6 +628,7 @@ ForEachMacros:
   - 'xbc_node_for_each_key_value'
   - 'xbc_node_for_each_subkey'
   - 'zorro_for_each_dev'
+  - 'for_offsetted'
 
 IncludeBlocks: Preserve
 IncludeCategories:

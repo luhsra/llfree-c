@@ -3,7 +3,7 @@
 bool child_inc(child_t *self, size_t order)
 {
 	size_t num_pages = 1 << order;
-	if (self->huge == true || self->free + num_pages > CHILD_SIZE)
+	if (self->huge == true || self->free + num_pages > LLFREE_CHILD_SIZE)
 		return false;
 
 	self->free += num_pages;
@@ -22,7 +22,7 @@ bool child_dec(child_t *self, size_t order)
 
 bool child_reserve_huge(child_t *self)
 {
-	if (self->free != CHILD_SIZE)
+	if (self->free != LLFREE_CHILD_SIZE)
 		return false;
 
 	*self = child_new(0, true);
@@ -31,7 +31,8 @@ bool child_reserve_huge(child_t *self)
 
 bool child_reserve_max(child_pair_t *self)
 {
-	if (self->first.free != CHILD_SIZE || self->second.free != CHILD_SIZE)
+	if (self->first.free != LLFREE_CHILD_SIZE ||
+	    self->second.free != LLFREE_CHILD_SIZE)
 		return false;
 
 	self->first = child_new(0, true);

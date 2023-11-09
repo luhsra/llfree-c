@@ -62,8 +62,8 @@ declare_test(child_counter_dec)
 	check_equal(actual.free, expect.free);
 	check_equal(actual.huge, expect.huge);
 
-	actual = child_new(CHILD_SIZE, false);
-	expect = child_new(CHILD_SIZE - 1, false);
+	actual = child_new(LLFREE_CHILD_SIZE, false);
+	expect = child_new(LLFREE_CHILD_SIZE - 1, false);
 	ret = child_dec(&actual, 0);
 	check(ret);
 	check_equal(actual.free, expect.free);
