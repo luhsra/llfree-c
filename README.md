@@ -4,10 +4,13 @@ This repo contains the reimplementation of LLFree in C.
 
 The two main design goals of this page frame allocator are multicore scalability and crash consistency.
 
+
 **Related Projects**
+- Rust-based LLFree: https://github.com/luhsra/llfree-rs
 - Benchmarks: https://github.com/luhsra/llfree-bench
 - Modified Linux: https://github.com/luhsra/llfree-linux
 - Benchmark Module: https://github.com/luhsra/linux-alloc-bench
+
 
 ## Usage
 
@@ -24,9 +27,12 @@ make DEBUG=0
 Running unit-tests
 ```sh
 make test
+# or tests that contain "bitfield" in their name
+make test A=bitfield
 ```
 
-# Project Structure
+
+## Project Structure
 
 ![LLFree Architecture](fig/llfree-arch.svg)
 
@@ -41,3 +47,9 @@ These 2M entries are further grouped into trees with 32 entries (this can be def
 The [llc.c](src/llc.c) file contains the upper allocator, which depends on the lower allocator for the actual allocations and only manages the higher-level trees.
 Its purpose is to improve performance by preventing memory sharing and fragmentation.
 It is completely volatile and has to be rebuilt on boot.
+
+## Publication
+
+**LLFree: Scalable and Optionally-Persistent Page-Frame Allocation**<br>
+Lars Wrenger, Florian Rommel, Alexander Halbuer, Christian Dietrich, Daniel Lohmann<br>
+In: 2023 USENIX Annual Technical Conference (USENIX '23); USENIX Association
