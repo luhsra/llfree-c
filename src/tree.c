@@ -23,7 +23,7 @@ bool tree_steal_counter(tree_t *self, size_t min)
 
 bool tree_writeback(tree_t *self, uint16_t free)
 {
-	if (self->free + free <= TREESIZE) {
+	if (self->free + free <= TREE_SIZE) {
 		*self = tree_new(free + self->free, false);
 		return true;
 	}
@@ -32,7 +32,7 @@ bool tree_writeback(tree_t *self, uint16_t free)
 
 bool tree_inc(tree_t *self, size_t free)
 {
-	if (self->free + free <= TREESIZE) {
+	if (self->free + free <= TREE_SIZE) {
 		self->free += free;
 		return true;
 	}

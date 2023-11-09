@@ -1,5 +1,4 @@
 #include "local.h"
-#include "tree.h"
 
 void local_init(local_t *self)
 {
@@ -46,7 +45,7 @@ bool reserved_inc(reserved_t *self, size_t tree_idx, size_t free)
 		return false;
 
 	// check if counter has enough space
-	assert(self->free + free <= TREESIZE);
+	assert(self->free + free <= TREE_SIZE);
 	self->free += free;
 	return true;
 }

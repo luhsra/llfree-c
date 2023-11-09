@@ -6,6 +6,7 @@
 #include <stdalign.h>
 
 #include "llc.h"
+#include "platform.h"
 
 /// Unused functions and variables
 #define _unused __attribute__((unused))

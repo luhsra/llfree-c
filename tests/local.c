@@ -23,7 +23,7 @@ declare_test(local_init)
 
 	check_equal(lf.counter, 0);
 	check_equal(lf.tree_idx, 0ul);
-	check_equal(reserved.free, 0);
+	check_equal(reserved.free, 0lu);
 	check_equal(reserved.reserving, false);
 	check_equal(reserved.present, false);
 

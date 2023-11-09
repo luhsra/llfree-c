@@ -1,4 +1,5 @@
 #include "llc.h"
+#include "child.h"
 #include "llc_inner.h"
 
 #include "check.h"
@@ -24,7 +25,7 @@ bool check_init(llc_t *upper, size_t cores, uint64_t offset, size_t len,
 {
 	bool success = true;
 	result_t ret = llc_init(upper, cores, offset, len, init, free_all);
-	size_t num_trees = div_ceil(len, TREESIZE);
+	size_t num_trees = div_ceil(len, TREE_SIZE);
 	size_t num_childs = div_ceil(len, CHILD_SIZE);
 	check_equal((uint64_t)upper->trees % CACHE_SIZE, 0ull);
 
@@ -59,8 +60,8 @@ declare_test(llc_init)
 declare_test(llc_alloc_s)
 {
 	int success = true;
-	const size_t SIZE = 8ul << 30; // 1G
-	void *memory = llc_ext_alloc(2 * FRAME_SIZE, SIZE);
+	const size_t SIZE = (1ul << 30); // 8G
+	void *memory = llc_ext_alloc(LLC_ALIGN, SIZE);
 	assert(memory != NULL);
 	llc_t *upper = llc_ext_alloc(CACHE_SIZE, sizeof(llc_t));
 	check_m(upper != NULL, "default init must reserve memory");
@@ -71,13 +72,31 @@ declare_test(llc_alloc_s)
 	check(result_ok(res));
 
 	info("Alloc");
-	size_t n = 512;
+	size_t n = 128;
 	for (size_t i = 0; i < n; i++) {
 		check(result_ok(llc_get(upper, 0, 0)));
-		check(result_ok(llc_get(upper, 0, 9)));
+		check(result_ok(llc_get(upper, 0, HUGE_ORDER)));
 	}
 
-	check_equal(n + n * 512, llc_frames(upper) - llc_free_frames(upper));
+	check_equal(n + (n << HUGE_ORDER),
+		    llc_frames(upper) - llc_free_frames(upper));
+	check_equal(n + (n << HUGE_ORDER),
+		    upper->lower.frames - lower_free_frames(&upper->lower));
+
+	check_equal(llc_free_frames(upper), lower_free_frames(&upper->lower));
+
+	for (size_t i = 0; i < upper->trees_len; i++) {
+		size_t free = 0;
+		for (size_t j = 0; j < TREE_CHILDREN; j++) {
+			size_t idx = i * TREE_CHILDREN + j;
+			if (idx > upper->lower.childs_len) break;
+			child_t child = atom_load(&upper->lower.children[idx]);
+			free += child.free;
+		}
+		tree_t tree = atom_load(&upper->trees[i]);
+		if (!tree.reserved)
+			check_equal_m(free, tree.free, "tree %lu", i);
+	}
 
 	llc_drop(upper);
 	return success;
@@ -126,7 +145,7 @@ declare_test(llc_general_function)
 	check_equal(lf.tree_idx, row_from_pfn(frame.val));
 
 	// reserve all frames in first tree
-	for (size_t i = 0; i < TREESIZE; ++i) {
+	for (size_t i = 0; i < TREE_SIZE; ++i) {
 		ret = llc_get(upper, 0, 0);
 		check(result_ok(ret));
 	}
@@ -135,15 +154,15 @@ declare_test(llc_general_function)
 	ret = llc_get(upper, 0, 0);
 	check(result_ok(ret));
 	reserved_t reserved = atom_load(&upper->local[0].reserved);
-	check_m(reserved.start_row == row_from_pfn(TREESIZE),
+	check_m(reserved.start_row == row_from_pfn(TREE_SIZE),
 		"second tree must be allocated");
 
 	uint64_t free_frames = llc_free_frames(upper);
 	// reserve and free a HugeFrame
-	frame = llc_get(upper, 0, HP_ORDER);
+	frame = llc_get(upper, 0, HUGE_ORDER);
 	check(result_ok(frame));
 	check_equal(llc_free_frames(upper), free_frames - CHILD_SIZE);
-	check(result_ok(llc_put(upper, 0, frame.val, HP_ORDER)));
+	check(result_ok(llc_put(upper, 0, frame.val, HUGE_ORDER)));
 	check_equal(llc_free_frames(upper), free_frames);
 
 	llc_drop(upper);
@@ -155,32 +174,32 @@ declare_test(llc_put)
 	bool success = true;
 	llc_t *upper = (llc_t *)llc_ext_alloc(CACHE_SIZE, sizeof(llc_t));
 	result_t ret =
-		llc_init(upper, 4, 0, TREESIZE << 4, INIT_VOLATILE, true);
+		llc_init(upper, 4, 0, TREE_SIZE << 4, INIT_VOLATILE, true);
 	assert(result_ok(ret));
 
-	int64_t reserved[TREESIZE + 5];
+	int64_t reserved[TREE_SIZE + 5];
 
 	// reserve more frames than one tree
-	for (size_t i = 0; i < TREESIZE + 5; ++i) {
+	for (size_t i = 0; i < TREE_SIZE + 5; ++i) {
 		ret = llc_get(upper, 1, 0);
 		check(result_ok(ret));
 		reserved[i] = ret.val;
 	}
 
 	check_equal(tree_from_pfn(reserved[0]),
-		    tree_from_pfn(reserved[TREESIZE - 1]));
-	check(tree_from_pfn(reserved[0]) != tree_from_pfn(reserved[TREESIZE]));
+		    tree_from_pfn(reserved[TREE_SIZE - 1]));
+	check(tree_from_pfn(reserved[0]) != tree_from_pfn(reserved[TREE_SIZE]));
 
 	result_t ret2 = llc_get(upper, 2, 0);
 	check(result_ok(ret2));
-	check_m(tree_from_pfn(ret2.val) != tree_from_pfn(reserved[TREESIZE]),
+	check_m(tree_from_pfn(ret2.val) != tree_from_pfn(reserved[TREE_SIZE]),
 		"second get must be in different tree");
 
 	if (!success)
 		llc_print(upper);
 
 	// free half the frames from old tree with core 2
-	for (size_t i = 0; i < TREESIZE / 2; ++i) {
+	for (size_t i = 0; i < TREE_SIZE / 2; ++i) {
 		ret = llc_put(upper, 2, reserved[i], 0);
 		check(result_ok(ret));
 	}
@@ -222,6 +241,7 @@ declare_test(llc_alloc_all)
 	check(ret.val == ERR_MEMORY);
 
 	check_equal(llc_free_frames(upper), 0ul);
+	check_equal(llc_free_frames(upper), lower_free_frames(&upper->lower));
 
 	return success;
 }
@@ -307,7 +327,7 @@ declare_test(llc_parallel_alloc)
 	int success = true;
 
 	const uint64_t LENGTH = 16 << 18;
-	char *memory = aligned_alloc(1 << HP_ORDER, LENGTH << FRAME_BITS);
+	char *memory = llc_ext_alloc(LLC_ALIGN, LENGTH << FRAME_BITS);
 	assert(memory != NULL);
 
 	upper = llc_ext_alloc(CACHE_SIZE, sizeof(llc_t));
@@ -316,7 +336,7 @@ declare_test(llc_parallel_alloc)
 	pthread_t threads[CORES];
 	struct arg args[CORES];
 	for (int i = 0; i < CORES; ++i) {
-		args[i] = (struct arg){ i, 0, (TREESIZE + 500), 40000 };
+		args[i] = (struct arg){ i, 0, (TREE_SIZE + 500), 40000 };
 		assert(pthread_create(&threads[i], NULL, alloc_frames,
 				      &args[i]) == 0);
 	}
@@ -335,6 +355,7 @@ declare_test(llc_parallel_alloc)
 	}
 	// now all threads are terminated
 	check_equal(llc_frames(upper) - llc_free_frames(upper), still_reserved);
+	check_equal(llc_free_frames(upper), lower_free_frames(&upper->lower));
 
 	// duplicate check
 	for (size_t core = 0; core < CORES; ++core) {
@@ -367,7 +388,7 @@ end:
 		free(rets[i]);
 	}
 	llc_drop(upper);
-	free(memory);
+	llc_ext_free(LLC_ALIGN, LENGTH << FRAME_BITS, memory);
 	return success;
 }
 
@@ -444,6 +465,7 @@ declare_test(llc_parallel_alloc_all)
 	}
 
 	check_equal(llc_frames(upper), total);
+	check_equal(llc_free_frames(upper), lower_free_frames(&upper->lower));
 
 	// check for duplicates
 	qsort(all_frames, total, sizeof(int64_t), comp);
@@ -463,15 +485,15 @@ declare_test(llc_get_huge)
 	bool success = true;
 
 	llc_t llc;
-	result_t res = llc_init(&llc, 1, 0, TREESIZE, INIT_VOLATILE, true);
+	result_t res = llc_init(&llc, 1, 0, TREE_SIZE, INIT_VOLATILE, true);
 	check(result_ok(res));
 
 	info("get");
-	res = llc_get(&llc, 0, HP_ORDER);
+	res = llc_get(&llc, 0, HUGE_ORDER);
 	check(result_ok(res));
 
 	info("get");
-	res = llc_get(&llc, 0, HP_ORDER);
+	res = llc_get(&llc, 0, HUGE_ORDER);
 	check(result_ok(res));
 
 	return success;

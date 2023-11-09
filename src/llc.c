@@ -56,7 +56,7 @@ result_t llc_init(llc_t *self, size_t cores, uint64_t offset, size_t len,
 		warn("Invalid size %ju", len);
 		return result(ERR_INITIALIZATION);
 	}
-	if ((offset * FRAME_SIZE) % (1 << MAX_ORDER) != 0) {
+	if (offset % (1 << MAX_ORDER) != 0) {
 		warn("Invalid alignment");
 		return result(ERR_INITIALIZATION);
 	}
@@ -132,11 +132,13 @@ static result_t swap_reserved(llc_t *self, local_t *local, reserved_t new,
 		tree_t tree;
 		if (!atom_update(&self->trees[tree_idx], tree, tree_writeback,
 				 old.free)) {
-			warn("Failed writeback %jd (next %" PRIu64 ")",
+			warn("Failed writeback %ju (next %" PRIu64 ")",
 			     tree_idx, tree_from_row(new.start_row));
 			return result(ERR_CORRUPTION);
 		}
+		tree = atom_load(&self->trees[tree_idx]);
 	}
+
 	return result(ERR_OK);
 }
 
@@ -166,8 +168,9 @@ static result_t reserve_tree_and_get(llc_t *self, local_t *local, size_t idx,
 		}
 	} else {
 		// undo reservation
+		size_t free = old_tree.free;
 		if (!atom_update(&self->trees[idx], old_tree, tree_writeback,
-				 old_tree.free)) {
+				 free)) {
 			warn("Failed undo");
 			return result(ERR_CORRUPTION);
 		}
@@ -218,9 +221,9 @@ static result_t reserve_and_get(llc_t *self, local_t *local, uint64_t core,
 	for (int64_t i = 1; i <= (int64_t)vicinity; ++i) {
 		int64_t toggle = i & 1 ? i / 2 : -i / 2;
 		uint64_t idx = (base_idx + toggle) % self->trees_len;
-		result_t res =
-			reserve_tree_and_get(self, local, idx, order,
-					     (range_t){ 1 << order, TREESIZE });
+		result_t res = reserve_tree_and_get(self, local, idx, order,
+						    (range_t){ 1 << order,
+							       TREE_SIZE });
 		if (res.val != ERR_MEMORY)
 			return res;
 	}
@@ -242,7 +245,7 @@ static result_t reserve_and_get(llc_t *self, local_t *local, uint64_t core,
 
 	// search whole tree for a tree with enough free frames
 	res = search_global(self, local, base_idx, order,
-			    (range_t){ 1 << order, TREESIZE });
+			    (range_t){ 1 << order, TREE_SIZE });
 
 	// clear reserving
 	if (!result_ok(res)) {
@@ -342,8 +345,8 @@ static result_t get_inner(llc_t *self, size_t core, size_t order)
 	if (res.val == ERR_MEMORY) {
 		// Increment global to prevent race condition with concurrent reservation
 		tree_t old;
-		if (atom_update(&self->trees[start / TREESIZE], old, tree_inc,
-				1 << order)) {
+		if (atom_update(&self->trees[tree_from_pfn(start)], old,
+				tree_inc, 1 << order)) {
 			return reserve_or_wait(self, core, order);
 		}
 
@@ -425,9 +428,10 @@ result_t llc_put(llc_t *self, size_t core, uint64_t frame, size_t order)
 				if (ret.val != ERR_RETRY)
 					return ret;
 
+				size_t free = old_tree.free;
 				if (!atom_update(&self->trees[tree_idx],
 						 old_tree, tree_writeback,
-						 old_tree.free)) {
+						 free)) {
 					warn("Undo failed!");
 					return result(ERR_CORRUPTION);
 				}
@@ -495,68 +499,43 @@ void llc_debug(llc_t *self, void (*writer)(void *, char *), void *arg)
 	writer(arg, msg);
 }
 
+void count_huge(void *acc, uint64_t frame, uint64_t free)
+{
+	size_t sum = (size_t)acc;
+	sum += free;
+}
+
 void llc_print(llc_t *self)
 {
-	printf("-----------------------------------------------\n"
-	       "UPPER ALLOCATOR\nTrees:\t%ju\nCores:\t%ju\n allocated: %" PRIu64
-	       ", free: %" PRIu64 ", all: %" PRIu64 "\n",
-	       self->trees_len, self->cores,
-	       llc_frames(self) - llc_free_frames(self), llc_free_frames(self),
-	       llc_frames(self));
+	printf("llc_t {\n");
+	printf("    memory: %" PRIx64 "..%" PRIx64 " (%ju)\n",
+	       self->lower.offset, self->lower.offset + self->lower.frames,
+	       self->lower.frames);
 
-	printf("\nTrees:\n-----------------------------------------------\n");
-	if (self->trees_len > 20)
-		printf("There are over 20 Trees. Print will only contain first and last "
-		       "10\n\n");
+	printf("    trees: %ju (%u) {\n", self->trees_len, TREE_SIZE);
+	size_t free_huge = 0;
+	llc_for_each_huge(self, &free_huge, count_huge);
+	size_t free_trees = 0;
+	for (size_t i = 0; i < self->trees_len; i++) {
+		tree_t tree = atom_load(&self->trees[i]);
+		printf("        %3ju: free: %5u, reserved: %d\n", i, tree.free,
+		       tree.reserved);
+		if (tree.free == TREE_SIZE)
+			free_trees += 1;
+	}
+	printf("    }\n");
 
-	printf("Nr:\t\t");
-	for (size_t i = 0; i < self->trees_len; ++i) {
-		if (i < 10 || i >= self->trees_len - 10)
-			printf("%ju\t", i);
-	}
-	printf("\nreserved:\t");
-	for (size_t i = 0; i < self->trees_len; ++i) {
-		if (i < 10 || i >= self->trees_len - 10) {
-			tree_t tree = atom_load(&self->trees[i]);
-			printf("%d\t", tree.reserved);
-		}
-	}
-	printf("\nfree:\t\t");
-	for (size_t i = 0; i < self->trees_len; ++i) {
-		if (i < 10 || i >= self->trees_len - 10) {
-			tree_t tree = atom_load(&self->trees[i]);
-			printf("%d\t", tree.free);
-		}
-	}
-	printf("\n");
+	printf("    free: { frames: %ju, huge: %ju, trees: %ju }\n",
+	       llc_free_frames(self), free_huge, free_trees);
 
-	printf("-----------------------------------------------\n"
-	       "Local Data:\n"
-	       "-----------------------------------------------\n"
-	       "Core\t\t");
-	for (size_t i = 0; i < self->cores; ++i) {
-		printf("%ju\t", i);
+	for (size_t i = 0; i < self->cores; i++) {
+		reserved_t reserved = atom_load(&self->local[i].reserved);
+		printf("    local %ju: { present: %d, free: %u, start: %" PRIu64
+		       ", reserving: %d }\n",
+		       i, reserved.present, reserved.free,
+		       tree_from_row(reserved.start_row), reserved.reserving);
 	}
-	printf("\nhas_tree:\t");
-	for (size_t i = 0; i < self->cores; ++i) {
-		reserved_t reserved = atom_load(&get_local(self, i)->reserved);
-		printf("%d\t", reserved.present);
-	}
-	printf("\nTreeIDX:\t");
-	for (size_t i = 0; i < self->cores; ++i) {
-		reserved_t reserved = atom_load(&get_local(self, i)->reserved);
-		printf("%" PRIu64 "\t", tree_from_row(reserved.start_row));
-	}
-	printf("\nFreeFrames:\t");
-	for (size_t i = 0; i < self->cores; ++i) {
-		reserved_t reserved = atom_load(&get_local(self, i)->reserved);
-		printf("%u\t", reserved.free);
-	}
-
-	lower_print(&self->lower);
-
-	printf("\n-----------------------------------------------\n");
-	fflush(stdout);
+	printf("}\n");
 }
 
 void llc_drop(llc_t *self)

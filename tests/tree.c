@@ -140,7 +140,7 @@ declare_test(tree_inc)
 	check(ret);
 	equal_trees(actual, expect);
 
-	order = HP_ORDER;
+	order = HUGE_ORDER;
 	free = 3456;
 	actual = tree_new(free, true);
 	expect = tree_new(free + (1 << order), true);
@@ -148,7 +148,7 @@ declare_test(tree_inc)
 	check(ret);
 	equal_trees(actual, expect);
 
-	order = HP_ORDER;
+	order = HUGE_ORDER;
 	free = (1 << 14) - (1 << 9); // max free
 	actual = tree_new(free, true);
 	expect = tree_new(free + (1 << order), true);

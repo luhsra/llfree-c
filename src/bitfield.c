@@ -188,14 +188,13 @@ result_t field_toggle(bitfield_t *field, size_t index, size_t order,
 	return result(ERR_ADDRESS);
 }
 
-int field_count_bits(bitfield_t *field)
+size_t field_count_ones(bitfield_t *field)
 {
-	int counter = 0;
+	size_t counter = 0;
 	for (size_t i = 0; i < FIELD_N; i++) {
 		uint64_t row = atom_load(&field->rows[i]);
 		counter += count_ones(row);
 	}
-
 	assert(0 <= counter && counter <= CHILD_SIZE);
 	return counter;
 }

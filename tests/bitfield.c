@@ -201,14 +201,14 @@ declare_test(bitfield_count_bits)
 	bitfield_t actual = bf(0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 	bitfield_t expect = bf(0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 
-	int ret = field_count_bits(&actual);
+	int ret = field_count_ones(&actual);
 	check_equal_m(ret, 0, "no bits set");
 	check_equal_bitfield_m(actual, expect, "no change!");
 
 	actual = bf(0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x8000000000000000);
 	expect = bf(0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x8000000000000000);
 
-	ret = field_count_bits(&actual);
+	ret = field_count_ones(&actual);
 	check_equal_m(ret, 2, "first and last bit set");
 	check_equal_bitfield_m(actual, expect, "no change!");
 
@@ -217,7 +217,7 @@ declare_test(bitfield_count_bits)
 	expect = bf(0x1, 0x0, 0x0, 0xfffdeadbeef4531, 0x0, 0x0, 0x0,
 		    0x80000000f0000000);
 
-	ret = field_count_bits(&actual);
+	ret = field_count_ones(&actual);
 	check_equal_m(ret, 48, "some bits set");
 	check_equal_bitfield_m(actual, expect, "no change!");
 
@@ -226,7 +226,7 @@ declare_test(bitfield_count_bits)
 	expect = bf(UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
 		    UINT64_MAX, UINT64_MAX, UINT64_MAX);
 
-	ret = field_count_bits(&actual);
+	ret = field_count_ones(&actual);
 	check_equal_m(ret, 512, "all bits set");
 	check_equal_bitfield_m(actual, expect, "no change!");
 

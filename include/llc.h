@@ -2,33 +2,7 @@
 
 #include <inttypes.h>
 #include <stdbool.h>
-#include <stdatomic.h>
-
-/// Number of Bytes in cacheline
-#define CACHE_SIZE 64
-
-#define FRAME_BITS 12
-/// Size of a base frame
-#define FRAME_SIZE (1 << FRAME_BITS)
-
-/// Order of a huge frame
-#define HP_ORDER 9
-/// Maximum order that can be allocated
-#define MAX_ORDER (HP_ORDER + 1)
-
-/// Num of bits of the larges atomic type of the architecture
-#define ATOMIC_ORDER 6
-#define ATOMIC_SIZE (1 << ATOMIC_ORDER)
-
-/// Number of frames in a child
-#define CHILD_ORDER HP_ORDER
-#define CHILD_SIZE (1 << CHILD_ORDER)
-
-/// Number of frames in a tree
-#define TREE_CHILDREN_ORDER 5
-#define TREE_CHILDREN (1 << TREE_CHILDREN_ORDER)
-#define TREE_ORDER (HP_ORDER + TREE_CHILDREN_ORDER)
-#define TREE_SIZE (1 << TREE_ORDER)
+#include <stddef.h>
 
 /// Result type, to distinguish between normal integers
 ///
@@ -93,53 +67,3 @@ void llc_for_each_huge(llc_t *self, void *context,
 extern void *llc_ext_alloc(size_t align, size_t size);
 /// Free metadata function
 extern void llc_ext_free(size_t align, size_t size, void *addr);
-
-#if defined(KERNEL)
-
-#include <linux/printk.h>
-#include <linux/bug.h>
-
-#define assert(con) BUG_ON(con)
-
-#define pr_fmt(fmt) "llc: " fmt
-
-#define warn(str, ...) pr_warn(str, ##__VA_ARGS__)
-
-#ifdef VERBOSE
-#define info(str, ...) pr_info(str, ##__VA_ARGS__)
-#else
-#define info(str, ...)
-#endif
-
-#ifdef DEBUG
-#define debug(str, ...) pr_debug(str, ##__VA_ARGS__)
-#else
-#define debug(str, ...)
-#endif
-
-#else
-
-#include <stdio.h>
-#include <assert.h>
-
-#define warn(str, ...)                                                \
-	printf("\x1b[93m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
-	       ##__VA_ARGS__)
-
-#ifdef VERBOSE
-#define info(str, ...)                                                \
-	printf("\x1b[90m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
-	       ##__VA_ARGS__)
-#else
-#define info(str, ...)
-#endif
-
-#ifdef DEBUG
-#define debug(str, ...)                                               \
-	printf("\x1b[90m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
-	       ##__VA_ARGS__)
-#else
-#define debug(str, ...)
-#endif
-
-#endif

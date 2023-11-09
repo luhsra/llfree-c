@@ -14,21 +14,18 @@ typedef struct range {
 	uint16_t min, max;
 } range_t;
 
-/// Number of frames a tree manages
-#define TREESIZE ((1 << HP_ORDER) << 5)
-
 /// Lower bound used by the tree search heuristics
-#define TREE_LOWER_LIM (2 << HP_ORDER)
+#define TREE_LOWER_LIM (2 << HUGE_ORDER)
 /// Upper bound used by the tree search heuristics
-#define TREE_UPPER_LIM (TREESIZE - (8 << HP_ORDER))
+#define TREE_UPPER_LIM (TREE_SIZE - (8 << HUGE_ORDER))
 static const range_t TREE_PARTIAL = { TREE_LOWER_LIM, TREE_UPPER_LIM };
-static const range_t TREE_FREE = { TREE_UPPER_LIM, TREESIZE };
+static const range_t TREE_FREE = { TREE_UPPER_LIM, TREE_SIZE };
 static const range_t TREE_FULL = { 0, TREE_LOWER_LIM };
 
 /// Create a new tree entry
 static inline _unused tree_t tree_new(uint16_t counter, bool flag)
 {
-	assert(counter <= TREESIZE); // max limit for 15 bit
+	assert(counter <= TREE_SIZE); // max limit for 15 bit
 	return (tree_t){ counter, flag };
 }
 
