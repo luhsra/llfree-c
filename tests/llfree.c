@@ -15,7 +15,7 @@ void print_trees(llfree_t *self)
 	printf("trees:\ti\tflag\tcounter\n");
 	for (size_t i = 0; i < self->trees_len; ++i) {
 		tree_t _unused tree = atom_load(&self->trees[i]);
-		llfree_info("\t%ju\t%d\t%X\n", i, tree.reserved, tree.free);
+		llfree_info("\t%zu\t%d\t%X\n", i, tree.reserved, tree.free);
 	}
 }
 
@@ -385,7 +385,7 @@ declare_test(llfree_parallel_alloc)
 					continue;
 
 				success = false;
-				printf("\tFound duplicate reserved Frame\n both core %ju and %ju "
+				printf("\tFound duplicate reserved Frame\n both core %zu and %zu "
 				       "reserved frame %" PRId64
 				       " in tree %" PRId64 "\n",
 				       core, i, frame, tree_from_pfn(frame));
@@ -398,7 +398,7 @@ end:
 
 	if (!success) {
 		llfree_print(upper);
-		printf("%ju times LLFREE_ERR_MEMORY was returned\n", err);
+		printf("%zu times LLFREE_ERR_MEMORY was returned\n", err);
 	}
 	for (size_t i = 0; i < CORES; ++i) {
 		free(rets[i]->pfns);
@@ -442,7 +442,7 @@ static void *parallel_alloc_all(void *input)
 
 		(*(args->frames))[i] = ret.val;
 	}
-	llfree_info("finish %ju (%ju)", args->core, i);
+	llfree_info("finish %zu (%zu)", args->core, i);
 	return (void *)i;
 }
 
@@ -460,7 +460,7 @@ declare_test(llfree_parallel_alloc_all)
 
 	pthread_t threads[CORES];
 	for (size_t i = 0; i < CORES; i++) {
-		llfree_info("spawn %ju", i);
+		llfree_info("spawn %zu", i);
 		args[i] = (struct par_args){ upper, &frames[i], i };
 		assert(pthread_create(&threads[i], NULL, parallel_alloc_all,
 				      &args[i]) == 0);
@@ -472,7 +472,7 @@ declare_test(llfree_parallel_alloc_all)
 
 	size_t total = 0;
 	for (size_t i = 0; i < CORES; i++) {
-		llfree_info("wait for %ju", i);
+		llfree_info("wait for %zu", i);
 		assert(pthread_join(threads[i], (void **)&counts[i]) == 0);
 
 		// collect allocated pages
@@ -494,7 +494,7 @@ declare_test(llfree_parallel_alloc_all)
 				all_frames[i] < (OFFSET + llfree_frames(upper)),
 			"check %" PRIx64, all_frames[i]);
 		check_m(all_frames[i - 1] != all_frames[i],
-			"dup %" PRIx64 " at %ju", all_frames[i], i);
+			"dup %" PRIx64 " at %zu", all_frames[i], i);
 	}
 
 	return success;

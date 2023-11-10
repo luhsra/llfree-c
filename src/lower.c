@@ -68,31 +68,47 @@ void lower_clear(lower_t *self, bool free_all)
 		}
 	}
 
-	uint64_t rest_frames = self->frames % LLFREE_CHILD_SIZE;
-	if (rest_frames == 0)
-		rest_frames = LLFREE_CHILD_SIZE;
-
-	self->children[self->childs_len - 1] =
-		free_all ? child_new(rest_frames, false) :
-			   child_new(0, rest_frames == LLFREE_CHILD_SIZE);
-
 	// we have a few more unused children, which simplifies iterating over them
 	for (size_t i = self->childs_len;
 	     i < align_up(self->childs_len, LLFREE_TREE_CHILDREN); i++) {
 		self->children[i] = child_new(0, false);
 	}
 
+	uint64_t rest_frames = self->frames % LLFREE_CHILD_SIZE;
+	if (rest_frames == 0) {
+		// rest is exactly one entire child
+		rest_frames = LLFREE_CHILD_SIZE;
+
+		self->children[self->childs_len - 1] =
+			free_all ? child_new(LLFREE_CHILD_SIZE, false) :
+				   child_new(0, true);
+
+		bitfield_t *field = &self->fields[self->childs_len - 1];
+		for (uint64_t j = 0; j < FIELD_N; ++j) {
+			*((uint64_t *)&field->rows[j]) = 0;
+		}
+		return;
+	}
+	// rest is less than an entire child
+	self->children[self->childs_len - 1] =
+		free_all ? child_new(rest_frames, false) : child_new(0, false);
+
 	bitfield_t *field = &self->fields[self->childs_len - 1];
-	uint64_t val = free_all ? 0 : UINT64_MAX;
-	for (uint64_t j = 0; j < FIELD_N; ++j) {
-		if (rest_frames >= LLFREE_ATOMIC_SIZE) {
-			*((uint64_t *)&field->rows[j]) = val;
-			rest_frames -= LLFREE_ATOMIC_SIZE;
-		} else if (rest_frames > 0) {
-			val = free_all ? UINT64_MAX << rest_frames : UINT64_MAX;
-			*((uint64_t *)&field->rows[j]) = val;
-			rest_frames = 0;
-		} else {
+	if (free_all) {
+		for (uint64_t j = 0; j < FIELD_N; ++j) {
+			if (rest_frames >= LLFREE_ATOMIC_SIZE) {
+				*((uint64_t *)&field->rows[j]) = 0;
+				rest_frames -= LLFREE_ATOMIC_SIZE;
+			} else if (rest_frames > 0) {
+				*((uint64_t *)&field->rows[j]) = UINT64_MAX
+								 << rest_frames;
+				rest_frames = 0;
+			} else {
+				*((uint64_t *)&field->rows[j]) = UINT64_MAX;
+			}
+		}
+	} else {
+		for (uint64_t j = 0; j < FIELD_N; ++j) {
 			*((uint64_t *)&field->rows[j]) = UINT64_MAX;
 		}
 	}
@@ -194,6 +210,8 @@ static void split_huge(_Atomic(child_t) *child, bitfield_t *field)
 	// synchronize multiple threads on the first row
 	bool success = atom_cmp_exchange(&field->rows[0], &zero, UINT64_MAX);
 	if (success) {
+		llfree_info("split huge");
+
 		for (size_t i = 1; i < FIELD_N; ++i) {
 			atom_store(&field->rows[i], UINT64_MAX);
 		}
@@ -203,7 +221,7 @@ static void split_huge(_Atomic(child_t) *child, bitfield_t *field)
 					    child_new(0, false));
 		assert(success);
 	} else {
-		llfree_info("wait");
+		llfree_info("split huge: wait");
 		// another thread ist trying to breakup this HP
 		// -> wait for their completion
 		while (({
@@ -218,8 +236,10 @@ static void split_huge(_Atomic(child_t) *child, bitfield_t *field)
 llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 {
 	assert(order <= LLFREE_MAX_ORDER);
-	if (frame + (1 << order) > self->frames || frame % (1 << order) != 0)
+	if (frame + (1 << order) > self->frames || frame % (1 << order) != 0) {
+		llfree_warn("invalid pfn %" PRIu64 "\n", frame);
 		return llfree_result(LLFREE_ERR_ADDRESS);
+	}
 
 	const size_t child_idx = child_from_pfn(frame);
 	_Atomic(child_t) *child = &self->children[child_idx];
@@ -228,17 +248,21 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 		child_pair_t old = { child_new(0, true), child_new(0, true) };
 		child_pair_t new = { child_new(LLFREE_CHILD_SIZE, false),
 				     child_new(LLFREE_CHILD_SIZE, false) };
-		return atom_cmp_exchange((_Atomic(child_pair_t) *)child, &old,
-					 new) ?
-			       llfree_result(LLFREE_ERR_OK) :
-			       llfree_result(LLFREE_ERR_ADDRESS);
+
+		if (atom_cmp_exchange((_Atomic(child_pair_t) *)child, &old,
+				      new))
+			return llfree_result(LLFREE_ERR_OK);
+
+		return llfree_result(LLFREE_ERR_MEMORY);
 	}
 	if (order == LLFREE_HUGE_ORDER) {
 		child_t old = child_new(0, true);
 		child_t new = child_new(LLFREE_CHILD_SIZE, false);
-		return atom_cmp_exchange(child, &old, new) ?
-			       llfree_result(LLFREE_ERR_OK) :
-			       llfree_result(LLFREE_ERR_ADDRESS);
+
+		if (atom_cmp_exchange(child, &old, new))
+			return llfree_result(LLFREE_ERR_OK);
+
+		return llfree_result(LLFREE_ERR_ADDRESS);
 	}
 
 	bitfield_t *field = &self->fields[child_idx];
@@ -254,7 +278,7 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 		return ret;
 
 	if (!atom_update(child, old, child_inc, order)) {
-		assert(!"should never be possible");
+		assert(!"unreachable");
 		return llfree_result(LLFREE_ERR_CORRUPT);
 	}
 
@@ -338,7 +362,7 @@ size_t lower_free_huge(lower_t *self)
 }
 
 void lower_for_each_child(const lower_t *self, void *context,
-			  void f(void *, uint64_t, uint64_t))
+			  void f(void *, uint64_t, size_t))
 {
 	for (uint64_t i = 0; i < self->childs_len; ++i) {
 		child_t child = atom_load(&self->children[i]);

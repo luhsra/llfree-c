@@ -82,9 +82,9 @@ bool llfree_is_free(llfree_t *self, uint64_t frame, size_t order);
 uint64_t llfree_frames(llfree_t *self);
 
 /// Returns number of currently free frames
-uint64_t llfree_free_frames(llfree_t *self);
+size_t llfree_free_frames(llfree_t *self);
 /// Returns number of currently free frames
-uint64_t llfree_free_huge(llfree_t *self);
+size_t llfree_free_huge(llfree_t *self);
 
 /// Destructs the allocator
 void llfree_drop(llfree_t *self);
@@ -103,7 +103,7 @@ void llfree_print(llfree_t *self);
 /// and the free counter as arguments
 /// - used by some rust benchmarks like frag.rs
 void llfree_for_each_huge(llfree_t *self, void *context,
-		       void f(void *, uint64_t, uint64_t));
+		       void f(void *, uint64_t, size_t));
 
 /// Allocate metadata function
 extern void *llfree_ext_alloc(size_t align, size_t size);

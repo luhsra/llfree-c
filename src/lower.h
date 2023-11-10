@@ -60,4 +60,4 @@ void lower_drop(lower_t *self);
 /// Calls f for each child. f will receive the context the current pfn and the free counter as arguments
 // used by frag.rs benchmark
 void lower_for_each_child(const lower_t *self, void *context,
-			  void f(void *, uint64_t, uint64_t));
+			  void f(void *, uint64_t, size_t));

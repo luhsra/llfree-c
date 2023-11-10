@@ -18,7 +18,7 @@ int main(int argc, char **argv)
 {
 	size_t fail_counter = 0;
 
-	printf("\x1b[92mRunning %ju test cases...\x1b[0m\n", test_case_i);
+	printf("\x1b[92mRunning %zu test cases...\x1b[0m\n", test_case_i);
 
 	for (size_t i = 0; i < test_case_i; i++) {
 		if (argc == 2 && strstr(TESTS[i].name, argv[1]) == NULL) {
@@ -37,7 +37,7 @@ int main(int argc, char **argv)
 		printf("\x1b[92m----------------SUCCESS----------------\x1b[0m\n");
 	} else {
 		printf("\x1b[91m----------------FAILED-----------------\x1b[0m\n");
-		printf("Failed %ju out of %ju tests.\n", fail_counter,
+		printf("Failed %zu out of %zu tests.\n", fail_counter,
 		       test_case_i);
 		return 1;
 	}
@@ -62,7 +62,7 @@ void add_test(char *name, bool (*f)(void))
 
 void *llfree_ext_alloc(size_t align, size_t size)
 {
-	llfree_info("alloc a=%ju %ju", align, size);
+	llfree_info("alloc a=%zu %zu", align, size);
 	void *ret = aligned_alloc(align, align_up(size, align));
 	assert(ret != NULL);
 	return ret;

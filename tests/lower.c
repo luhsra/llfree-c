@@ -359,15 +359,15 @@ declare_test(lower_large)
 			}
 		} while (pfn.val == LLFREE_ERR_MEMORY);
 
-		check_m(llfree_result_ok(pfn), "%ju -> %" PRId64, o, pfn.val);
-		check_m(pfn.val % (1 << o) == 0, "%ju -> 0x%" PRIx64, o,
+		check_m(llfree_result_ok(pfn), "%zu -> %" PRId64, o, pfn.val);
+		check_m(pfn.val % (1 << o) == 0, "%zu -> 0x%" PRIx64, o,
 			pfn.val);
 		frames[o] = pfn.val;
 	}
 
 	for (size_t o = 0; o <= LLFREE_MAX_ORDER; o++) {
 		llfree_result_t ret = lower_put(&lower, frames[o], o);
-		check_m(llfree_result_ok(ret), "%ju -> 0x%" PRIx64, o,
+		check_m(llfree_result_ok(ret), "%zu -> 0x%" PRIx64, o,
 			frames[o]);
 	}
 
@@ -464,7 +464,7 @@ declare_test(lower_max)
 	for (size_t i = 0; i < FRAMES / (1 << LLFREE_MAX_ORDER); ++i) {
 		llfree_result_t pfn = lower_get(
 			&lower, i * (1 << LLFREE_MAX_ORDER), LLFREE_MAX_ORDER);
-		check_m(llfree_result_ok(pfn), "%ju", i);
+		check_m(llfree_result_ok(pfn), "%zu", i);
 	}
 
 	check_equal(lower_free_frames(&lower), 0);
@@ -472,7 +472,7 @@ declare_test(lower_max)
 	for (size_t i = 0; i < FRAMES / (1 << LLFREE_MAX_ORDER); ++i) {
 		llfree_result_t ret = lower_put(
 			&lower, i * (1 << LLFREE_MAX_ORDER), LLFREE_MAX_ORDER);
-		check_m(llfree_result_ok(ret), "%ju", i);
+		check_m(llfree_result_ok(ret), "%zu", i);
 	}
 
 	return success;

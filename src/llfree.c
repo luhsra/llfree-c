@@ -54,7 +54,7 @@ llfree_result_t llfree_init(llfree_t *self, size_t cores, uint64_t offset,
 		return llfree_result(LLFREE_ERR_INIT);
 	}
 	if (len < MIN_PAGES || len > MAX_PAGES) {
-		llfree_warn("Invalid size %ju", len);
+		llfree_warn("Invalid size %" PRIu64, (uint64_t)len);
 		return llfree_result(LLFREE_ERR_INIT);
 	}
 	if (offset % (1 << LLFREE_MAX_ORDER) != 0) {
@@ -135,7 +135,8 @@ static llfree_result_t swap_reserved(llfree_t *self, local_t *local,
 		tree_t tree;
 		if (!atom_update(&self->trees[tree_idx], tree, tree_writeback,
 				 old.free)) {
-			llfree_warn("Failed writeback %ju (next %" PRIu64 ")",
+			llfree_warn("Failed writeback %" PRIuS " (next %" PRIu64
+				    ")",
 				    tree_idx, tree_from_row(new.start_row));
 			return llfree_result(LLFREE_ERR_CORRUPT);
 		}
@@ -389,14 +390,19 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 	assert(order <= LLFREE_MAX_ORDER);
 
 	if (frame < self->lower.offset ||
-	    frame >= self->lower.offset + self->lower.frames)
+	    frame >= self->lower.offset + self->lower.frames) {
+		llfree_warn("frame %" PRIu64 " out of range %" PRIu64
+			    "-%" PRIu64 "\n",
+			    frame, self->lower.offset,
+			    self->lower.offset + self->lower.frames);
 		return llfree_result(LLFREE_ERR_ADDRESS);
+	}
 	frame -= self->lower.offset;
 	assert(frame < self->lower.frames);
 
 	llfree_result_t res = lower_put(&self->lower, frame, order);
 	if (!llfree_result_ok(res)) {
-		llfree_warn("lower err %" PRIu64, res.val);
+		llfree_warn("lower err %" PRId64, res.val);
 		return res;
 	}
 
@@ -471,7 +477,7 @@ uint64_t llfree_frames(llfree_t *self)
 	return self->lower.frames;
 }
 
-uint64_t llfree_free_frames(llfree_t *self)
+size_t llfree_free_frames(llfree_t *self)
 {
 	assert(self != NULL);
 	uint64_t free = 0;
@@ -486,13 +492,13 @@ uint64_t llfree_free_frames(llfree_t *self)
 	return free;
 }
 
-static void count_huge(void *acc, uint64_t frame, uint64_t free)
+static void count_huge(void *acc, uint64_t frame, size_t free)
 {
 	size_t sum = (size_t)acc;
 	sum += free;
 }
 
-uint64_t llfree_free_huge(llfree_t *self)
+size_t llfree_free_huge(llfree_t *self)
 {
 	assert(self != NULL);
 	size_t free_huge = 0;
@@ -507,7 +513,7 @@ bool llfree_is_free(llfree_t *self, uint64_t frame, size_t order)
 }
 
 void llfree_for_each_huge(llfree_t *self, void *context,
-			  void f(void *, uint64_t, uint64_t))
+			  void f(void *, uint64_t, size_t))
 {
 	assert(self != NULL);
 	lower_for_each_child(&self->lower, context, f);
@@ -519,7 +525,9 @@ void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
 	assert(self != NULL);
 
 	char *msg = llfree_ext_alloc(1, 200 * sizeof(char));
-	snprintf(msg, 200, "LLC { frames: %" PRIu64 "/%jd, huge: %ju/%ju }",
+	snprintf(msg, 200,
+		 "LLC { frames: %" PRIdS "/%" PRIuS ", huge: %" PRIuS "/%" PRIuS
+		 " }",
 		 llfree_free_frames(self), self->lower.frames,
 		 lower_free_huge(&self->lower), self->lower.childs_len);
 	writer(arg, msg);
@@ -529,11 +537,12 @@ void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
 void llfree_print(llfree_t *self)
 {
 	printf("llfree_t {\n");
-	printf("    memory: %" PRIx64 "..%" PRIx64 " (%ju)\n",
+	printf("    memory: %" PRIx64 "..%" PRIx64 " (%" PRIuS ")\n",
 	       self->lower.offset, self->lower.offset + self->lower.frames,
 	       self->lower.frames);
 
-	printf("    trees: %ju (%u) {\n", self->trees_len, LLFREE_TREE_SIZE);
+	printf("    trees: %" PRIuS " (%u) {\n", self->trees_len,
+	       LLFREE_TREE_SIZE);
 	size_t free_huge = llfree_free_huge(self);
 	size_t free_trees = 0;
 	for (size_t i = 0; i < self->trees_len; i++) {
@@ -545,12 +554,14 @@ void llfree_print(llfree_t *self)
 	}
 	printf("    }\n");
 
-	printf("    free: { frames: %ju, huge: %ju, trees: %ju }\n",
+	printf("    free: { frames: %" PRIuS ", huge: %" PRIuS
+	       ", trees: %" PRIuS " }\n",
 	       llfree_free_frames(self), free_huge, free_trees);
 
 	for (size_t i = 0; i < self->cores; i++) {
 		reserved_t reserved = atom_load(&self->local[i].reserved);
-		printf("    local %ju: { present: %d, free: %u, start: %" PRIu64
+		printf("    local %" PRIuS
+		       ": { present: %d, free: %u, start: %" PRIu64
 		       ", reserving: %d }\n",
 		       i, reserved.present, reserved.free,
 		       tree_from_row(reserved.start_row), reserved.reserving);
