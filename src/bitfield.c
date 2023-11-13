@@ -218,7 +218,7 @@ void field_print(bitfield_t *field)
 {
 	llfree_info("Field in HEX: MSB to LSB\n");
 	for (size_t i = 0; i < FIELD_N; i++) {
-		uint16_t *s = (uint16_t *)&(field->rows[i]);
+		uint16_t _unused *s = (uint16_t *)&(field->rows[i]);
 		llfree_info("%04X %04X %04X %04X\n", s[3], s[2], s[1], s[0]);
 	}
 }
