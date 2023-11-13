@@ -18,7 +18,9 @@ void lower_init(lower_t *self, uint64_t offset, size_t len, uint8_t init)
 		assert(self->fields != NULL);
 
 		self->children = llfree_ext_alloc(
-			LLFREE_CACHE_SIZE, sizeof(child_t) * self->childs_len);
+			LLFREE_CACHE_SIZE,
+			sizeof(child_t) * align_up(self->childs_len,
+						   LLFREE_TREE_CHILDREN));
 		assert(self->children != NULL);
 
 	} else {
@@ -342,7 +344,9 @@ void lower_drop(lower_t *self)
 		(void *)((self->offset + self->frames) * LLFREE_FRAME_SIZE);
 	if (self->children != start_data) {
 		llfree_ext_free(LLFREE_CACHE_SIZE,
-				sizeof(child_t) * self->childs_len,
+				sizeof(child_t) *
+					align_up(self->childs_len,
+						 LLFREE_TREE_CHILDREN),
 				self->children);
 		llfree_ext_free(LLFREE_CACHE_SIZE,
 				sizeof(bitfield_t) * self->childs_len,
