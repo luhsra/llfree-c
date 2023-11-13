@@ -45,7 +45,7 @@ static void init_trees(llfree_t *self)
 }
 
 llfree_result_t llfree_init(llfree_t *self, size_t cores, uint64_t offset,
-			    size_t len, uint8_t init, uint8_t free_all)
+			    size_t len, uint8_t init, bool free_all)
 {
 	assert(self != NULL);
 	if (init != LLFREE_INIT_VOLATILE && init != LLFREE_INIT_OVERWRITE &&
@@ -245,9 +245,8 @@ static llfree_result_t reserve_and_get(llfree_t *self, local_t *local,
 		return res;
 
 	// drain other cores for a tree
-	uint64_t local_idx = core % self->cores;
 	for (uint64_t i = 1; i < self->cores; ++i) {
-		llfree_drain(self, (local_idx + i) % self->cores);
+		llfree_drain(self, (core + i) % self->cores);
 	}
 
 	// search whole tree for a tree with enough free frames
@@ -582,6 +581,8 @@ void llfree_drop(llfree_t *self)
 		lower_drop(&self->lower);
 		llfree_ext_free(LLFREE_CACHE_SIZE,
 				self->trees_len * sizeof(tree_t), self->trees);
+
+		assert(self->cores <= self->trees_len);
 		llfree_ext_free(LLFREE_CACHE_SIZE,
 				self->cores * sizeof(local_t), self->local);
 	}

@@ -519,3 +519,89 @@ declare_test(llfree_get_huge)
 
 	return success;
 }
+
+struct llfree_less_mem {
+	_Atomic(uint64_t) sync0;
+	_Atomic(uint64_t) sync1;
+	llfree_t *llfree;
+	size_t cores;
+	size_t frames_len;
+};
+
+struct llfree_less_mem_p {
+	struct llfree_less_mem *shared;
+	size_t core;
+};
+
+static void *llfree_less_mem_par(void *input)
+{
+	struct llfree_less_mem_p *data = input;
+	struct llfree_less_mem *shared = data->shared;
+
+	uint64_t *frames = llfree_ext_alloc(
+		sizeof(uint64_t), sizeof(uint64_t) * shared->frames_len);
+
+	llfree_info("sync0 on %zu", data->core);
+	atomic_fetch_add(&shared->sync0, 1);
+	while (atom_load(&shared->sync0) < shared->cores) {
+		spin_wait();
+	}
+
+	for (size_t i = 0; i < shared->frames_len; i++) {
+		llfree_result_t res = llfree_get(shared->llfree, data->core, 0);
+		assert(llfree_result_ok(res));
+		frames[i] = res.val;
+	}
+
+	llfree_info("sync1 on %zu", data->core);
+	atomic_fetch_add(&shared->sync1, 1);
+	while (atom_load(&shared->sync1) < shared->cores) {
+		spin_wait();
+	}
+
+	for (size_t i = 0; i < shared->frames_len; i++) {
+		llfree_result_t res =
+			llfree_put(shared->llfree, data->core, frames[i], 0);
+		assert(llfree_result_ok(res));
+	}
+
+	return NULL;
+}
+
+declare_test(llfree_less_mem)
+{
+	bool success = true;
+#undef CORES
+#define CORES 4
+#undef FRAMES
+#define FRAMES 4096
+
+	llfree_t llfree;
+	llfree_result_t res = llfree_init(&llfree, CORES, 0, FRAMES,
+					  LLFREE_INIT_VOLATILE, true);
+	check(llfree_result_ok(res));
+
+	llfree_info("get");
+
+	struct llfree_less_mem shared = { .sync0 = 0,
+					  .sync1 = 0,
+					  .llfree = &llfree,
+					  .cores = CORES,
+					  .frames_len = FRAMES / CORES };
+	struct llfree_less_mem_p private[CORES];
+	pthread_t threads[CORES];
+	for (size_t i = 0; i < CORES; i++) {
+		private[i].core = i;
+		private[i].shared = &shared;
+		assert(pthread_create(&threads[i], NULL, llfree_less_mem_par,
+				      &private[i]) == 0);
+	}
+
+	for (size_t i = 0; i < CORES; i++) {
+		assert(pthread_join(threads[i], NULL) == 0);
+	}
+
+	check_equal(llfree_free_frames(&llfree), FRAMES);
+
+	return success;
+}

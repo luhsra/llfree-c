@@ -64,7 +64,7 @@ enum {
 /// `all_free` determins whether the region is initalized as entirely free
 /// or entirely allocated.
 llfree_result_t llfree_init(llfree_t *self, size_t cores, uint64_t offset, size_t len,
-		  uint8_t init, uint8_t free_all);
+		  uint8_t init, bool free_all);
 
 /// Allocates a frame and returns its number, or a negative error code
 llfree_result_t llfree_get(llfree_t *self, size_t core, size_t order);
