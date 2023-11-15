@@ -77,8 +77,9 @@ llfree_result_t llfree_init(llfree_t *self, size_t cores, uint64_t offset,
 			llfree_warn("Invalid magic");
 			return llfree_result(LLFREE_ERR_INIT);
 		}
-		if (self->meta->crashed)
+		if (self->meta->crashed) {
 			lower_recover(&self->lower);
+		}
 	} else {
 		lower_clear(&self->lower, free_all);
 	}
@@ -162,13 +163,13 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, local_t *local,
 	llfree_result_t res =
 		lower_get(&self->lower, pfn_from_tree(idx), order);
 
-	if (llfree_result_ok(res)) {
+	if (llfree_ok(res)) {
 		// write back llfree_result
 		reserved_t new = { .free = old_tree.free - (1 << order),
 				   .start_row = row_from_pfn(res.val),
 				   .present = true,
 				   .reserving = false };
-		if (!llfree_result_ok(swap_reserved(self, local, new, true))) {
+		if (!llfree_ok(swap_reserved(self, local, new, true))) {
 			llfree_warn("Invalid reserve state");
 			return llfree_result(LLFREE_ERR_CORRUPT);
 		}
@@ -247,7 +248,7 @@ static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
 
 	// drain other cores for a tree
 	for (uint64_t i = 1; i < self->cores; ++i) {
-		llfree_drain(self, (core + i) % self->cores);
+		res = llfree_drain(self, (core + i) % self->cores);
 	}
 
 	// search whole tree for a tree with enough free frames
@@ -255,7 +256,7 @@ static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
 			    (p_range_t){ 1 << order, LLFREE_TREE_SIZE });
 
 	// clear reserving
-	if (!llfree_result_ok(res)) {
+	if (!llfree_ok(res)) {
 		reserved_t old;
 		bool _unused res = atom_update(&local->reserved, old,
 					       reserved_set_reserving, false);
@@ -342,7 +343,7 @@ static llfree_result_t get_inner(llfree_t *self, size_t core, size_t order)
 	uint64_t start = pfn_from_row(reserved.start_row);
 
 	llfree_result_t res = lower_get(&self->lower, start, order);
-	if (llfree_result_ok(res)) {
+	if (llfree_ok(res)) {
 		// save pfn only if necessary
 		if (order <= LLFREE_ATOMIC_ORDER &&
 		    reserved.start_row != row_from_pfn(res.val)) {
@@ -374,7 +375,7 @@ llfree_result_t llfree_get(llfree_t *self, size_t core, size_t order)
 	for (size_t i = 0; i < RETRIES; i++) {
 		llfree_result_t res = get_inner(self, core, order);
 
-		if (llfree_result_ok(res))
+		if (llfree_ok(res))
 			return llfree_result(res.val + self->lower.offset);
 		if (res.val != LLFREE_ERR_RETRY)
 			return res;
@@ -402,7 +403,7 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 	assert(frame < self->lower.frames);
 
 	llfree_result_t res = lower_put(&self->lower, frame, order);
-	if (!llfree_result_ok(res)) {
+	if (!llfree_ok(res)) {
 		llfree_warn("lower err %" PRId64, res.val);
 		return res;
 	}
@@ -441,7 +442,7 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 			llfree_result_t ret =
 				swap_reserved(self, local, new, false);
 
-			if (!llfree_result_ok(ret)) {
+			if (!llfree_ok(ret)) {
 				if (ret.val != LLFREE_ERR_RETRY)
 					return ret;
 
@@ -467,7 +468,7 @@ llfree_result_t llfree_drain(llfree_t *self, size_t core)
 		.free = 0, .start_row = 0, .present = false, .reserving = false
 	};
 	llfree_result_t res = swap_reserved(self, local, none, false);
-	if (llfree_result_ok(res) || res.val == LLFREE_ERR_RETRY)
+	if (llfree_ok(res) || res.val == LLFREE_ERR_RETRY)
 		return llfree_result(LLFREE_ERR_OK);
 	return res;
 }

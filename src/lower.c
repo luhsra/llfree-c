@@ -1,6 +1,7 @@
 #include "lower.h"
 #include "bitfield.h"
 #include "child.h"
+#include "llfree.h"
 
 void lower_init(lower_t *self, uint64_t offset, size_t len, uint8_t init)
 {
@@ -116,7 +117,7 @@ void lower_clear(lower_t *self, bool free_all)
 	}
 }
 
-llfree_result_t lower_recover(lower_t *self)
+void lower_recover(lower_t *self)
 {
 	for (size_t i = 0; i < self->childs_len; ++i) {
 		child_t child = atom_load(&self->children[i]);
@@ -132,8 +133,6 @@ llfree_result_t lower_recover(lower_t *self)
 				   child_new(counter, false));
 		}
 	}
-
-	return llfree_result(LLFREE_ERR_OK);
 }
 
 static llfree_result_t get_max(lower_t *self, uint64_t pfn)
@@ -190,7 +189,7 @@ llfree_result_t lower_get(lower_t *self, const uint64_t start_frame,
 				order)) {
 			llfree_result_t pos = field_set_next(
 				&self->fields[current_i], start_frame, order);
-			if (llfree_result_ok(pos)) {
+			if (llfree_ok(pos)) {
 				return llfree_result(pfn_from_child(current_i) +
 						     pos.val);
 			}
@@ -205,7 +204,7 @@ llfree_result_t lower_get(lower_t *self, const uint64_t start_frame,
 	return llfree_result(LLFREE_ERR_MEMORY);
 }
 
-static void split_huge(_Atomic(child_t) *child, bitfield_t *field)
+static llfree_result_t split_huge(_Atomic(child_t) *child, bitfield_t *field)
 {
 	uint64_t zero = 0;
 
@@ -226,13 +225,15 @@ static void split_huge(_Atomic(child_t) *child, bitfield_t *field)
 		llfree_info("split huge: wait");
 		// another thread ist trying to breakup this HP
 		// -> wait for their completion
-		while (({
+		for (size_t i = 0; i < RETRIES; i++) {
 			child_t c = atom_load(child);
-			c.huge;
-		})) {
-			spin_wait();
+			if (!c.huge)
+				return llfree_result(LLFREE_ERR_OK);
 		}
+		llfree_warn("split huge: timeout");
+		return llfree_result(LLFREE_ERR_RETRY);
 	}
+	return llfree_result(LLFREE_ERR_OK);
 }
 
 llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order)
@@ -271,12 +272,14 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 
 	child_t old = atom_load(child);
 	if (old.huge) {
-		split_huge(child, field);
+		llfree_result_t res = split_huge(child, field);
+		if (!llfree_ok(res))
+			return res;
 	}
 
 	size_t field_index = frame % LLFREE_CHILD_SIZE;
 	llfree_result_t ret = field_toggle(field, field_index, order, true);
-	if (!llfree_result_ok(ret))
+	if (!llfree_ok(ret))
 		return ret;
 
 	if (!atom_update(child, old, child_inc, order)) {

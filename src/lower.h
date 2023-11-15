@@ -32,7 +32,7 @@ void lower_clear(lower_t *self, bool free_all);
 /// Recovers the state from persistent memory
 ///
 /// Checks and possibly corrects the free counter in childs
-llfree_result_t lower_recover(lower_t *self);
+void lower_recover(lower_t *self);
 
 /// Allocates the given frame, returning its number or an error
 llfree_result_t lower_get(lower_t *self, uint64_t start_frame, size_t order);

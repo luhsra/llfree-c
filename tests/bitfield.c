@@ -151,7 +151,7 @@ declare_test(bitfield_reset_bit)
 	llfree_result_t ret = field_toggle(&actual, pos, 0, true);
 	check_equal_bitfield_m(actual, expect,
 			       "no change if original Bit was already 0");
-	check(!llfree_result_ok(ret));
+	check(!llfree_ok(ret));
 
 	actual = bf(0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 	expect = bf(0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
@@ -188,7 +188,7 @@ declare_test(bitfield_reset_bit)
 	pos = 4ul * 64 + 62;
 
 	ret = field_toggle(&actual, pos, 0, true);
-	check(!llfree_result_ok(ret));
+	check(!llfree_ok(ret));
 	check_equal_bitfield_m(actual, expect, "no change");
 
 	return success;

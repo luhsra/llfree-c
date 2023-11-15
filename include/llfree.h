@@ -8,7 +8,7 @@
 /// Result type, to distinguish between normal integers
 ///
 /// Errors are negative and the actual values are zero or positive.
-typedef struct llfree_result {
+typedef struct __attribute__((warn_unused_result)) llfree_result {
 	int64_t val;
 } llfree_result_t;
 
@@ -20,7 +20,7 @@ static inline llfree_result_t _unused llfree_result(int64_t v)
 	return (llfree_result_t){ v };
 }
 /// Check if the result is ok (no error)
-static inline bool _unused llfree_result_ok(llfree_result_t r)
+static inline bool _unused llfree_ok(llfree_result_t r)
 {
 	return r.val >= 0;
 }
