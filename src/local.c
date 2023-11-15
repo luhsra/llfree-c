@@ -17,11 +17,11 @@ bool reserved_swap(reserved_t *self, reserved_t new, bool expect_reserving)
 	return false;
 }
 
-bool reserved_set_start(reserved_t *self, size_t tree_idx)
+bool reserved_set_start(reserved_t *self, size_t row_idx)
 {
 	// no update if reservation is in progress
 	if (!self->reserving) {
-		self->start_row = row_from_tree(tree_idx);
+		self->start_row = row_idx;
 		return true;
 	}
 	return false;

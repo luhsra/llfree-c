@@ -205,13 +205,14 @@ static llfree_result_t search_global(llfree_t *self, local_t *local,
 /// Reserves a new tree and allocates from it.
 ///
 /// The search for a new tree aims to be both fast and avoid fragmentation.
-static llfree_result_t reserve_and_get(llfree_t *self, local_t *local,
-				       uint64_t core, uint64_t order)
+static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
+				       uint64_t order, reserved_t old)
 {
-	reserved_t reserved = atom_load(&local->reserved);
+	local_t *local = get_local(self, core);
+
 	uint64_t start_idx;
-	if (reserved.present) {
-		start_idx = tree_from_row(reserved.start_row);
+	if (old.present) {
+		start_idx = tree_from_row(old.start_row);
 	} else {
 		start_idx =
 			self->trees_len / self->cores * (core % self->cores);
@@ -270,7 +271,7 @@ static llfree_result_t reserve_or_wait(llfree_t *self, size_t core,
 	reserved_t reserved;
 	if (atom_update(&local->reserved, reserved, reserved_set_reserving,
 			true)) {
-		return reserve_and_get(self, local, core, order);
+		return reserve_and_get(self, core, order, reserved);
 	}
 	llfree_info("spin wait");
 	while (({
@@ -346,11 +347,12 @@ static llfree_result_t get_inner(llfree_t *self, size_t core, size_t order)
 		if (order <= LLFREE_ATOMIC_ORDER &&
 		    reserved.start_row != row_from_pfn(res.val)) {
 			atom_update(&local->reserved, reserved,
-				    reserved_set_start, tree_from_pfn(res.val));
+				    reserved_set_start, row_from_pfn(res.val));
 		}
 		return res;
 	}
 	if (res.val == LLFREE_ERR_MEMORY) {
+		// Current tree is fragmented!
 		// Increment global to prevent race condition with concurrent reservation
 		tree_t old;
 		if (atom_update(&self->trees[tree_from_pfn(start)], old,

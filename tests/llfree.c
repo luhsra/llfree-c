@@ -60,7 +60,7 @@ declare_test(llfree_init)
 declare_test(llfree_alloc_s)
 {
 	int success = true;
-	const size_t SIZE = (1ul << 30); // 8G
+	const size_t SIZE = (1ul << 30);
 	void *memory = llfree_ext_alloc(LLFREE_ALIGN, SIZE);
 	assert(memory != NULL);
 	llfree_t *upper = llfree_ext_alloc(LLFREE_CACHE_SIZE, sizeof(llfree_t));
@@ -93,8 +93,6 @@ declare_test(llfree_alloc_s)
 		size_t free = 0;
 		for (size_t j = 0; j < LLFREE_TREE_CHILDREN; j++) {
 			size_t idx = i * LLFREE_TREE_CHILDREN + j;
-			if (idx > upper->lower.childs_len)
-				break;
 			child_t child = atom_load(&upper->lower.children[idx]);
 			free += child.free;
 		}

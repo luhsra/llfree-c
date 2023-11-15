@@ -45,7 +45,7 @@ bool reserved_inc(reserved_t *self, size_t tree_idx, size_t free);
 bool reserved_dec(reserved_t *self, size_t free);
 
 /// Updates the start index to speedup the next search for a free frame
-bool reserved_set_start(reserved_t *self, size_t tree_idx);
+bool reserved_set_start(reserved_t *self, size_t row_idx);
 
 /// Set the reserving flag, returning false if it already has the specified value
 bool reserved_set_reserving(reserved_t *self, bool reserving);
