@@ -24,19 +24,21 @@
 
 #define check(x) check_m(x, "")
 
-#define fmt_spec(x)                           \
-	_Generic((x), _Bool                   \
-		 : "%d", char                 \
-		 : "%c", unsigned char        \
-		 : "%c", short                \
-		 : "%hd", unsigned short      \
-		 : "%hu", int                 \
-		 : "%d", unsigned int         \
-		 : "%u", long                 \
-		 : "%ld", unsigned long       \
-		 : "%lu", long long           \
-		 : "%lld", unsigned long long \
-		 : "%llu")
+// clang-format off
+#define fmt_spec(x) _Generic((x),	\
+		_Bool: "%d", 		\
+		char: "%c",		\
+		unsigned char: "%c",	\
+		short: "%hd",		\
+		unsigned short: "%hu",	\
+		int: "%d",		\
+		unsigned int: "%u",	\
+		long: "%ld",		\
+		unsigned long: "%lu",	\
+		long long: "%lld",	\
+		unsigned long long: "%llu"	\
+	)
+// clang-format on
 
 #define check_equal_m(actual, expected, msg, ...)                     \
 	if ((actual) != (expected)) {                                 \

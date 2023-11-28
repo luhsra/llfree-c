@@ -136,9 +136,10 @@ static llfree_result_t swap_reserved(llfree_t *self, local_t *local,
 		tree_t tree;
 		if (!atom_update(&self->trees[tree_idx], tree, tree_writeback,
 				 old.free)) {
+			uint64_t new_tree = tree_from_row(new.start_row);
 			llfree_warn("Failed writeback %" PRIuS " (next %" PRIu64
 				    ")",
-				    tree_idx, tree_from_row(new.start_row));
+				    tree_idx, new_tree);
 			return llfree_result(LLFREE_ERR_CORRUPT);
 		}
 		tree = atom_load(&self->trees[tree_idx]);
@@ -528,7 +529,7 @@ void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
 
 	char *msg = llfree_ext_alloc(1, 200 * sizeof(char));
 	snprintf(msg, 200,
-		 "LLC { frames: %" PRIdS "/%" PRIuS ", huge: %" PRIuS "/%" PRIuS
+		 "LLC { frames: %" PRIuS "/%" PRIuS ", huge: %" PRIuS "/%" PRIuS
 		 " }",
 		 llfree_free_frames(self), self->lower.frames,
 		 lower_free_huge(&self->lower), self->lower.childs_len);

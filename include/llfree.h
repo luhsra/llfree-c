@@ -5,10 +5,16 @@
 /// Unused functions and variables
 #define _unused __attribute__((unused))
 
+#ifdef __clang__
+#define _warn_unused __attribute__((warn_unused_result))
+#else
+#define _warn_unused
+#endif
+
 /// Result type, to distinguish between normal integers
 ///
 /// Errors are negative and the actual values are zero or positive.
-typedef struct __attribute__((warn_unused_result)) llfree_result {
+typedef struct _warn_unused llfree_result {
 	int64_t val;
 } llfree_result_t;
 
@@ -63,14 +69,15 @@ enum {
 ///
 /// `all_free` determins whether the region is initalized as entirely free
 /// or entirely allocated.
-llfree_result_t llfree_init(llfree_t *self, size_t cores, uint64_t offset, size_t len,
-		  uint8_t init, bool free_all);
+llfree_result_t llfree_init(llfree_t *self, size_t cores, uint64_t offset,
+			    size_t len, uint8_t init, bool free_all);
 
 /// Allocates a frame and returns its number, or a negative error code
 llfree_result_t llfree_get(llfree_t *self, size_t core, size_t order);
 
 /// Frees a frame, returning 0 on success or a negative error code
-llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame, size_t order);
+llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
+			   size_t order);
 
 /// Frees a frame, returning 0 on success or a negative error code
 llfree_result_t llfree_drain(llfree_t *self, size_t core);
@@ -92,7 +99,8 @@ void llfree_drop(llfree_t *self);
 // == Debugging ==
 
 /// Prints the allocators state for debugging with given Rust printer
-void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *), void *arg);
+void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
+			void *arg);
 
 #ifdef STD
 /// Prints detailed stats about the allocator state
@@ -103,7 +111,7 @@ void llfree_print(llfree_t *self);
 /// and the free counter as arguments
 /// - used by some rust benchmarks like frag.rs
 void llfree_for_each_huge(llfree_t *self, void *context,
-		       void f(void *, uint64_t, size_t));
+			  void f(void *, uint64_t, size_t));
 
 /// Allocate metadata function
 extern void *llfree_ext_alloc(size_t align, size_t size);

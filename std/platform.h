@@ -5,7 +5,6 @@
 #include <stdatomic.h>
 
 #define PRIuS "zu"
-#define PRIdS "zd"
 #define PRIxS "zx"
 
 /// Number of Bytes in cacheline
