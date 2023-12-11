@@ -13,86 +13,63 @@
 		bitfield_is_free(actual[i]); \
 	}
 
-bool init_lower_test(uint8_t init)
+static inline lower_t lower_new(size_t frames, uint8_t init)
+{
+	lower_t actual;
+	uint8_t *primary = llfree_ext_alloc(LLFREE_CACHE_SIZE,
+					    lower_metadata_size(frames));
+	llfree_result_t ret = lower_init(&actual, frames, init, primary);
+	assert(llfree_ok(ret));
+	return actual;
+}
+
+static inline void lower_drop(lower_t *self)
+{
+	assert(self != NULL);
+	llfree_ext_free(LLFREE_CACHE_SIZE, lower_metadata_size(self->frames),
+			lower_metadata(self));
+}
+
+declare_test(lower_init)
 {
 	bool success = true;
 
-	char *memory = NULL;
 	size_t frames = 1024;
-	lower_t actual;
-	if (init != LLFREE_INIT_VOLATILE) {
-		memory = llfree_ext_alloc(LLFREE_ALIGN,
-					  frames * LLFREE_FRAME_SIZE);
-		assert(memory != NULL);
-	}
-	lower_init(&actual, (uint64_t)memory / LLFREE_FRAME_SIZE, frames, init);
-	lower_clear(&actual, true);
-	check_equal(actual.childs_len, 2);
+	lower_t actual = lower_new(frames, LLFREE_INIT_FREE);
 
+	check_equal(actual.childs_len, 2);
 	bitfield_is_free(actual.fields[0]);
 	check_equal(lower_free_frames(&actual), actual.frames);
-	if (init == LLFREE_INIT_VOLATILE) {
-		lower_drop(&actual);
-		llfree_ext_free(LLFREE_ALIGN, frames, memory);
-	}
+	lower_drop(&actual);
 
 	frames = 1023;
-	if (init != LLFREE_INIT_VOLATILE) {
-		memory = llfree_ext_alloc(LLFREE_ALIGN,
-					  frames * LLFREE_FRAME_SIZE);
-		assert(memory != NULL);
-	}
-	lower_init(&actual, (uint64_t)memory / LLFREE_FRAME_SIZE, frames, init);
-	lower_clear(&actual, true);
+	actual = lower_new(frames, LLFREE_INIT_FREE);
+
 	check_equal(actual.childs_len, 2);
-	check_equal_bitfield(actual.fields[1],
-			     ((bitfield_t){ 0, 0, 0, 0, 0, 0, 0,
-					    init == LLFREE_INIT_VOLATILE ?
-						    0x8000000000000000 :
-						    0xC000000000000000 }));
+	check_equal_bitfield(
+		actual.fields[1],
+		((bitfield_t){ 0, 0, 0, 0, 0, 0, 0, 0x8000000000000000 }));
 	check_equal(lower_free_frames(&actual), actual.frames);
-	if (init == LLFREE_INIT_VOLATILE) {
-		lower_drop(&actual);
-		llfree_ext_free(LLFREE_ALIGN, frames, memory);
-	}
+	lower_drop(&actual);
 
 	frames = 632;
-	if (init != LLFREE_INIT_VOLATILE) {
-		memory = llfree_ext_alloc(LLFREE_ALIGN,
-					  frames * LLFREE_FRAME_SIZE);
-		assert(memory != NULL);
-	}
-	lower_init(&actual, (uint64_t)memory / LLFREE_FRAME_SIZE, frames, init);
-	lower_clear(&actual, false);
+	actual = lower_new(frames, LLFREE_INIT_ALLOC);
+
 	check_equal(actual.childs_len, 2);
-	check_equal(actual.frames,
-		    init == LLFREE_INIT_VOLATILE ? 632ul : 631ul);
+	check_equal(actual.frames, 632ul);
 	check_equal(lower_free_frames(&actual), 0);
-	if (init == LLFREE_INIT_VOLATILE) {
-		lower_drop(&actual);
-		llfree_ext_free(LLFREE_ALIGN, frames, memory);
-	}
+	lower_drop(&actual);
 
 	frames = 685161;
-	if (init != LLFREE_INIT_VOLATILE) {
-		memory = llfree_ext_alloc(LLFREE_ALIGN,
-					  frames * LLFREE_FRAME_SIZE);
-		assert(memory != NULL);
-	}
-	lower_init(&actual, (uint64_t)memory / LLFREE_FRAME_SIZE, frames, init);
-	lower_clear(&actual, true);
+	actual = lower_new(frames, LLFREE_INIT_FREE);
+
 	check_equal(actual.childs_len, 1339);
 	bitfield_is_free_n(actual.fields, 1338);
 	check_equal_bitfield(actual.fields[1338],
-			     ((bitfield_t){ 0x0,
-					    init == LLFREE_INIT_VOLATILE ?
-						    0xfffffe0000000000 :
-						    0xfffffffffff80000,
+			     ((bitfield_t){ 0x0, 0xfffffe0000000000, UINT64_MAX,
 					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX }));
-	check_equal(lower_free_frames(&actual),
-		    init == LLFREE_INIT_VOLATILE ? 685161 : 685139);
+					    UINT64_MAX, UINT64_MAX }));
+	check_equal(lower_free_frames(&actual), 685161);
 
 	// check alignment
 
@@ -100,11 +77,7 @@ bool init_lower_test(uint8_t init)
 		      "array must be aligned to cachesize");
 	check_equal_m((uint64_t)actual.fields % LLFREE_CACHE_SIZE, 0ul,
 		      "array must be aligned to cachesize");
-
-	if (init == LLFREE_INIT_VOLATILE) {
-		lower_drop(&actual);
-		llfree_ext_free(LLFREE_ALIGN, frames, memory);
-	}
+	lower_drop(&actual);
 
 	return success;
 }
@@ -112,12 +85,11 @@ bool init_lower_test(uint8_t init)
 declare_test(lower_get)
 {
 	bool success = true;
-
-	lower_t actual;
-	lower_init(&actual, 0, 1360, LLFREE_INIT_VOLATILE);
-	lower_clear(&actual, true);
-
 	llfree_result_t ret;
+
+	size_t frames = 1360;
+	lower_t actual = lower_new(frames, LLFREE_INIT_FREE);
+
 	int order = 0;
 
 	ret = lower_get(&actual, 0, order);
@@ -153,8 +125,9 @@ declare_test(lower_get)
 					    0x1fffffffffffffff, 0x0 }));
 
 	lower_drop(&actual);
-	lower_init(&actual, 0, 2, LLFREE_INIT_VOLATILE);
-	lower_clear(&actual, true);
+
+	frames = 2;
+	actual = lower_new(frames, LLFREE_INIT_FREE);
 
 	ret = lower_get(&actual, 0, order);
 	check_equal((int)ret.val, 0);
@@ -177,10 +150,10 @@ declare_test(lower_get)
 			     ((bitfield_t){ UINT64_MAX, UINT64_MAX, UINT64_MAX,
 					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
 					    UINT64_MAX, UINT64_MAX }));
-
 	lower_drop(&actual);
-	lower_init(&actual, 0, 166120, LLFREE_INIT_VOLATILE);
-	lower_clear(&actual, true);
+
+	frames = 166120;
+	actual = lower_new(frames, LLFREE_INIT_FREE);
 
 	ret = lower_get(&actual, 0, 0);
 	check(ret.val == 0);
@@ -193,6 +166,7 @@ declare_test(lower_get)
 			     ((bitfield_t){ 0, 0, 0, 0, 0, 0, 0, 0 }));
 
 	check_equal((int)ret.val, 1 << 9);
+	lower_drop(&actual);
 
 	return success;
 }
@@ -201,9 +175,7 @@ declare_test(lower_put)
 {
 	bool success = true;
 
-	lower_t actual;
-	lower_init(&actual, 0, 1360, LLFREE_INIT_VOLATILE);
-	lower_clear(&actual, true);
+	lower_t actual = lower_new(1360, LLFREE_INIT_FREE);
 
 	uint64_t pfn;
 	llfree_result_t ret;
@@ -299,9 +271,7 @@ declare_test(lower_is_free)
 {
 	bool success = true;
 
-	lower_t actual;
-	lower_init(&actual, 0, 1360, LLFREE_INIT_VOLATILE);
-	lower_clear(&actual, true);
+	lower_t actual = lower_new(1360, LLFREE_INIT_FREE);
 
 	int ret;
 	int order = 0;
@@ -316,8 +286,7 @@ declare_test(lower_is_free)
 
 	lower_drop(&actual);
 
-	lower_init(&actual, 0, 1360, LLFREE_INIT_VOLATILE);
-	lower_clear(&actual, false);
+	actual = lower_new(1360, LLFREE_INIT_ALLOC);
 
 	ret = lower_is_free(&actual, pfn, order);
 	check_equal(ret, false);
@@ -343,9 +312,7 @@ declare_test(lower_large)
 
 	const size_t FRAMES = 128 * LLFREE_CHILD_SIZE;
 
-	lower_t lower;
-	lower_init(&lower, 0, FRAMES, LLFREE_INIT_VOLATILE);
-	lower_clear(&lower, true);
+	lower_t lower = lower_new(FRAMES, LLFREE_INIT_FREE);
 
 	uint64_t frames[LLFREE_MAX_ORDER + 1];
 	size_t tree = 0;
@@ -367,8 +334,7 @@ declare_test(lower_large)
 
 	for (size_t o = 0; o <= LLFREE_MAX_ORDER; o++) {
 		llfree_result_t ret = lower_put(&lower, frames[o], o);
-		check_m(llfree_ok(ret), "%zu -> 0x%" PRIx64, o,
-			frames[o]);
+		check_m(llfree_ok(ret), "%zu -> 0x%" PRIx64, o, frames[o]);
 	}
 
 	return success;
@@ -378,9 +344,8 @@ declare_test(lower_huge)
 {
 	bool success = true;
 
-	lower_t actual;
-	lower_init(&actual, 0, LLFREE_CHILD_SIZE * 60, LLFREE_INIT_VOLATILE);
-	lower_clear(&actual, true);
+	const size_t FRAMES = LLFREE_CHILD_SIZE * 60;
+	lower_t actual = lower_new(FRAMES, LLFREE_INIT_FREE);
 
 	llfree_result_t pfn1 = lower_get(&actual, 0, LLFREE_HUGE_ORDER);
 	check(llfree_ok(pfn1));
@@ -398,8 +363,7 @@ declare_test(lower_huge)
 	llfree_result_t regular = lower_get(&actual, 0, 0);
 	assert(llfree_ok(regular));
 	// regular frame cannot be returned as HP
-	assert(!llfree_ok(
-		lower_put(&actual, regular.val, LLFREE_HUGE_ORDER)));
+	assert(!llfree_ok(lower_put(&actual, regular.val, LLFREE_HUGE_ORDER)));
 
 	// this HF must be in another child than the regular frame.
 	llfree_result_t pfn3 =
@@ -407,7 +371,7 @@ declare_test(lower_huge)
 	check(llfree_ok(pfn3));
 	offset = pfn3.val % LLFREE_CHILD_SIZE;
 	check_equal(offset, 0ul);
-	check_equal((uint64_t)pfn3.val, 3 * LLFREE_CHILD_SIZE + actual.offset);
+	check_equal((uint64_t)pfn3.val, 3 * LLFREE_CHILD_SIZE);
 
 	// free regular page und try get this child as complete HP
 	assert(llfree_ok(lower_put(&actual, regular.val, 0)));
@@ -440,8 +404,7 @@ declare_test(lower_huge)
 	check(lower_put(&actual, pfn2.val, LLFREE_HUGE_ORDER).val ==
 	      LLFREE_ERR_ADDRESS);
 
-	check(llfree_ok(
-		lower_put(&actual, pfn1.val, LLFREE_HUGE_ORDER)));
+	check(llfree_ok(lower_put(&actual, pfn1.val, LLFREE_HUGE_ORDER)));
 
 	// check if right amout of free regular frames are present
 	check_equal(lower_free_frames(&actual), LLFREE_CHILD_SIZE + 1ul);
@@ -457,9 +420,7 @@ declare_test(lower_max)
 	bool success = true;
 
 	const size_t FRAMES = LLFREE_CHILD_SIZE * 60;
-	lower_t lower;
-	lower_init(&lower, 0, FRAMES, LLFREE_INIT_VOLATILE);
-	lower_clear(&lower, true);
+	lower_t lower = lower_new(FRAMES, LLFREE_INIT_FREE);
 
 	for (size_t i = 0; i < FRAMES / (1 << LLFREE_MAX_ORDER); ++i) {
 		llfree_result_t pfn = lower_get(
@@ -478,29 +439,12 @@ declare_test(lower_max)
 	return success;
 }
 
-declare_test(lower_init_persistent)
-{
-	return init_lower_test(LLFREE_INIT_OVERWRITE);
-}
-
-declare_test(lower_init_volatile)
-{
-	return init_lower_test(LLFREE_INIT_VOLATILE);
-}
-
 declare_test(lower_free_all)
 {
 	bool success = true;
 	const uint64_t len = (1 << 13) + 35; // 16 HP + 35 regular frames
-	char *memory = llfree_ext_alloc(LLFREE_ALIGN, LLFREE_FRAME_SIZE * len);
-	assert(memory != NULL);
-	const uint64_t offset = (uint64_t)memory / LLFREE_FRAME_SIZE;
-
-	lower_t lower;
-	lower_init(&lower, offset, len, LLFREE_INIT_OVERWRITE);
-	lower_clear(&lower, false);
-	check_equal_m(lower.frames, len - 1,
-		      "one frame for management structures");
+	lower_t lower = lower_new(len, LLFREE_INIT_ALLOC);
+	check_equal(lower.frames, len);
 	check_equal_m(lower_free_frames(&lower), 0ul,
 		      "all_frames_are_allocated");
 
@@ -510,12 +454,12 @@ declare_test(lower_free_all)
 		ret = lower_put(&lower, i * 512, LLFREE_HUGE_ORDER);
 		check(llfree_ok(ret));
 	}
-	check_equal_m(lower_free_frames(&lower), lower.frames - (512ul + 34),
-		      "one allocated HF and the 34 regular frames");
+	check_equal_m(lower_free_frames(&lower), lower.frames - (512ul + 35),
+		      "one allocated HF and the 35 regular frames");
 
 	// free last HP as regular frame and regular frames
 	const uint64_t start = 15 * 512;
-	for (int i = 0; i < 512 + 34; ++i) {
+	for (int i = 0; i < 512 + 35; ++i) {
 		ret = lower_put(&lower, start + i, 0);
 		check(llfree_ok(ret));
 	}
@@ -523,59 +467,5 @@ declare_test(lower_free_all)
 	check_equal_m(lower_free_frames(&lower), lower.frames,
 		      "lower should be completely free");
 
-	llfree_ext_free(LLFREE_ALIGN, LLFREE_FRAME_SIZE * len, memory);
-	return success;
-}
-
-declare_test(lower_persistent_init)
-{
-	bool success = true;
-	size_t len = (1ul << 30) / LLFREE_FRAME_SIZE; // 1GiB
-	char *mem = llfree_ext_alloc(LLFREE_ALIGN, len * LLFREE_FRAME_SIZE);
-	assert(mem != NULL);
-	llfree_info("mem: %p-%p (%lx)", mem, mem + len * LLFREE_FRAME_SIZE,
-		    len);
-
-	lower_t lower;
-	lower_init(&lower, (uint64_t)mem / LLFREE_FRAME_SIZE, len,
-		   LLFREE_INIT_OVERWRITE);
-	lower_clear(&lower, true);
-
-	llfree_info("childs %p, fields %p", lower.children, lower.fields);
-
-	check_equal((uint64_t)lower.children % LLFREE_CACHE_SIZE, 0ul);
-	check_equal((uint64_t)lower.fields % LLFREE_CACHE_SIZE, 0ul);
-
-	check((uint64_t)lower.children > lower.offset * LLFREE_FRAME_SIZE);
-	check((uint64_t)&lower.children[lower.childs_len] <
-	      (lower.offset + len) * LLFREE_FRAME_SIZE);
-
-	check((uint64_t)lower.fields > lower.offset * LLFREE_FRAME_SIZE);
-	check((uint64_t)&lower.fields[lower.childs_len] <=
-	      (lower.offset + len) * LLFREE_FRAME_SIZE);
-
-	check_equal(lower_free_frames(&lower), lower.frames);
-
-	llfree_result_t res = lower_get(&lower, 0, 0);
-	check(llfree_ok(res));
-	check_equal(lower_free_frames(&lower), lower.frames - 1);
-
-	res = lower_get(&lower, 0, LLFREE_HUGE_ORDER);
-	check(llfree_ok(res));
-	check_equal(lower_free_frames(&lower),
-		    lower.frames - 1 - (1 << LLFREE_HUGE_ORDER));
-
-	llfree_info("Alloc");
-	size_t n = LLFREE_TREE_CHILDREN - 1;
-	for (size_t i = 0; i < n - 1; i++) {
-		check(llfree_ok(lower_get(&lower, 0, 0)));
-		check(llfree_ok(
-			lower_get(&lower, 0, LLFREE_HUGE_ORDER)));
-	}
-
-	check_equal(n + n * 512, lower.frames - lower_free_frames(&lower));
-
-	lower_drop(&lower);
-	llfree_ext_free(LLFREE_ALIGN, len * LLFREE_FRAME_SIZE, mem);
 	return success;
 }

@@ -7,17 +7,6 @@
 #include "lower.h"
 #include "utils.h"
 
-/// Magic used the identify a previous allocator state
-#define MAGIC 0xC0FFEE
-
-/// Persistent metadata used for recovery
-struct meta {
-	/// Marker to find the parsistent state
-	uint32_t magic;
-	/// If it has crashed
-	bool crashed;
-};
-
 /// Returns the local data of given core
 static inline local_t *get_local(llfree_t *self, size_t core)
 {
@@ -44,63 +33,50 @@ static void init_trees(llfree_t *self)
 	}
 }
 
-llfree_result_t llfree_init(llfree_t *self, size_t cores, uint64_t offset,
-			    size_t len, uint8_t init, bool free_all)
+llfree_meta_size_t llfree_metadata_size(size_t cores, size_t frames)
+{
+	size_t tree_len = div_ceil(frames, LLFREE_TREE_SIZE);
+	size_t tree_size =
+		align_up(sizeof(tree_t) * tree_len, LLFREE_CACHE_SIZE);
+	size_t local_len = MIN(cores, tree_len);
+	size_t local_size =
+		align_up(sizeof(local_t) * local_len, LLFREE_CACHE_SIZE);
+	llfree_meta_size_t meta = {
+		.primary = lower_metadata_size(frames),
+		.secondary = local_size + tree_size,
+	};
+	return meta;
+}
+
+llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
+			    uint8_t init, uint8_t *primary, uint8_t *secondary)
 {
 	assert(self != NULL);
-	if (init != LLFREE_INIT_VOLATILE && init != LLFREE_INIT_OVERWRITE &&
-	    init != LLFREE_INIT_RECOVER) {
+	assert(primary != NULL && secondary != NULL);
+
+	if (init != LLFREE_INIT_FREE && init != LLFREE_INIT_ALLOC &&
+	    init != LLFREE_INIT_RECOVER && init != LLFREE_INIT_RECOVER_CRASH) {
 		llfree_warn("Invalid init mode %d", init);
 		return llfree_result(LLFREE_ERR_INIT);
 	}
-	if (len < MIN_PAGES || len > MAX_PAGES) {
-		llfree_warn("Invalid size %" PRIu64, (uint64_t)len);
-		return llfree_result(LLFREE_ERR_INIT);
-	}
-	if (offset % (1 << LLFREE_MAX_ORDER) != 0) {
-		llfree_warn("Invalid alignment");
+	if (frames < MIN_PAGES || frames > MAX_PAGES) {
+		llfree_warn("Invalid size %" PRIu64, (uint64_t)frames);
 		return llfree_result(LLFREE_ERR_INIT);
 	}
 
-	if (init == LLFREE_INIT_VOLATILE) {
-		self->meta = NULL;
-	} else {
-		len -= 1;
-		uint64_t last_page = (offset + len) * LLFREE_FRAME_SIZE;
-		self->meta = (struct meta *)last_page;
+	llfree_result_t res = lower_init(&self->lower, frames, init, primary);
+	if (!llfree_ok(res)) {
+		return res;
 	}
-
-	lower_init(&self->lower, offset, len, init);
-
-	if (init == LLFREE_INIT_RECOVER) {
-		if (self->meta->magic != MAGIC) {
-			llfree_warn("Invalid magic");
-			return llfree_result(LLFREE_ERR_INIT);
-		}
-		if (self->meta->crashed) {
-			lower_recover(&self->lower);
-		}
-	} else {
-		lower_clear(&self->lower, free_all);
-	}
-
-	self->trees_len =
-		div_ceil(self->lower.childs_len, LLFREE_TREE_CHILDREN);
-	self->trees = llfree_ext_alloc(LLFREE_CACHE_SIZE,
-				       sizeof(child_t) * self->trees_len);
-	assert(self->trees != NULL);
-	if (self->trees == NULL)
-		return llfree_result(LLFREE_ERR_INIT);
 
 	// check if more cores than trees -> if not shared locale data
-	size_t local_len = MIN(cores, self->trees_len);
-	self->cores = local_len;
-	self->local = llfree_ext_alloc(LLFREE_CACHE_SIZE,
-				       sizeof(local_t) * local_len);
+	self->trees_len = div_ceil(frames, LLFREE_TREE_SIZE);
+	self->cores = MIN(cores, self->trees_len);
+	size_t local_size =
+		align_up(sizeof(local_t) * self->cores, LLFREE_CACHE_SIZE);
 
-	assert(self->local != NULL);
-	if (self->trees == NULL)
-		return llfree_result(LLFREE_ERR_INIT);
+	self->local = (local_t *)secondary;
+	self->trees = (_Atomic(tree_t) *)(secondary + local_size);
 
 	// init local data do default 0
 	for (size_t local_idx = 0; local_idx < self->cores; ++local_idx) {
@@ -108,12 +84,17 @@ llfree_result_t llfree_init(llfree_t *self, size_t cores, uint64_t offset,
 	}
 
 	init_trees(self);
-
-	if (init != LLFREE_INIT_VOLATILE) {
-		self->meta->magic = MAGIC;
-		self->meta->crashed = true;
-	}
 	return llfree_result(LLFREE_ERR_OK);
+}
+
+llfree_meta_t llfree_metadata(llfree_t *self)
+{
+	assert(self != NULL);
+	llfree_meta_t meta = {
+		.primary = lower_metadata(&self->lower),
+		.secondary = (uint8_t *)self->local,
+	};
+	return meta;
 }
 
 /// Swap out the currently reserved tree for a new one and writes back the free
@@ -376,9 +357,7 @@ llfree_result_t llfree_get(llfree_t *self, size_t core, size_t order)
 	for (size_t i = 0; i < RETRIES; i++) {
 		llfree_result_t res = get_inner(self, core, order);
 
-		if (llfree_ok(res))
-			return llfree_result(res.val + self->lower.offset);
-		if (res.val != LLFREE_ERR_RETRY)
+		if (llfree_ok(res) || res.val != LLFREE_ERR_RETRY)
 			return res;
 	}
 
@@ -391,16 +370,6 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 {
 	assert(self != NULL);
 	assert(order <= LLFREE_MAX_ORDER);
-
-	if (frame < self->lower.offset ||
-	    frame >= self->lower.offset + self->lower.frames) {
-		llfree_warn("frame %" PRIu64 " out of range %" PRIu64
-			    "-%" PRIu64 "\n",
-			    frame, self->lower.offset,
-			    self->lower.offset + self->lower.frames);
-		return llfree_result(LLFREE_ERR_ADDRESS);
-	}
-	frame -= self->lower.offset;
 	assert(frame < self->lower.frames);
 
 	llfree_result_t res = lower_put(&self->lower, frame, order);
@@ -474,7 +443,13 @@ llfree_result_t llfree_drain(llfree_t *self, size_t core)
 	return res;
 }
 
-uint64_t llfree_frames(llfree_t *self)
+size_t llfree_cores(llfree_t *self)
+{
+	assert(self != NULL);
+	return self->cores;
+}
+
+size_t llfree_frames(llfree_t *self)
 {
 	assert(self != NULL);
 	return self->lower.frames;
@@ -527,7 +502,7 @@ void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
 {
 	assert(self != NULL);
 
-	char *msg = llfree_ext_alloc(1, 200 * sizeof(char));
+	char msg[200];
 	snprintf(msg, 200,
 		 "LLC { frames: %" PRIuS "/%" PRIuS ", huge: %" PRIuS "/%" PRIuS
 		 " }",
@@ -540,10 +515,7 @@ void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
 void llfree_print(llfree_t *self)
 {
 	printf("llfree_t {\n");
-	printf("    memory: %" PRIx64 "..%" PRIx64 " (%" PRIuS ")\n",
-	       self->lower.offset, self->lower.offset + self->lower.frames,
-	       self->lower.frames);
-
+	printf("    frames: %" PRIuS "\n", self->lower.frames);
 	printf("    trees: %" PRIuS " (%u) {\n", self->trees_len,
 	       LLFREE_TREE_SIZE);
 	size_t free_huge = llfree_free_huge(self);
@@ -572,22 +544,3 @@ void llfree_print(llfree_t *self)
 	printf("}\n");
 }
 #endif
-
-void llfree_drop(llfree_t *self)
-{
-	assert(self != NULL);
-
-	if (self->meta != NULL)
-		self->meta->crashed = false;
-
-	// if initialized
-	if (self->local != NULL) {
-		lower_drop(&self->lower);
-		llfree_ext_free(LLFREE_CACHE_SIZE,
-				self->trees_len * sizeof(tree_t), self->trees);
-
-		assert(self->cores <= self->trees_len);
-		llfree_ext_free(LLFREE_CACHE_SIZE,
-				self->cores * sizeof(local_t), self->local);
-	}
-}

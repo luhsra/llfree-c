@@ -8,8 +8,6 @@
 
 /// The llfree metadata
 typedef struct llfree {
-	/// Persistent metadata, used for recovery
-	struct meta *meta;
 	/// Lower allocator
 	lower_t lower;
 	/// Cpu-local data

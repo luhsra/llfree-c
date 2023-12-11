@@ -49,12 +49,15 @@ enum {
 
 /// Init modes
 enum {
-	/// Not persistent
-	LLFREE_INIT_VOLATILE = 0,
-	/// Persistent and try recovery
-	LLFREE_INIT_RECOVER = 1,
-	/// Overwrite the persistent memory
-	LLFREE_INIT_OVERWRITE = 2,
+	/// Clear the allocator marking all frames as free
+	LLFREE_INIT_FREE = 0,
+	/// Clear the allocator marking all frames as allocated
+	LLFREE_INIT_ALLOC = 1,
+	/// Try recovering all frames from persistent memory
+	LLFREE_INIT_RECOVER = 2,
+	/// Try recovering all frames from persistent memory after a crash,
+	/// correcting invalid counters
+	LLFREE_INIT_RECOVER_CRASH = 3,
 };
 
 /// Allocate and initialize the data structures of the allocator.
@@ -62,15 +65,34 @@ enum {
 /// `offset` is the number of the first page to be managed and `len` determins
 /// the size of the region in the number of pages.
 ///
-/// The `init` parameter determins which memory is used:
-/// - LLFREE_INIT_VOLATILE:  allocator uses volatile memory for its own data structures
-/// - LLFREE_INIT_OVERWRITE: allocator uses parts of the persistent managed memory for its data structures
-/// - LLFREE_INIT_RECOVER:   similar to LLFREE_INIT_OVERWRITE, but tries to recover from persistent memory.
+/// The `init` parameter is expected to be one of the `LLFREE_INIT_<..>` modes.
 ///
-/// `all_free` determins whether the region is initalized as entirely free
-/// or entirely allocated.
-llfree_result_t llfree_init(llfree_t *self, size_t cores, uint64_t offset,
-			    size_t len, uint8_t init, bool free_all);
+/// The `primary` and `secondary` buffer are used to store the allocator state
+/// and must be at least as large as reported by llfree_metadata_size.
+llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
+			    uint8_t init, uint8_t *primary, uint8_t *secondary);
+
+/// Size of the required metadata
+typedef struct llfree_meta_size {
+	/// Size of the optionally persistent data.
+	size_t primary;
+	/// Size of the volatile data.
+	size_t secondary;
+} llfree_meta_size_t;
+
+/// Returns the size of the metadata buffers required for initialization
+llfree_meta_size_t llfree_metadata_size(size_t cores, size_t frames);
+
+/// Size of the required metadata
+typedef struct llfree_meta {
+	/// Size of the optionally persistent data.
+	uint8_t *primary;
+	/// Size of the volatile data.
+	uint8_t *secondary;
+} llfree_meta_t;
+
+/// Returns the metadata
+llfree_meta_t llfree_metadata(llfree_t *self);
 
 /// Allocates a frame and returns its number, or a negative error code
 llfree_result_t llfree_get(llfree_t *self, size_t core, size_t order);
@@ -85,16 +107,16 @@ llfree_result_t llfree_drain(llfree_t *self, size_t core);
 /// Checks if a frame is allocated, returning 0 if not
 bool llfree_is_free(llfree_t *self, uint64_t frame, size_t order);
 
+/// Returns the number of cores this allocator was initialized with
+size_t llfree_cores(llfree_t *self);
+
 /// Returns the total number of frames the allocator can allocate
-uint64_t llfree_frames(llfree_t *self);
+size_t llfree_frames(llfree_t *self);
 
 /// Returns number of currently free frames
 size_t llfree_free_frames(llfree_t *self);
 /// Returns number of currently free frames
 size_t llfree_free_huge(llfree_t *self);
-
-/// Destructs the allocator
-void llfree_drop(llfree_t *self);
 
 // == Debugging ==
 
@@ -112,8 +134,3 @@ void llfree_print(llfree_t *self);
 /// - used by some rust benchmarks like frag.rs
 void llfree_for_each_huge(llfree_t *self, void *context,
 			  void f(void *, uint64_t, size_t));
-
-/// Allocate metadata function
-extern void *llfree_ext_alloc(size_t align, size_t size);
-/// Free metadata function
-extern void llfree_ext_free(size_t align, size_t size, void *addr);

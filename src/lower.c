@@ -3,58 +3,17 @@
 #include "child.h"
 #include "llfree.h"
 
-void lower_init(lower_t *self, uint64_t offset, size_t len, uint8_t init)
+size_t lower_metadata_size(size_t frames)
 {
-	assert(offset % (1 << (LLFREE_MAX_ORDER - LLFREE_HUGE_ORDER)) == 0);
-
-	self->offset = offset;
-	self->frames = len;
-
-	self->childs_len = div_ceil(self->frames, LLFREE_CHILD_SIZE);
-
-	if (init == LLFREE_INIT_VOLATILE) {
-		self->fields =
-			llfree_ext_alloc(LLFREE_CACHE_SIZE,
-					 sizeof(bitfield_t) * self->childs_len);
-		assert(self->fields != NULL);
-
-		self->children = llfree_ext_alloc(
-			LLFREE_CACHE_SIZE,
-			sizeof(child_t) * align_up(self->childs_len,
-						   LLFREE_TREE_CHILDREN));
-		assert(self->children != NULL);
-
-	} else {
-		// Layout in persistent Memory:
-		// |---------------+----------+-----------+----------|
-		// |     Frames    | children | bitfields | metadata |
-		// |---------------+----------+-----------+----------|
-
-		uint64_t size_bitfields = self->childs_len * sizeof(bitfield_t);
-		size_bitfields = align_up(
-			size_bitfields, LLFREE_TREE_CHILDREN * sizeof(child_t));
-		uint64_t size_children = self->childs_len * sizeof(child_t);
-		// round up to get complete cacheline
-		size_children =
-			align_up(size_children,
-				 MAX(LLFREE_TREE_CHILDREN * sizeof(child_t),
-				     sizeof(bitfield_t)));
-
-		uint64_t metadata_bytes = size_bitfields + size_children;
-		uint64_t metadata_pages =
-			div_ceil(metadata_bytes, LLFREE_FRAME_SIZE);
-
-		assert(metadata_pages < self->frames);
-
-		self->frames -= metadata_pages;
-		self->childs_len = div_ceil(self->frames, LLFREE_CHILD_SIZE);
-
-		uint64_t metadata_start =
-			(self->offset + self->frames) * LLFREE_FRAME_SIZE;
-
-		self->children = (_Atomic(child_t) *)metadata_start;
-		self->fields = (bitfield_t *)(metadata_start + size_children);
-	}
+	size_t children = div_ceil(frames, LLFREE_CHILD_SIZE);
+	uint64_t size_bitfields =
+		align_up(children * sizeof(bitfield_t),
+			 LLFREE_TREE_CHILDREN * sizeof(child_t));
+	uint64_t size_children =
+		align_up(children * sizeof(child_t),
+			 MAX(LLFREE_TREE_CHILDREN * sizeof(child_t),
+			     sizeof(bitfield_t)));
+	return size_bitfields + size_children;
 }
 
 void lower_clear(lower_t *self, bool free_all)
@@ -133,6 +92,40 @@ void lower_recover(lower_t *self)
 				   child_new(counter, false));
 		}
 	}
+}
+
+llfree_result_t lower_init(lower_t *self, size_t frames, uint8_t init,
+			   uint8_t *primary)
+{
+	self->frames = frames;
+	self->childs_len = div_ceil(self->frames, LLFREE_CHILD_SIZE);
+
+	size_t bitfield_size = align_up(sizeof(bitfield_t) * self->childs_len,
+					sizeof(child_t) * LLFREE_TREE_CHILDREN);
+
+	self->fields = (bitfield_t *)primary;
+	self->children = (_Atomic(child_t) *)(primary + bitfield_size);
+
+	switch (init) {
+	case LLFREE_INIT_RECOVER:
+	case LLFREE_INIT_FREE:
+		lower_clear(self, true);
+		break;
+	case LLFREE_INIT_ALLOC:
+		lower_clear(self, false);
+		break;
+	case LLFREE_INIT_RECOVER_CRASH:
+		lower_recover(self);
+		break;
+	default:
+		return llfree_result(LLFREE_ERR_INIT);
+	}
+	return llfree_result(LLFREE_ERR_OK);
+}
+
+uint8_t *lower_metadata(lower_t *self)
+{
+	return (uint8_t *)self->fields;
 }
 
 static llfree_result_t get_max(lower_t *self, uint64_t pfn)
@@ -340,23 +333,6 @@ void lower_print(lower_t *self)
 }
 #endif
 
-void lower_drop(lower_t *self)
-{
-	assert(self != NULL);
-	_Atomic(child_t) *start_data =
-		(void *)((self->offset + self->frames) * LLFREE_FRAME_SIZE);
-	if (self->children != start_data) {
-		llfree_ext_free(LLFREE_CACHE_SIZE,
-				sizeof(child_t) *
-					align_up(self->childs_len,
-						 LLFREE_TREE_CHILDREN),
-				self->children);
-		llfree_ext_free(LLFREE_CACHE_SIZE,
-				sizeof(bitfield_t) * self->childs_len,
-				self->fields);
-	}
-}
-
 size_t lower_free_huge(lower_t *self)
 {
 	size_t count = 0;
@@ -373,7 +349,6 @@ void lower_for_each_child(const lower_t *self, void *context,
 {
 	for (uint64_t i = 0; i < self->childs_len; ++i) {
 		child_t child = atom_load(&self->children[i]);
-		f(context, self->offset + i * (1 << LLFREE_HUGE_ORDER),
-		  child.free);
+		f(context, i << LLFREE_HUGE_ORDER, child.free);
 	}
 }

@@ -90,3 +90,6 @@ void add_test(char *name, bool (*f)(void));
 		add_test(#name, _test_##name);               \
 	}                                                    \
 	static bool _test_##name(void)
+
+void *llfree_ext_alloc(size_t align, size_t size);
+void llfree_ext_free(size_t align, size_t size, void *addr);
