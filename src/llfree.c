@@ -53,6 +53,8 @@ llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
 {
 	assert(self != NULL);
 	assert(primary != NULL && secondary != NULL);
+	assert((size_t)primary % LLFREE_CACHE_SIZE == 0 &&
+	       (size_t)secondary % LLFREE_CACHE_SIZE == 0);
 
 	if (init != LLFREE_INIT_FREE && init != LLFREE_INIT_ALLOC &&
 	    init != LLFREE_INIT_RECOVER && init != LLFREE_INIT_RECOVER_CRASH) {
