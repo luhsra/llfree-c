@@ -472,18 +472,10 @@ size_t llfree_free_frames(llfree_t *self)
 	return free;
 }
 
-static void count_huge(void *acc, uint64_t frame, size_t free)
-{
-	size_t sum = (size_t)acc;
-	sum += free;
-}
-
 size_t llfree_free_huge(llfree_t *self)
 {
 	assert(self != NULL);
-	size_t free_huge = 0;
-	llfree_for_each_huge(self, &free_huge, count_huge);
-	return free_huge;
+	return lower_free_huge(&self->lower);
 }
 
 bool llfree_is_free(llfree_t *self, uint64_t frame, size_t order)
