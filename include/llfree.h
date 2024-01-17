@@ -101,7 +101,7 @@ llfree_result_t llfree_get(llfree_t *self, size_t core, size_t order);
 llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 			   size_t order);
 
-/// Frees a frame, returning 0 on success or a negative error code
+/// Unreserves all cpu-local reservations
 llfree_result_t llfree_drain(llfree_t *self, size_t core);
 
 /// Checks if a frame is allocated, returning 0 if not
