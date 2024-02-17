@@ -43,7 +43,7 @@ static void llfree_drop(llfree_t *self)
 
 declare_test(llfree_init)
 {
-	int success = true;
+	bool success = true;
 
 	llfree_t upper = llfree_new(4, 1 << 20, LLFREE_INIT_FREE);
 	assert(llfree_frames(&upper) == 1 << 20);
@@ -54,7 +54,7 @@ declare_test(llfree_init)
 
 declare_test(llfree_alloc_s)
 {
-	int success = true;
+	bool success = true;
 	const size_t FRAMES = (1ul << 30) / LLFREE_FRAME_SIZE;
 
 	llfree_info("Init");
@@ -206,7 +206,7 @@ declare_test(llfree_put)
 
 declare_test(llfree_alloc_all)
 {
-	int success = true;
+	bool success = true;
 	llfree_result_t ret;
 
 	const int CORES = 8;
@@ -249,7 +249,7 @@ struct ret {
 	size_t amount_ENOMEM;
 };
 
-static int64_t contains(int64_t *sorted_list, size_t len, int64_t item)
+static int64_t contains(int64_t const *sorted_list, size_t len, int64_t item)
 {
 	if (item < sorted_list[0] || item > sorted_list[len - 1])
 		return -1;
@@ -314,7 +314,7 @@ declare_test(llfree_parallel_alloc)
 #undef CORES
 #define CORES 4
 
-	int success = true;
+	bool success = true;
 
 	const uint64_t LENGTH = 16 << 18;
 	char *memory =

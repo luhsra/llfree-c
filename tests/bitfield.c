@@ -1,6 +1,5 @@
 #include "check.h"
 #include "bitfield.h"
-#include "utils.h"
 
 static inline bitfield_t bf(uint64_t b0, uint64_t b1, uint64_t b2, uint64_t b3,
 			    uint64_t b4, uint64_t b5, uint64_t b6, uint64_t b7)
@@ -201,7 +200,7 @@ declare_test(bitfield_count_bits)
 	bitfield_t actual = bf(0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 	bitfield_t expect = bf(0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 
-	int ret = field_count_ones(&actual);
+	size_t ret = field_count_ones(&actual);
 	check_equal_m(ret, 0, "no bits set");
 	check_equal_bitfield_m(actual, expect, "no change!");
 

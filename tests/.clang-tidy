@@ -1,0 +1,2 @@
+Checks: '-readability-magic-numbers'
+InheritParentConfig: true

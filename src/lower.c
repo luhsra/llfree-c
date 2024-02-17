@@ -16,7 +16,7 @@ size_t lower_metadata_size(size_t frames)
 	return size_bitfields + size_children;
 }
 
-void lower_clear(lower_t *self, bool free_all)
+static void lower_clear(lower_t *self, bool free_all)
 {
 	assert(self != NULL);
 
@@ -39,11 +39,8 @@ void lower_clear(lower_t *self, bool free_all)
 	uint64_t rest_frames = self->frames % LLFREE_CHILD_SIZE;
 	if (rest_frames == 0) {
 		// rest is exactly one entire child
-		rest_frames = LLFREE_CHILD_SIZE;
-
 		self->children[self->childs_len - 1] =
-			free_all ? child_new(LLFREE_CHILD_SIZE, false) :
-				   child_new(0, true);
+			child_new(free_all ? LLFREE_CHILD_SIZE : 0, !free_all);
 
 		bitfield_t *field = &self->fields[self->childs_len - 1];
 		for (uint64_t j = 0; j < FIELD_N; ++j) {
@@ -53,7 +50,7 @@ void lower_clear(lower_t *self, bool free_all)
 	}
 	// rest is less than an entire child
 	self->children[self->childs_len - 1] =
-		free_all ? child_new(rest_frames, false) : child_new(0, false);
+		child_new(free_all ? rest_frames : 0, false);
 
 	bitfield_t *field = &self->fields[self->childs_len - 1];
 	if (free_all) {
@@ -76,7 +73,7 @@ void lower_clear(lower_t *self, bool free_all)
 	}
 }
 
-void lower_recover(lower_t *self)
+static void lower_recover(lower_t *self)
 {
 	for (size_t i = 0; i < self->childs_len; ++i) {
 		child_t child = atom_load(&self->children[i]);
@@ -107,13 +104,14 @@ llfree_result_t lower_init(lower_t *self, size_t frames, uint8_t init,
 	self->children = (_Atomic(child_t) *)(primary + bitfield_size);
 
 	switch (init) {
-	case LLFREE_INIT_RECOVER:
 	case LLFREE_INIT_FREE:
 		lower_clear(self, true);
 		break;
 	case LLFREE_INIT_ALLOC:
 		lower_clear(self, false);
 		break;
+	case LLFREE_INIT_RECOVER:
+		break; // nothing to do
 	case LLFREE_INIT_RECOVER_CRASH:
 		lower_recover(self);
 		break;

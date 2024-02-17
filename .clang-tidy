@@ -1,1 +1,1 @@
-Checks: 'clang-analyze-*,bugprone-*,readability-*,-readability-braces-around-statements,-bugprone-easily-swappable-parameters,-readability-function-cognitive-complexity'
+Checks: 'clang-analyze-*,bugprone-*,readability-*,-readability-braces-around-statements,-bugprone-easily-swappable-parameters,-readability-function-cognitive-complexity,-readability-identifier-length,-readability-uppercase-literal-suffix'

@@ -28,6 +28,7 @@ void field_init(bitfield_t *self)
 /// - See <https://graphics.stanford.edu/~seander/bithacks.html#ZeroInWord>
 bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos)
 {
+	// NOLINTBEGIN(readability-magic-numbers)
 	uint64_t mask;
 	int p = -1;
 	switch (order) {
@@ -86,6 +87,7 @@ bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos)
 		return true;
 	}
 	return false;
+	// NOLINTEND(readability-magic-numbers)
 }
 
 llfree_result_t field_set_next(bitfield_t *field, uint64_t start_pfn,

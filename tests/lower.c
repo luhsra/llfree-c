@@ -2,6 +2,7 @@
 #include "check.h"
 #include "utils.h"
 
+#include <assert.h>
 #include <stdlib.h>
 
 #define bitfield_is_free(actual)                                             \
@@ -207,7 +208,7 @@ declare_test(lower_put)
 					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
 					    0x1fffffffffffffff, 0x0 }));
 
-	// wiederholtes put auf selbe stelle
+	// repeat the same address
 	pfn = 0;
 	ret = lower_put(&actual, pfn, order);
 	check_equal((int)ret.val, LLFREE_ERR_ADDRESS);
@@ -273,36 +274,25 @@ declare_test(lower_is_free)
 
 	lower_t actual = lower_new(1360, LLFREE_INIT_FREE);
 
-	int ret;
-	int order = 0;
-
-	uint64_t pfn = 0;
-	ret = lower_is_free(&actual, pfn, order);
-	check_equal(ret, true);
-
-	pfn = 910;
-	ret = lower_is_free(&actual, pfn, order);
-	check_equal(ret, true);
+	assert(lower_is_free(&actual, 0, 0));
+	assert(lower_is_free(&actual, 910, 0));
 
 	lower_drop(&actual);
 
 	actual = lower_new(1360, LLFREE_INIT_ALLOC);
 
-	ret = lower_is_free(&actual, pfn, order);
-	check_equal(ret, false);
+	assert(!lower_is_free(&actual, 0, 0));
+	assert(!lower_is_free(&actual, 513, 0));
+	assert(!lower_is_free(&actual, 511, 0));
 
-	pfn = 910;
-	ret = lower_is_free(&actual, pfn, order);
-	check_equal(ret, false);
-	assert(llfree_ok(lower_put(&actual, 513, order)));
-	assert(llfree_ok(lower_put(&actual, 511, order)));
-	ret = lower_is_free(&actual, 513, order);
-	check_equal(ret, true);
-	ret = lower_is_free(&actual, 511, order);
-	check_equal(ret, true);
-	ret = lower_is_free(&actual, 512, order);
-	check_equal(ret, false);
+	assert(llfree_ok(lower_put(&actual, 513, 0)));
+	assert(llfree_ok(lower_put(&actual, 511, 0)));
 
+	assert(lower_is_free(&actual, 513, 0));
+	assert(lower_is_free(&actual, 511, 0));
+	assert(!lower_is_free(&actual, 512, 0));
+
+	lower_drop(&actual);
 	return success;
 }
 
@@ -310,7 +300,7 @@ declare_test(lower_large)
 {
 	bool success = true;
 
-	const size_t FRAMES = 128 * LLFREE_CHILD_SIZE;
+	const size_t FRAMES = 128lu * LLFREE_CHILD_SIZE;
 
 	lower_t lower = lower_new(FRAMES, LLFREE_INIT_FREE);
 
@@ -450,7 +440,7 @@ declare_test(lower_free_all)
 
 	// free all HPs
 	llfree_result_t ret;
-	for (int i = 0; i < 15; ++i) {
+	for (size_t i = 0; i < 15; ++i) {
 		ret = lower_put(&lower, i * 512, LLFREE_HUGE_ORDER);
 		check(llfree_ok(ret));
 	}
@@ -459,7 +449,7 @@ declare_test(lower_free_all)
 
 	// free last HP as regular frame and regular frames
 	const uint64_t start = 15 * 512;
-	for (int i = 0; i < 512 + 35; ++i) {
+	for (size_t i = 0; i < 512 + 35; ++i) {
 		ret = lower_put(&lower, start + i, 0);
 		check(llfree_ok(ret));
 	}
