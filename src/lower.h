@@ -15,7 +15,8 @@ typedef struct lower {
 } lower_t;
 
 /// Allocate and initialize the data structures of the lower allocator.
-llfree_result_t lower_init(lower_t *self, size_t frames, uint8_t init, uint8_t *primary);
+llfree_result_t lower_init(lower_t *self, size_t frames, uint8_t init,
+			   uint8_t *primary);
 
 /// Size of the required metadata
 size_t lower_metadata_size(size_t frames);
@@ -44,5 +45,5 @@ void lower_print(lower_t *self);
 
 /// Calls f for each child. f will receive the context the current pfn and the free counter as arguments
 // used by frag.rs benchmark
-void lower_for_each_child(const lower_t *self, void *context,
-			  void f(void *, uint64_t, size_t));
+bool lower_for_each_child(const lower_t *self, void *context,
+			  bool f(void *, uint64_t, size_t));

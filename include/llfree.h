@@ -43,8 +43,6 @@ enum {
 	LLFREE_ERR_ADDRESS = -3,
 	/// Allocator not initialized or initialization failed
 	LLFREE_ERR_INIT = -4,
-	/// Corrupted allocator state
-	LLFREE_ERR_CORRUPT = -5,
 };
 
 /// Init modes
@@ -131,6 +129,8 @@ void llfree_print(llfree_t *self);
 
 /// Calls f for each Huge Frame. f will receive the context the current pfn
 /// and the free counter as arguments
+/// If f returns false, the iteration stops and this function returns false.
+///
 /// - used by some rust benchmarks like frag.rs
-void llfree_for_each_huge(llfree_t *self, void *context,
-			  void f(void *, uint64_t, size_t));
+bool llfree_for_each_huge(llfree_t *self, void *context,
+			  bool f(void *, uint64_t, size_t));

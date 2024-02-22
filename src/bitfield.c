@@ -128,8 +128,8 @@ llfree_result_t field_set_next(bitfield_t *field, uint64_t start_pfn,
 				uint64_t old = UINT64_MAX;
 				if (!atom_cmp_exchange(&field->rows[idx], &old,
 						       0)) {
-					return llfree_result(
-						LLFREE_ERR_CORRUPT);
+					llfree_warn("Undo failed!");
+					assert(false);
 				}
 			}
 			failed = true;

@@ -187,7 +187,8 @@ llfree_result_t lower_get(lower_t *self, const uint64_t start_frame,
 
 			if (!atom_update(&self->children[current_i], old,
 					 child_inc, order)) {
-				return llfree_result(LLFREE_ERR_CORRUPT);
+				llfree_warn("Undo failed!");
+				assert(false);
 			}
 		}
 	}
@@ -274,8 +275,8 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 		return ret;
 
 	if (!atom_update(child, old, child_inc, order)) {
-		assert(!"unreachable");
-		return llfree_result(LLFREE_ERR_CORRUPT);
+		llfree_warn("Undo failed!");
+		assert(false);
 	}
 
 	return llfree_result(LLFREE_ERR_OK);
@@ -342,11 +343,13 @@ size_t lower_free_huge(lower_t *self)
 	return count;
 }
 
-void lower_for_each_child(const lower_t *self, void *context,
-			  void f(void *, uint64_t, size_t))
+bool lower_for_each_child(const lower_t *self, void *context,
+			  bool f(void *, uint64_t, size_t))
 {
 	for (uint64_t i = 0; i < self->childs_len; ++i) {
 		child_t child = atom_load(&self->children[i]);
-		f(context, i << LLFREE_HUGE_ORDER, child.free);
+		if (!f(context, i << LLFREE_HUGE_ORDER, child.free))
+			return false;
 	}
+	return true;
 }

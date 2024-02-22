@@ -123,7 +123,7 @@ static llfree_result_t swap_reserved(llfree_t *self, local_t *local,
 			llfree_warn("Failed writeback %" PRIuS " (next %" PRIu64
 				    ")",
 				    tree_idx, new_tree);
-			return llfree_result(LLFREE_ERR_CORRUPT);
+			assert(false);
 		}
 		tree = atom_load(&self->trees[tree_idx]);
 	}
@@ -155,7 +155,7 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, local_t *local,
 				   .reserving = false };
 		if (!llfree_ok(swap_reserved(self, local, new, true))) {
 			llfree_warn("Invalid reserve state");
-			return llfree_result(LLFREE_ERR_CORRUPT);
+			assert(false);
 		}
 	} else {
 		// undo reservation
@@ -163,7 +163,7 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, local_t *local,
 		if (!atom_update(&self->trees[idx], old_tree, tree_writeback,
 				 free)) {
 			llfree_warn("Failed undo");
-			return llfree_result(LLFREE_ERR_CORRUPT);
+			assert(false);
 		}
 	}
 	return res;
@@ -344,9 +344,8 @@ static llfree_result_t get_inner(llfree_t *self, size_t core, size_t order)
 				tree_inc, 1 << order)) {
 			return reserve_or_wait(self, core, order);
 		}
-
-		llfree_warn("undo failed");
-		return llfree_result(LLFREE_ERR_CORRUPT);
+		llfree_warn("Undo failed!");
+		assert(false);
 	}
 	return res;
 }
@@ -423,8 +422,7 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 						 old_tree, tree_writeback,
 						 free)) {
 					llfree_warn("Undo failed!");
-					return llfree_result(
-						LLFREE_ERR_CORRUPT);
+					assert(false);
 				}
 			}
 		}
@@ -484,11 +482,11 @@ bool llfree_is_free(llfree_t *self, uint64_t frame, size_t order)
 	return lower_is_free(&self->lower, frame, order);
 }
 
-void llfree_for_each_huge(llfree_t *self, void *context,
-			  void f(void *, uint64_t, size_t))
+bool llfree_for_each_huge(llfree_t *self, void *context,
+			  bool f(void *, uint64_t, size_t))
 {
 	assert(self != NULL);
-	lower_for_each_child(&self->lower, context, f);
+	return lower_for_each_child(&self->lower, context, f);
 }
 
 void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
