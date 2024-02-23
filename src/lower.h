@@ -38,12 +38,10 @@ size_t lower_free_frames(lower_t *self);
 /// Returns the number of free huge frames
 size_t lower_free_huge(lower_t *self);
 
+/// Returns the number of free pages in the huge page
+size_t lower_free_at_huge(lower_t *self, uint64_t frame);
+
 #ifdef STD
 /// Print llfree_debug llfree_info
 void lower_print(lower_t *self);
 #endif
-
-/// Calls f for each child. f will receive the context the current pfn and the free counter as arguments
-// used by frag.rs benchmark
-bool lower_for_each_child(const lower_t *self, void *context,
-			  bool f(void *, uint64_t, size_t));

@@ -9,9 +9,9 @@ typedef struct child {
 } child_t;
 
 /// Initializes the child entry with the given parameters
-static inline child_t _unused child_new(uint16_t free, bool flag)
+static inline child_t _unused child_new(uint16_t free, bool huge)
 {
-	return (child_t){ .free = free, .huge = flag };
+	return (child_t){ .free = free, .huge = huge };
 }
 
 /// Increment the free counter if possible

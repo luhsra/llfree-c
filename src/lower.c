@@ -343,13 +343,9 @@ size_t lower_free_huge(lower_t *self)
 	return count;
 }
 
-bool lower_for_each_child(const lower_t *self, void *context,
-			  bool f(void *, uint64_t, size_t))
+size_t lower_free_at_huge(lower_t *self, uint64_t frame)
 {
-	for (uint64_t i = 0; i < self->childs_len; ++i) {
-		child_t child = atom_load(&self->children[i]);
-		if (!f(context, i << LLFREE_HUGE_ORDER, child.free))
-			return false;
-	}
-	return true;
+	assert(frame >> LLFREE_CHILD_ORDER < self->childs_len);
+	child_t child = atom_load(&self->children[frame >> LLFREE_CHILD_ORDER]);
+	return child.free;
 }

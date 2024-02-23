@@ -116,6 +116,10 @@ size_t llfree_free_frames(llfree_t *self);
 /// Returns number of currently free frames
 size_t llfree_free_huge(llfree_t *self);
 
+/// Returns the number of frames in the given chunk.
+/// This is only implemented for 0, HUGE_ORDER and TREE_ORDER.
+size_t llfree_free_at(llfree_t *self, uint64_t frame, size_t order);
+
 // == Debugging ==
 
 /// Prints the allocators state for debugging with given Rust printer
@@ -126,11 +130,3 @@ void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
 /// Prints detailed stats about the allocator state
 void llfree_print(llfree_t *self);
 #endif
-
-/// Calls f for each Huge Frame. f will receive the context the current pfn
-/// and the free counter as arguments
-/// If f returns false, the iteration stops and this function returns false.
-///
-/// - used by some rust benchmarks like frag.rs
-bool llfree_for_each_huge(llfree_t *self, void *context,
-			  bool f(void *, uint64_t, size_t));

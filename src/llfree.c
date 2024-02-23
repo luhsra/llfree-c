@@ -116,16 +116,9 @@ static llfree_result_t swap_reserved(llfree_t *self, local_t *local,
 
 	if (old.present) {
 		size_t tree_idx = tree_from_row(old.start_row);
+		size_t free = old.free;
 		tree_t tree;
-		if (!atom_update(&self->trees[tree_idx], tree, tree_writeback,
-				 old.free)) {
-			uint64_t new_tree = tree_from_row(new.start_row);
-			llfree_warn("Failed writeback %" PRIuS " (next %" PRIu64
-				    ")",
-				    tree_idx, new_tree);
-			assert(false);
-		}
-		tree = atom_load(&self->trees[tree_idx]);
+		atom_update(&self->trees[tree_idx], tree, tree_writeback, free);
 	}
 
 	return llfree_result(LLFREE_ERR_OK);
@@ -138,6 +131,8 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, local_t *local,
 					    size_t idx, size_t order,
 					    p_range_t free)
 {
+	assert(idx < self->trees_len);
+
 	tree_t old_tree;
 	if (!atom_update(&self->trees[idx], old_tree, tree_reserve, free.min,
 			 free.max))
@@ -160,11 +155,7 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, local_t *local,
 	} else {
 		// undo reservation
 		size_t free = old_tree.free;
-		if (!atom_update(&self->trees[idx], old_tree, tree_writeback,
-				 free)) {
-			llfree_warn("Failed undo");
-			assert(false);
-		}
+		atom_update(&self->trees[idx], old_tree, tree_writeback, free);
 	}
 	return res;
 }
@@ -294,9 +285,8 @@ static bool sync_with_global(llfree_t *self, local_t *local, size_t order,
 
 	llfree_info("undo sync global");
 	// undo changes
-	bool _unused ret = atom_update(&self->trees[tree_idx], old_tree,
-				       tree_inc, desired.free);
-	assert(ret);
+	size_t old_free = old_tree.free;
+	atom_update(&self->trees[tree_idx], old_tree, tree_inc, old_free);
 
 	return false;
 }
@@ -340,12 +330,9 @@ static llfree_result_t get_inner(llfree_t *self, size_t core, size_t order)
 		// Current tree is fragmented!
 		// Increment global to prevent race condition with concurrent reservation
 		tree_t old;
-		if (atom_update(&self->trees[tree_from_pfn(start)], old,
-				tree_inc, 1 << order)) {
-			return reserve_or_wait(self, core, order);
-		}
-		llfree_warn("Undo failed!");
-		assert(false);
+		atom_update(&self->trees[tree_from_pfn(start)], old, tree_inc,
+			    1 << order);
+		return reserve_or_wait(self, core, order);
 	}
 	return res;
 }
@@ -383,15 +370,12 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 	local_t *local = get_local(self, core);
 	size_t tree_idx = tree_from_pfn(frame);
 
-	// increment local or global counters
+	// increment local or otherwise global counter
 	reserved_t old;
 	if (!atom_update(&local->reserved, old, reserved_inc, tree_idx,
 			 1 << order)) {
-		// given tree was not the local tree -> increase global counter
 		tree_t old;
-		bool _unused success = atom_update(&self->trees[tree_idx], old,
-						   tree_inc, 1 << order);
-		assert(success);
+		atom_update(&self->trees[tree_idx], old, tree_inc, 1 << order);
 	}
 
 	// set last reserved in local
@@ -417,13 +401,10 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 				if (ret.val != LLFREE_ERR_RETRY)
 					return ret;
 
+				// undo reservation
 				size_t free = old_tree.free;
-				if (!atom_update(&self->trees[tree_idx],
-						 old_tree, tree_writeback,
-						 free)) {
-					llfree_warn("Undo failed!");
-					assert(false);
-				}
+				atom_update(&self->trees[tree_idx], old_tree,
+					    tree_writeback, free);
 			}
 		}
 	}
@@ -482,11 +463,19 @@ bool llfree_is_free(llfree_t *self, uint64_t frame, size_t order)
 	return lower_is_free(&self->lower, frame, order);
 }
 
-bool llfree_for_each_huge(llfree_t *self, void *context,
-			  bool f(void *, uint64_t, size_t))
+size_t llfree_free_at(llfree_t *self, uint64_t frame, size_t order)
 {
-	assert(self != NULL);
-	return lower_for_each_child(&self->lower, context, f);
+	if (order == 0)
+		return lower_is_free(&self->lower, frame, 0);
+	if (order == LLFREE_HUGE_ORDER)
+		return lower_free_at_huge(&self->lower, frame);
+	if (order == LLFREE_TREE_ORDER) {
+		assert(frame >> LLFREE_TREE_ORDER < self->trees_len);
+		tree_t tree =
+			atom_load(&self->trees[frame >> LLFREE_TREE_ORDER]);
+		return tree.free;
+	}
+	return 0;
 }
 
 void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
