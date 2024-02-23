@@ -20,7 +20,7 @@ static void lower_clear(lower_t *self, bool free_all)
 {
 	assert(self != NULL);
 
-	for (size_t i = 0; i < self->childs_len - 1; i++) {
+	for (size_t i = 0; i < self->children_len - 1; i++) {
 		self->children[i] =
 			child_new(free_all ? LLFREE_CHILD_SIZE : 0, !free_all);
 
@@ -31,28 +31,28 @@ static void lower_clear(lower_t *self, bool free_all)
 	}
 
 	// we have a few more unused children, which simplifies iterating over them
-	for (size_t i = self->childs_len;
-	     i < align_up(self->childs_len, LLFREE_TREE_CHILDREN); i++) {
+	for (size_t i = self->children_len;
+	     i < align_up(self->children_len, LLFREE_TREE_CHILDREN); i++) {
 		self->children[i] = child_new(0, false);
 	}
 
 	uint64_t rest_frames = self->frames % LLFREE_CHILD_SIZE;
 	if (rest_frames == 0) {
 		// rest is exactly one entire child
-		self->children[self->childs_len - 1] =
+		self->children[self->children_len - 1] =
 			child_new(free_all ? LLFREE_CHILD_SIZE : 0, !free_all);
 
-		bitfield_t *field = &self->fields[self->childs_len - 1];
+		bitfield_t *field = &self->fields[self->children_len - 1];
 		for (uint64_t j = 0; j < FIELD_N; ++j) {
 			*((uint64_t *)&field->rows[j]) = 0;
 		}
 		return;
 	}
 	// rest is less than an entire child
-	self->children[self->childs_len - 1] =
+	self->children[self->children_len - 1] =
 		child_new(free_all ? rest_frames : 0, false);
 
-	bitfield_t *field = &self->fields[self->childs_len - 1];
+	bitfield_t *field = &self->fields[self->children_len - 1];
 	if (free_all) {
 		for (uint64_t j = 0; j < FIELD_N; ++j) {
 			if (rest_frames >= LLFREE_ATOMIC_SIZE) {
@@ -75,7 +75,7 @@ static void lower_clear(lower_t *self, bool free_all)
 
 static void lower_recover(lower_t *self)
 {
-	for (size_t i = 0; i < self->childs_len; ++i) {
+	for (size_t i = 0; i < self->children_len; ++i) {
 		child_t child = atom_load(&self->children[i]);
 		if (child.huge) {
 			// if this was reserved as Huge Page set counter and all frames to 0
@@ -95,13 +95,16 @@ llfree_result_t lower_init(lower_t *self, size_t frames, uint8_t init,
 			   uint8_t *primary)
 {
 	self->frames = frames;
-	self->childs_len = div_ceil(self->frames, LLFREE_CHILD_SIZE);
+	self->children_len = div_ceil(self->frames, LLFREE_CHILD_SIZE);
 
-	size_t bitfield_size = align_up(sizeof(bitfield_t) * self->childs_len,
+	size_t bitfield_size = align_up(sizeof(bitfield_t) * self->children_len,
 					sizeof(child_t) * LLFREE_TREE_CHILDREN);
 
 	self->fields = (bitfield_t *)primary;
 	self->children = (_Atomic(child_t) *)(primary + bitfield_size);
+	size_t meta = lower_metadata_size(frames);
+	assert((size_t)(self->children + self->children_len) <=
+	       (size_t)(primary + meta));
 
 	switch (init) {
 	case LLFREE_INIT_FREE:
@@ -131,7 +134,7 @@ static llfree_result_t get_max(lower_t *self, uint64_t pfn)
 	assert(self != 0);
 
 	size_t idx = child_from_pfn(pfn) / 2;
-	assert(idx < self->childs_len / 2);
+	assert(idx < self->children_len / 2);
 	for_offsetted(idx, LLFREE_TREE_CHILDREN / 2) {
 		child_pair_t old;
 		if (atom_update((_Atomic(child_pair_t) *)&self
@@ -149,7 +152,7 @@ static llfree_result_t get_huge(lower_t *self, uint64_t pfn)
 	assert(self != 0);
 
 	size_t idx = child_from_pfn(pfn);
-	assert(idx < self->childs_len);
+	assert(idx < self->children_len);
 	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
 		child_t old;
 		if (atom_update(&self->children[current_i], old,
@@ -173,7 +176,7 @@ llfree_result_t lower_get(lower_t *self, const uint64_t start_frame,
 		return get_huge(self, start_frame);
 
 	const size_t idx = child_from_pfn(start_frame);
-	assert(idx < self->childs_len);
+	assert(idx < self->children_len);
 	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
 		child_t old;
 		if (atom_update(&self->children[current_i], old, child_dec,
@@ -308,7 +311,7 @@ bool lower_is_free(lower_t *self, uint64_t frame, size_t order)
 size_t lower_free_frames(lower_t *self)
 {
 	size_t counter = 0;
-	for (size_t i = 0; i < self->childs_len; i++) {
+	for (size_t i = 0; i < self->children_len; i++) {
 		child_t child = atom_load(&self->children[i]);
 		counter += child.free;
 	}
@@ -319,7 +322,7 @@ size_t lower_free_frames(lower_t *self)
 void lower_print(lower_t *self)
 {
 	printf("lower_t {\n");
-	for (size_t i = 0; i < align_up(self->childs_len, LLFREE_TREE_CHILDREN);
+	for (size_t i = 0; i < align_up(self->children_len, LLFREE_TREE_CHILDREN);
 	     i++) {
 		if (i % LLFREE_TREE_CHILDREN == 0)
 			printf("\n");
@@ -335,7 +338,7 @@ void lower_print(lower_t *self)
 size_t lower_free_huge(lower_t *self)
 {
 	size_t count = 0;
-	for (size_t i = 0; i < self->childs_len; ++i) {
+	for (size_t i = 0; i < self->children_len; ++i) {
 		child_t child = atom_load(&self->children[i]);
 		if (child.free == LLFREE_CHILD_SIZE)
 			++count;
@@ -345,7 +348,7 @@ size_t lower_free_huge(lower_t *self)
 
 size_t lower_free_at_huge(lower_t *self, uint64_t frame)
 {
-	assert(frame >> LLFREE_CHILD_ORDER < self->childs_len);
+	assert(frame >> LLFREE_CHILD_ORDER < self->children_len);
 	child_t child = atom_load(&self->children[frame >> LLFREE_CHILD_ORDER]);
 	return child.free;
 }

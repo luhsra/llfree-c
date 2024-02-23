@@ -38,7 +38,7 @@ declare_test(lower_init)
 	size_t frames = 1024;
 	lower_t actual = lower_new(frames, LLFREE_INIT_FREE);
 
-	check_equal(actual.childs_len, 2);
+	check_equal(actual.children_len, 2);
 	bitfield_is_free(actual.fields[0]);
 	check_equal(lower_free_frames(&actual), actual.frames);
 	lower_drop(&actual);
@@ -46,7 +46,7 @@ declare_test(lower_init)
 	frames = 1023;
 	actual = lower_new(frames, LLFREE_INIT_FREE);
 
-	check_equal(actual.childs_len, 2);
+	check_equal(actual.children_len, 2);
 	check_equal_bitfield(
 		actual.fields[1],
 		((bitfield_t){ 0, 0, 0, 0, 0, 0, 0, 0x8000000000000000 }));
@@ -56,7 +56,7 @@ declare_test(lower_init)
 	frames = 632;
 	actual = lower_new(frames, LLFREE_INIT_ALLOC);
 
-	check_equal(actual.childs_len, 2);
+	check_equal(actual.children_len, 2);
 	check_equal(actual.frames, 632ul);
 	check_equal(lower_free_frames(&actual), 0);
 	lower_drop(&actual);
@@ -64,7 +64,7 @@ declare_test(lower_init)
 	frames = 685161;
 	actual = lower_new(frames, LLFREE_INIT_FREE);
 
-	check_equal(actual.childs_len, 1339);
+	check_equal(actual.children_len, 1339);
 	bitfield_is_free_n(actual.fields, 1338);
 	check_equal_bitfield(actual.fields[1338],
 			     ((bitfield_t){ 0x0, 0xfffffe0000000000, UINT64_MAX,

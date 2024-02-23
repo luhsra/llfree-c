@@ -29,14 +29,14 @@ static inline _unused tree_t tree_new(uint16_t counter, bool flag)
 	return (tree_t){ counter, flag };
 }
 
-/// Increment the free counter if possible
+/// Increment the free counter
 bool tree_inc(tree_t *self, size_t free);
 
 /// Try reserving the tree if the free counter is withing the range
 bool tree_reserve(tree_t *self, size_t min, size_t max);
 
 /// Adds the given counter and clears reserved
-bool tree_writeback(tree_t *self, uint16_t free);
+bool tree_writeback(tree_t *self, size_t free);
 
 // Steals the counter of a reserved tree
 bool tree_steal_counter(tree_t *self, size_t min);

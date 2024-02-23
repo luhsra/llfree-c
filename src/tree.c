@@ -21,7 +21,7 @@ bool tree_steal_counter(tree_t *self, size_t min)
 	return false;
 }
 
-bool tree_writeback(tree_t *self, uint16_t free)
+bool tree_writeback(tree_t *self, size_t free)
 {
 	assert(self->free + free <= LLFREE_TREE_SIZE);
 

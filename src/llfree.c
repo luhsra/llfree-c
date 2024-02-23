@@ -23,7 +23,7 @@ static void init_trees(llfree_t *self)
 		for (size_t child_idx = LLFREE_TREE_CHILDREN * tree_idx;
 		     child_idx < LLFREE_TREE_CHILDREN * (tree_idx + 1);
 		     ++child_idx) {
-			if (child_idx >= self->lower.childs_len)
+			if (child_idx >= self->lower.children_len)
 				break;
 			child_t child =
 				atom_load(&self->lower.children[child_idx]);
@@ -40,7 +40,7 @@ llfree_meta_size_t llfree_metadata_size(size_t cores, size_t frames)
 		align_up(sizeof(tree_t) * tree_len, LLFREE_CACHE_SIZE);
 	size_t local_len = MIN(cores, tree_len);
 	size_t local_size =
-		align_up(sizeof(local_t) * local_len, LLFREE_CACHE_SIZE);
+		align_up(sizeof(local_t), LLFREE_CACHE_SIZE) * local_len;
 	llfree_meta_size_t meta = {
 		.primary = lower_metadata_size(frames),
 		.secondary = local_size + tree_size,
@@ -55,6 +55,11 @@ llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
 	assert(primary != NULL && secondary != NULL);
 	assert((size_t)primary % LLFREE_CACHE_SIZE == 0 &&
 	       (size_t)secondary % LLFREE_CACHE_SIZE == 0);
+
+	llfree_meta_size_t meta = llfree_metadata_size(cores, frames);
+	// no overlap!
+	assert(primary + meta.primary <= secondary ||
+	       secondary + meta.secondary <= primary);
 
 	if (init != LLFREE_INIT_FREE && init != LLFREE_INIT_ALLOC &&
 	    init != LLFREE_INIT_RECOVER && init != LLFREE_INIT_RECOVER_CRASH) {
@@ -75,10 +80,12 @@ llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
 	self->trees_len = div_ceil(frames, LLFREE_TREE_SIZE);
 	self->cores = MIN(cores, self->trees_len);
 	size_t local_size =
-		align_up(sizeof(local_t) * self->cores, LLFREE_CACHE_SIZE);
+		align_up(sizeof(local_t), LLFREE_CACHE_SIZE) * self->cores;
 
 	self->local = (local_t *)secondary;
 	self->trees = (_Atomic(tree_t) *)(secondary + local_size);
+	assert((size_t)(self->local + self->cores) <= (size_t)self->trees);
+	assert((size_t)self->trees <= (size_t)(secondary + meta.secondary));
 
 	// init local data do default 0
 	for (size_t local_idx = 0; local_idx < self->cores; ++local_idx) {
@@ -488,7 +495,7 @@ void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
 		 "LLC { frames: %" PRIuS "/%" PRIuS ", huge: %" PRIuS "/%" PRIuS
 		 " }",
 		 llfree_free_frames(self), self->lower.frames,
-		 lower_free_huge(&self->lower), self->lower.childs_len);
+		 lower_free_huge(&self->lower), self->lower.children_len);
 	writer(arg, msg);
 }
 

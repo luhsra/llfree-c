@@ -7,7 +7,7 @@ typedef struct lower {
 	/// number of managed frames
 	size_t frames;
 	/// array length for fields and childs
-	size_t childs_len;
+	size_t children_len;
 	/// bitfields storing the allocation states of the pages
 	bitfield_t *fields;
 	/// index per bitfield
