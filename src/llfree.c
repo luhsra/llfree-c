@@ -56,7 +56,7 @@ llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
 	assert((size_t)primary % LLFREE_CACHE_SIZE == 0 &&
 	       (size_t)secondary % LLFREE_CACHE_SIZE == 0);
 
-	llfree_meta_size_t meta = llfree_metadata_size(cores, frames);
+	llfree_meta_size_t _unused meta = llfree_metadata_size(cores, frames);
 	// no overlap!
 	assert(primary + meta.primary <= secondary ||
 	       secondary + meta.secondary <= primary);

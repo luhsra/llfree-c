@@ -102,7 +102,7 @@ llfree_result_t lower_init(lower_t *self, size_t frames, uint8_t init,
 
 	self->fields = (bitfield_t *)primary;
 	self->children = (_Atomic(child_t) *)(primary + bitfield_size);
-	size_t meta = lower_metadata_size(frames);
+	size_t _unused meta = lower_metadata_size(frames);
 	assert((size_t)(self->children + self->children_len) <=
 	       (size_t)(primary + meta));
 
