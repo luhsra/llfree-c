@@ -45,7 +45,7 @@ bool reserved_inc(reserved_t *self, size_t tree_idx, size_t free);
 bool reserved_dec(reserved_t *self, size_t free);
 
 /// Decrements the free counter or sets the lock otherwise
-bool reserved_dec_or_lock(reserved_t *self, size_t free);
+bool reserved_dec_or_lock(reserved_t *self, size_t free, bool *locked);
 
 /// Updates the start index to speedup the next search for a free frame
 bool reserved_set_start(reserved_t *self, size_t row_idx);

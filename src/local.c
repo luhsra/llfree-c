@@ -20,7 +20,8 @@ bool reserved_swap(reserved_t *self, reserved_t new, bool expect_locked)
 bool reserved_set_start(reserved_t *self, size_t row_idx)
 {
 	// no update if reservation is in progress
-	if (!self->lock) {
+	if (!self->lock &&
+	    tree_from_row(self->start_row) == tree_from_row(row_idx)) {
 		self->start_row = row_idx;
 		return true;
 	}
@@ -60,10 +61,14 @@ bool reserved_dec(reserved_t *self, size_t free)
 	return true;
 }
 
-bool reserved_dec_or_lock(reserved_t *self, size_t free)
+bool reserved_dec_or_lock(reserved_t *self, size_t free, bool *locked)
 {
 	if (!self->present || self->free < free) {
 		// not enough free frames in this tree
+		if (self->lock)
+			return false;
+
+		*locked = true;
 		self->lock = true;
 		return true;
 	}
