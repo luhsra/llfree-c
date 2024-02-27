@@ -26,7 +26,7 @@ static llfree_t llfree_new(size_t cores, size_t frames, uint8_t init)
 	uint8_t *primary = llfree_ext_alloc(LLFREE_CACHE_SIZE, m.primary);
 	uint8_t *secondary = llfree_ext_alloc(LLFREE_CACHE_SIZE, m.secondary);
 	assert(primary != NULL && secondary != NULL);
-	llfree_result_t ret =
+	llfree_result_t _unused ret =
 		llfree_init(&upper, cores, frames, init, primary, secondary);
 	assert(llfree_ok(ret));
 	return upper;
@@ -46,8 +46,8 @@ declare_test(llfree_init)
 	bool success = true;
 
 	llfree_t upper = llfree_new(4, 1 << 20, LLFREE_INIT_FREE);
-	assert(llfree_frames(&upper) == 1 << 20);
-	assert(llfree_free_frames(&upper) == 1 << 20);
+	check(llfree_frames(&upper) == 1 << 20);
+	check(llfree_free_frames(&upper) == 1 << 20);
 
 	return success;
 }

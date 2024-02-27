@@ -7,10 +7,10 @@ void local_init(local_t *self)
 	atom_store(&self->reserved, ((reserved_t){ 0, 0, false, false }));
 }
 
-bool reserved_swap(reserved_t *self, reserved_t new, bool expect_reserving)
+bool reserved_swap(reserved_t *self, reserved_t new, bool expect_locked)
 {
 	assert(self != NULL);
-	if (self->reserving == expect_reserving) {
+	if (self->lock == expect_locked) {
 		*self = new;
 		return true;
 	}
@@ -20,18 +20,18 @@ bool reserved_swap(reserved_t *self, reserved_t new, bool expect_reserving)
 bool reserved_set_start(reserved_t *self, size_t row_idx)
 {
 	// no update if reservation is in progress
-	if (!self->reserving) {
+	if (!self->lock) {
 		self->start_row = row_idx;
 		return true;
 	}
 	return false;
 }
 
-bool reserved_set_reserving(reserved_t *self, bool reserving)
+bool reserved_set_lock(reserved_t *self, bool lock)
 {
 	// only update if reserving is different
-	if (self->reserving != reserving) {
-		self->reserving = reserving;
+	if (self->lock != lock) {
+		self->lock = lock;
 		return true;
 	}
 	return false;
@@ -40,8 +40,7 @@ bool reserved_set_reserving(reserved_t *self, bool reserving)
 bool reserved_inc(reserved_t *self, size_t tree_idx, size_t free)
 {
 	// check if reserved tree is a match for given pfn
-	if (!self->present || self->reserving ||
-	    tree_from_row(self->start_row) != tree_idx)
+	if (!self->present || tree_from_row(self->start_row) != tree_idx)
 		return false;
 
 	// check if counter has enough space
@@ -52,9 +51,21 @@ bool reserved_inc(reserved_t *self, size_t tree_idx, size_t free)
 
 bool reserved_dec(reserved_t *self, size_t free)
 {
-	if (!self->present || self->reserving || self->free < free) {
+	if (!self->present || self->free < free) {
 		// not enough free frames in this tree
 		return false;
+	}
+
+	self->free -= free;
+	return true;
+}
+
+bool reserved_dec_or_lock(reserved_t *self, size_t free)
+{
+	if (!self->present || self->free < free) {
+		// not enough free frames in this tree
+		self->lock = true;
+		return true;
 	}
 
 	self->free -= free;
@@ -69,9 +80,12 @@ bool last_free_inc(last_free_t *self, uint64_t tree_idx)
 	if (self->tree_idx != tree_idx) {
 		self->tree_idx = tree_idx;
 		self->counter = 0;
-	} else if (self->counter < 3) {
+	} else if (self->counter < LAST_FREES) {
 		// if the same tree -> increase the counter for this
 		self->counter += 1;
+	} else {
+		// the heuristic does not have to be updated
+		return false;
 	}
 
 	return true;

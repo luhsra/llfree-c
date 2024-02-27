@@ -40,3 +40,7 @@ bool tree_writeback(tree_t *self, size_t free);
 
 // Steals the counter of a reserved tree
 bool tree_steal_counter(tree_t *self, size_t min);
+
+/// Increment the free counter or reserve if specified
+bool tree_inc_or_reserve(tree_t *self, size_t free, bool *reserve, size_t min,
+			 size_t max);
