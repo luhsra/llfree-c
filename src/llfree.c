@@ -141,6 +141,7 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, local_t *local,
 					    p_range_t free)
 {
 	assert(idx < self->trees_len);
+	free.min = MAX(free.min, 1 << order);
 
 	tree_t old;
 	if (!atom_update(&self->trees[idx], old, tree_reserve, free.min,
@@ -210,23 +211,29 @@ static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
 	if (vicinity > LLFREE_TREE_CHILDREN)
 		vicinity = LLFREE_TREE_CHILDREN;
 
-	// Search inside of current cacheline for a partial tree
+	// Search inside of current cacheline for a not-full tree
 	for (int64_t i = 1; i <= (int64_t)vicinity; ++i) {
 		int64_t toggle = i & 1 ? i / 2 : -i / 2;
 		uint64_t idx = (base_idx + toggle) % self->trees_len;
 		llfree_result_t res = reserve_tree_and_get(
-			self, local, idx, order,
-			(p_range_t){ 1 << order, LLFREE_TREE_SIZE });
+			self, local, idx, order, TREE_NOT_FULL);
 		if (res.val != LLFREE_ERR_MEMORY)
 			return res;
 	}
 
-	// Search globally for a frame
+	// Search globally for a tree with that is neither free nor full
 	llfree_result_t res;
 	res = search_global(self, local, base_idx, order, TREE_PARTIAL);
 	if (res.val != LLFREE_ERR_MEMORY)
 		return res;
-	res = search_global(self, local, base_idx, order, TREE_FREE);
+
+	// Fallback to trees that are not free
+	res = search_global(self, local, base_idx, order, TREE_NOT_FREE);
+	if (res.val != LLFREE_ERR_MEMORY)
+		return res;
+
+	// Fallback to any tree
+	res = search_global(self, local, base_idx, order, TREE_ANY);
 	if (res.val != LLFREE_ERR_MEMORY)
 		return res;
 
@@ -234,10 +241,8 @@ static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
 	for (uint64_t i = 1; i < self->cores; ++i) {
 		res = llfree_drain(self, (core + i) % self->cores);
 	}
-
-	// Search whole tree for a tree with enough free frames
-	res = search_global(self, local, base_idx, order,
-			    (p_range_t){ 1 << order, LLFREE_TREE_SIZE });
+	// Repeat search
+	res = search_global(self, local, base_idx, order, TREE_ANY);
 
 	// Clear reserving
 	if (!llfree_ok(res)) {
