@@ -174,10 +174,30 @@ static llfree_result_t search_global(llfree_t *self, local_t *local,
 				     uint64_t base_idx, uint64_t order,
 				     p_range_t free)
 {
-	for (int64_t i = 1; i <= (int64_t)self->trees_len; ++i) {
+	for (int64_t i = 0; i < (int64_t)self->trees_len; ++i) {
 		// Search alternating left and right from base_idx
-		int64_t toggle = i & 1 ? i / 2 : -i / 2;
-		uint64_t idx = (base_idx + toggle) % self->trees_len;
+		int64_t toggle = i % 2 == 0 ? i / 2 : -(i + 1) / 2;
+		uint64_t idx =
+			(self->trees_len + base_idx + toggle) % self->trees_len;
+		llfree_result_t res =
+			reserve_tree_and_get(self, local, idx, order, free);
+		if (res.val != LLFREE_ERR_MEMORY)
+			return res;
+	}
+	return llfree_result(LLFREE_ERR_MEMORY);
+}
+
+/// Searches the tree array starting at base_idx for a tree with a
+/// free counter in the provided range, reserves it, and allocates from it.
+static llfree_result_t search(llfree_t *self, local_t *local, uint64_t base_idx,
+			      uint64_t order, p_range_t free, uint64_t offset,
+			      uint64_t len)
+{
+	for (int64_t i = (int64_t)offset; i < (int64_t)len; ++i) {
+		// Search alternating left and right from base_idx
+		int64_t toggle = i % 2 == 0 ? i / 2 : -(i + 1) / 2;
+		uint64_t idx =
+			(self->trees_len + base_idx + toggle) % self->trees_len;
 		llfree_result_t res =
 			reserve_tree_and_get(self, local, idx, order, free);
 		if (res.val != LLFREE_ERR_MEMORY)
@@ -196,44 +216,38 @@ static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
 
 	local_t *local = get_local(self, core);
 
-	uint64_t start_idx;
-	if (old.present) {
-		start_idx = tree_from_row(old.start_row);
-	} else {
-		start_idx =
-			self->trees_len / self->cores * (core % self->cores);
-	}
+	uint64_t start_idx =
+		old.present ?
+			tree_from_row(old.start_row) :
+			(self->trees_len / self->cores * (core % self->cores));
 	assert(start_idx < self->trees_len);
 
-	uint64_t offset = start_idx % LLFREE_TREE_CHILDREN;
-	uint64_t base_idx = start_idx - offset;
-	uint64_t vicinity = div_ceil(div_ceil(self->trees_len, self->cores), 4);
-	if (vicinity > LLFREE_TREE_CHILDREN)
-		vicinity = LLFREE_TREE_CHILDREN;
+	const uint64_t cl_trees = LLFREE_CACHE_SIZE / sizeof(tree_t);
+	uint64_t base_idx = align_down(start_idx, cl_trees);
 
-	// Search inside of current cacheline for a not-full tree
-	for (int64_t i = 1; i <= (int64_t)vicinity; ++i) {
-		int64_t toggle = i & 1 ? i / 2 : -i / 2;
-		uint64_t idx = (base_idx + toggle) % self->trees_len;
-		llfree_result_t res = reserve_tree_and_get(
-			self, local, idx, order, TREE_NOT_FULL);
-		if (res.val != LLFREE_ERR_MEMORY)
-			return res;
-	}
-
-	// Search globally for a tree with that is neither free nor full
 	llfree_result_t res;
-	res = search_global(self, local, base_idx, order, TREE_PARTIAL);
+
+	uint64_t vicinity =
+		MIN(MIN(8 * cl_trees, self->trees_len),
+		    MAX(cl_trees / 2, (self->trees_len / self->cores) / 2));
+	// Search vicinity for a tree that is neither free nor full
+	res = search(self, local, base_idx, order, TREE_PARTIAL, 1, vicinity);
 	if (res.val != LLFREE_ERR_MEMORY)
 		return res;
 
+	// Search globally for a tree that is neither free nor full
+	res = search(self, local, base_idx, order, TREE_PARTIAL, vicinity,
+		     self->trees_len);
+	if (res.val != LLFREE_ERR_MEMORY)
+		return res;
 	// Fallback to trees that are not free
-	res = search_global(self, local, base_idx, order, TREE_NOT_FREE);
+	res = search(self, local, base_idx, order, TREE_NOT_FREE, 0,
+		     self->trees_len);
 	if (res.val != LLFREE_ERR_MEMORY)
 		return res;
-
 	// Fallback to any tree
-	res = search_global(self, local, base_idx, order, TREE_ANY);
+	res = search(self, local, base_idx, order, TREE_ANY, 0,
+		     self->trees_len);
 	if (res.val != LLFREE_ERR_MEMORY)
 		return res;
 
@@ -242,7 +256,8 @@ static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
 		res = llfree_drain(self, (core + i) % self->cores);
 	}
 	// Repeat search
-	res = search_global(self, local, base_idx, order, TREE_ANY);
+	res = search(self, local, base_idx, order, TREE_ANY, 0,
+		     self->trees_len);
 
 	// Clear reserving
 	if (!llfree_ok(res)) {
