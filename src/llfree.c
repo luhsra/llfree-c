@@ -225,29 +225,56 @@ static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
 	const uint64_t cl_trees = LLFREE_CACHE_SIZE / sizeof(tree_t);
 	uint64_t base_idx = align_down(start_idx, cl_trees);
 
+	uint64_t near =
+		MIN(MAX((self->trees_len / self->cores / 4), cl_trees / 4),
+		    cl_trees * 2);
+
 	llfree_result_t res;
+	p_range_t half = { MAX(4 << order, LLFREE_TREE_SIZE / 32),
+			   LLFREE_TREE_SIZE / 2 };
+	p_range_t partial = { MAX(2 << order, LLFREE_TREE_SIZE / 128),
+			      LLFREE_TREE_SIZE - LLFREE_TREE_SIZE / 32 };
+	p_range_t nofree = { 0, LLFREE_TREE_SIZE - 8 };
+	p_range_t any = { 0, LLFREE_TREE_SIZE };
 
-	uint64_t vicinity =
-		MIN(MIN(8 * cl_trees, self->trees_len),
-		    MAX(cl_trees / 2, (self->trees_len / self->cores) / 2));
-	// Search vicinity for a tree that is neither free nor full
-	res = search(self, local, base_idx, order, TREE_PARTIAL, 1, vicinity);
+	// Search near trees
+
+	// Half full
+	res = search(self, local, base_idx, order, half, 1, near);
+	if (res.val != LLFREE_ERR_MEMORY)
+		return res;
+	// Neither filled nor free
+	res = search(self, local, base_idx, order, partial, 1, near);
+	if (res.val != LLFREE_ERR_MEMORY)
+		return res;
+	// Trees that are not free
+	res = search(self, local, base_idx, order, nofree, 1, near);
+	if (res.val != LLFREE_ERR_MEMORY)
+		return res;
+	// Any tree
+	res = search(self, local, base_idx, order, any, 1, near);
 	if (res.val != LLFREE_ERR_MEMORY)
 		return res;
 
-	// Search globally for a tree that is neither free nor full
-	res = search(self, local, base_idx, order, TREE_PARTIAL, vicinity,
+	// Search global trees
+
+	// Half full
+	res = search(self, local, base_idx, order, half, near, self->trees_len);
+	if (res.val != LLFREE_ERR_MEMORY)
+		return res;
+	// Neither filled nor free
+	res = search(self, local, base_idx, order, partial, near,
 		     self->trees_len);
 	if (res.val != LLFREE_ERR_MEMORY)
 		return res;
-	// Fallback to trees that are not free
-	res = search(self, local, base_idx, order, TREE_NOT_FREE, 0,
+	// Trees that are not free
+	res = search(self, local, base_idx, order, nofree, near,
 		     self->trees_len);
 	if (res.val != LLFREE_ERR_MEMORY)
 		return res;
-	// Fallback to any tree
-	res = search(self, local, base_idx, order, TREE_ANY, 0,
-		     self->trees_len);
+
+	// Any tree
+	res = search(self, local, base_idx, order, any, 0, self->trees_len);
 	if (res.val != LLFREE_ERR_MEMORY)
 		return res;
 
@@ -256,13 +283,11 @@ static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
 		res = llfree_drain(self, (core + i) % self->cores);
 	}
 	// Repeat search
-	res = search(self, local, base_idx, order, TREE_ANY, 0,
-		     self->trees_len);
+	res = search(self, local, base_idx, order, any, 0, self->trees_len);
 
 	// Clear reserving
 	if (!llfree_ok(res)) {
 		llfree_info("Reserve failed");
-
 		reserved_t old;
 		bool _unused res = atom_update(&local->reserved, old,
 					       reserved_set_lock, false);
@@ -429,7 +454,8 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 
 	tree_t old_t;
 	atom_update(&self->trees[tree_idx], old_t, tree_inc_or_reserve,
-		    1 << order, &reserve, TREE_LOWER_LIM, TREE_UPPER_LIM);
+		    1 << order, &reserve, TREE_LOWER_LIM,
+		    LLFREE_TREE_SIZE - (2 << LLFREE_HUGE_ORDER));
 
 	// Free-reserve heuristic:
 	// Reserve trees where a lot of frees happen, assuming locality

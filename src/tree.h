@@ -16,12 +16,6 @@ typedef struct p_range {
 
 /// Lower bound used by the tree search heuristics
 #define TREE_LOWER_LIM (LLFREE_TREE_SIZE / 32)
-/// Upper bound used by the tree search heuristics
-#define TREE_UPPER_LIM (LLFREE_TREE_SIZE - (LLFREE_TREE_SIZE / 32))
-static const p_range_t TREE_PARTIAL = { TREE_LOWER_LIM, TREE_UPPER_LIM };
-static const p_range_t TREE_NOT_FULL = { TREE_LOWER_LIM, LLFREE_TREE_SIZE };
-static const p_range_t TREE_NOT_FREE = { 0, LLFREE_TREE_SIZE - 8 };
-static const p_range_t TREE_ANY = { 0, LLFREE_TREE_SIZE };
 
 /// Create a new tree entry
 static inline _unused tree_t tree_new(uint16_t counter, bool flag)
