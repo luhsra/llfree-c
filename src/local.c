@@ -1,6 +1,6 @@
 #include "local.h"
 
-void local_init(local_t *self)
+void ll_local_init(local_t *self)
 {
 	assert(self != NULL);
 	atom_store(&self->lock, false);
@@ -10,7 +10,7 @@ void local_init(local_t *self)
 	self->reserved = (reserved_t){ 0, 0, false };
 }
 
-void local_lock(local_t *self)
+void ll_local_lock(local_t *self)
 {
 	bool expected = false;
 	while (!atom_cmp_exchange_weak(&self->lock, &expected, true)) {
@@ -19,7 +19,7 @@ void local_lock(local_t *self)
 	}
 }
 
-bool local_try_lock(local_t *self)
+bool ll_local_try_lock(local_t *self)
 {
 	bool expected = false;
 	if (atom_cmp_exchange(&self->lock, &expected, true)) {
@@ -29,12 +29,12 @@ bool local_try_lock(local_t *self)
 	return false;
 }
 
-void local_unlock(local_t *self)
+void ll_local_unlock(local_t *self)
 {
 	atom_store(&self->lock, false);
 }
 
-bool local_free_inc(local_t *self, uint64_t tree_idx)
+bool ll_local_free_inc(local_t *self, uint64_t tree_idx)
 {
 	assert(self != NULL);
 

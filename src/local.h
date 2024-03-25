@@ -34,15 +34,15 @@ typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) local {
 } local_t;
 
 /// Initialize the per-cpu data
-void local_init(local_t *self);
+void ll_local_init(local_t *self);
 
 /// Locks the reserved tree
-void local_lock(local_t *self);
-bool local_try_lock(local_t *self);
+void ll_local_lock(local_t *self);
+bool ll_local_try_lock(local_t *self);
 
 /// Unlocks the reserved tree
-void local_unlock(local_t *self);
+void ll_local_unlock(local_t *self);
 
 /// Updates the last-frees heuristic, returning true if the corresponding
 /// tree should be reserved
-bool local_free_inc(local_t *self, uint64_t tree_idx);
+bool ll_local_free_inc(local_t *self, uint64_t tree_idx);

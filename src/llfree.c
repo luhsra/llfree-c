@@ -89,7 +89,7 @@ llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
 
 	// init local data do default 0
 	for (size_t local_idx = 0; local_idx < self->cores; ++local_idx) {
-		local_init(&self->local[local_idx]);
+		ll_local_init(&self->local[local_idx]);
 	}
 
 	init_trees(self);
@@ -226,6 +226,7 @@ static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
 		if (res.val != LLFREE_ERR_MEMORY)
 			return res;
 	} else {
+		near = 0;
 		local->skip_near_counter = 0;
 	}
 
@@ -285,7 +286,7 @@ static llfree_result_t get_inner(llfree_t *self, size_t core, size_t order)
 	assert(order <= LLFREE_MAX_ORDER);
 
 	local_t *local = get_local(self, core);
-	local_lock(local);
+	ll_local_lock(local);
 
 	if (local->reserved.present) {
 		// Try decrementing the local counter
@@ -299,22 +300,21 @@ static llfree_result_t get_inner(llfree_t *self, size_t core, size_t order)
 					row_from_pfn(res.val);
 			} else if (res.val == LLFREE_ERR_MEMORY) {
 				// Current tree is fragmented!
-				llfree_warn("fragmentation o=%" PRIuS, order);
 				res = reserve_and_get(self, core, order);
 			}
-			local_unlock(local);
+			ll_local_unlock(local);
 			return res;
 		}
 		// Try sync with global counter
 		if (sync_with_global(self, local, order)) {
 			// Success -> Retry allocation
-			local_unlock(local);
+			ll_local_unlock(local);
 			return llfree_result(LLFREE_ERR_RETRY);
 		}
 	}
 
 	llfree_result_t res = reserve_and_get(self, core, order);
-	local_unlock(local);
+	ll_local_unlock(local);
 	return res;
 }
 
@@ -349,18 +349,18 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 
 	// Frame is successfully freed in lower allocator
 	local_t *local = get_local(self, core);
-	local_lock(local);
+	ll_local_lock(local);
 
 	size_t tree_idx = tree_from_pfn(frame);
 
 	// Update free-reserve heuristic
-	bool reserve = local_free_inc(local, tree_idx);
+	bool reserve = ll_local_free_inc(local, tree_idx);
 
 	// Increment local or otherwise global counter
 	if (local->reserved.present &&
 	    tree_from_row(local->reserved.start_row) == tree_idx) {
 		local->reserved.free += 1 << order;
-		local_unlock(local);
+		ll_local_unlock(local);
 		return llfree_result(LLFREE_ERR_OK);
 	}
 
@@ -381,21 +381,21 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 				   .present = true };
 		swap_reserved(self, local, new);
 	}
-	local_unlock(local);
+	ll_local_unlock(local);
 	return llfree_result(LLFREE_ERR_OK);
 }
 
 llfree_result_t llfree_drain(llfree_t *self, size_t core)
 {
 	local_t *local = get_local(self, core);
-	if (local_try_lock(local)) {
+	if (ll_local_try_lock(local)) {
 		reserved_t none = {
 			.free = 0,
 			.start_row = 0,
 			.present = false,
 		};
 		swap_reserved(self, local, none);
-		local_unlock(local);
+		ll_local_unlock(local);
 	}
 	return llfree_result(LLFREE_ERR_OK);
 }
