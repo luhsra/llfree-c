@@ -2,7 +2,10 @@
 
 #include "utils.h"
 
+/// Reservation heuristic: number of frees in the same tree before reserving it
 #define LAST_FREES 4U
+/// Reservation heuristic: search globally every n reservations
+#define SKIP_NEAR_FREQ 4U
 
 /// CPU-local data of the currently reserved tree
 typedef struct reserved {
@@ -11,48 +14,35 @@ typedef struct reserved {
 	/// Bitfield row index of reserved tree,
 	/// used for identifying the reserved tree and as starting point
 	/// for the next allocation
-	uint64_t start_row : 47;
+	uint64_t start_row : 48;
 	/// true if there is a reserved tree
 	bool present : 1;
-	/// Used to synchronize concurrent reservations
-	bool lock : 1;
 } reserved_t;
-
-/// Stores information about the last frees
-typedef struct last_free {
-	/// Counts concurrent frees in same tree
-	uint16_t counter : 4;
-	/// Index of the last tree where a frame was freed
-	uint64_t tree_idx : 60;
-} last_free_t;
 
 /// This represents the local CPU data
 typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) local {
-	_Atomic(reserved_t) reserved;
-	_Atomic(last_free_t) last_free;
+	/// Protect the local data from concurrent access (in case of shared local data or parallel drain)
+	_Atomic(bool) lock;
+	/// Counts concurrent frees in same tree
+	uint8_t last_frees;
+	/// Counter that triggers full scans (fragmentation heuristic)
+	uint8_t skip_near_counter;
+	/// Reserved tree
+	reserved_t reserved;
+	/// Index of the last tree where a frame was freed
+	uint64_t last_idx;
 } local_t;
 
 /// Initialize the per-cpu data
 void local_init(local_t *self);
 
-/// Changes the preferred tree (and free counter) to a new one
-bool reserved_swap(reserved_t *self, reserved_t new, bool expect_lock);
+/// Locks the reserved tree
+void local_lock(local_t *self);
+bool local_try_lock(local_t *self);
 
-/// Increases the free counter if tree of frame matches the reserved tree
-bool reserved_inc(reserved_t *self, size_t tree_idx, size_t free);
-
-/// Decrements the free counter
-bool reserved_dec(reserved_t *self, size_t free);
-
-/// Decrements the free counter or sets the lock otherwise
-bool reserved_dec_or_lock(reserved_t *self, size_t free, bool *locked);
-
-/// Updates the start index to speedup the next search for a free frame
-bool reserved_set_start(reserved_t *self, size_t row_idx);
-
-/// Set the reserving flag, returning false if it already has the specified value
-bool reserved_set_lock(reserved_t *self, bool lock);
+/// Unlocks the reserved tree
+void local_unlock(local_t *self);
 
 /// Updates the last-frees heuristic, returning true if the corresponding
 /// tree should be reserved
-bool last_free_inc(last_free_t *self, uint64_t tree_idx);
+bool local_free_inc(local_t *self, uint64_t tree_idx);

@@ -130,8 +130,7 @@ declare_test(llfree_general_function)
 	check_m(llfree_free_frames(&upper) == 132000,
 		"right number of free frames");
 
-	last_free_t lf = atom_load(&upper.local->last_free);
-	check_equal(lf.tree_idx, row_from_pfn(frame.val));
+	check_equal(upper.local->last_idx, row_from_pfn(frame.val));
 
 	// reserve all frames in first tree
 	for (size_t i = 0; i < LLFREE_TREE_SIZE; ++i) {
@@ -142,7 +141,7 @@ declare_test(llfree_general_function)
 	// reserve first frame in new tree
 	ret = llfree_get(&upper, 0, 0);
 	check(llfree_ok(ret));
-	reserved_t reserved = atom_load(&upper.local[0].reserved);
+	reserved_t reserved = upper.local[0].reserved;
 	check_m(reserved.start_row == row_from_pfn(LLFREE_TREE_SIZE),
 		"second tree must be allocated");
 
@@ -179,6 +178,7 @@ declare_test(llfree_put)
 	check(tree_from_pfn(reserved[0]) !=
 	      tree_from_pfn(reserved[LLFREE_TREE_SIZE]));
 
+
 	llfree_result_t ret2 = llfree_get(&upper, 2, 0);
 	check(llfree_ok(ret2));
 	check_m(tree_from_pfn(ret2.val) !=
@@ -188,6 +188,8 @@ declare_test(llfree_put)
 	if (!success)
 		llfree_print(&upper);
 
+	llfree_info("free");
+
 	// free half the frames from old tree with core 2
 	for (size_t i = 0; i < LLFREE_TREE_SIZE / 2; ++i) {
 		ret = llfree_put(&upper, 2, reserved[i], 0);
@@ -195,7 +197,7 @@ declare_test(llfree_put)
 	}
 
 	// core 2 must have now this first tree reserved
-	reserved_t res = atom_load(&upper.local[2].reserved);
+	reserved_t res = upper.local[2].reserved;
 	check_equal(tree_from_row(res.start_row),
 		    (uint64_t)tree_from_pfn(reserved[0]));
 	if (!success)
@@ -268,7 +270,7 @@ static int comp(const void *a, const void *b)
 	int64_t *x = (int64_t *)a;
 	int64_t *y = (int64_t *)b;
 
-	return *x - *y;
+	return (int)(*x - *y);
 }
 
 static void *alloc_frames(void *arg)

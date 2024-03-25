@@ -82,6 +82,14 @@ static const int ATOM_STORE_ORDER = memory_order_release;
 							ATOM_UPDATE_ORDER, \
 							ATOM_LOAD_ORDER);  \
 	})
+#define atom_cmp_exchange_weak(obj, expected, desired)                          \
+	({                                                                 \
+		llfree_debug("cmpxchg");                                   \
+		atomic_compare_exchange_weak_explicit((obj), (expected), \
+							(desired),         \
+							ATOM_UPDATE_ORDER, \
+							ATOM_LOAD_ORDER);  \
+	})
 
 #define atom_load(obj)                                      \
 	({                                                  \
