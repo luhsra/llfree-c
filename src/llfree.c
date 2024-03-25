@@ -168,25 +168,6 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, local_t *local,
 	return res;
 }
 
-/// Searches the whole tree array starting at base_idx for a tree with
-/// a free counter in the provided range, reserves it, and allocates from it.
-static llfree_result_t search_global(llfree_t *self, local_t *local,
-				     uint64_t base_idx, uint64_t order,
-				     p_range_t free)
-{
-	for (int64_t i = 0; i < (int64_t)self->trees_len; ++i) {
-		// Search alternating left and right from base_idx
-		int64_t toggle = i % 2 == 0 ? i / 2 : -(i + 1) / 2;
-		uint64_t idx =
-			(self->trees_len + base_idx + toggle) % self->trees_len;
-		llfree_result_t res =
-			reserve_tree_and_get(self, local, idx, order, free);
-		if (res.val != LLFREE_ERR_MEMORY)
-			return res;
-	}
-	return llfree_result(LLFREE_ERR_MEMORY);
-}
-
 /// Searches the tree array starting at base_idx for a tree with a
 /// free counter in the provided range, reserves it, and allocates from it.
 static llfree_result_t search(llfree_t *self, local_t *local, uint64_t base_idx,
