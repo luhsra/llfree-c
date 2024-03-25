@@ -37,21 +37,18 @@ declare_test(local_last_free_inc)
 	_Atomic(last_free_t) lf = (last_free_t){ 0, 0 };
 
 	last_free_t old;
-	check(atom_update(&lf, old, last_free_inc, 0)); // 1
-	check(atom_update(&lf, old, last_free_inc, 0)); // 2
-	check(atom_update(&lf, old, last_free_inc, 0)); // 3
-	check(atom_update(&lf, old, last_free_inc, 0)); // 4
-	check(!atom_update(&lf, old, last_free_inc, 0)); // 0
-	check(!atom_update(&lf, old, last_free_inc, 0)); // 0
+	for (size_t i = 0; i < LAST_FREES; i++) {
+		check(atom_update(&lf, old, last_free_inc, 0));
+	}
+	check(!atom_update(&lf, old, last_free_inc, 0));
+	check(!atom_update(&lf, old, last_free_inc, 0));
 
-	check(atom_update(&lf, old, last_free_inc, 1)); // 0
-	check(atom_update(&lf, old, last_free_inc, 0)); // 0
+	check(atom_update(&lf, old, last_free_inc, 1));
+	check(atom_update(&lf, old, last_free_inc, 0));
 
-	check(atom_update(&lf, old, last_free_inc, 1)); // 0
-	check(atom_update(&lf, old, last_free_inc, 1)); // 1
-	check(atom_update(&lf, old, last_free_inc, 1)); // 2
-	check(atom_update(&lf, old, last_free_inc, 1)); // 3
-	check(atom_update(&lf, old, last_free_inc, 1)); // 4
+	for (size_t i = 0; i < LAST_FREES; i++) {
+		check(atom_update(&lf, old, last_free_inc, 1));
+	}
 	check(!atom_update(&lf, old, last_free_inc, 1));
 	return success;
 }

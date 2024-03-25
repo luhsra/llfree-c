@@ -81,12 +81,12 @@ bool last_free_inc(last_free_t *self, uint64_t tree_idx)
 {
 	assert(self != NULL);
 
-	// if last free was in another tree -> overwrite last reserved Index
 	if (self->tree_idx != tree_idx) {
+		// if last free was in another tree -> reset
 		self->tree_idx = tree_idx;
-		self->counter = 0;
+		self->counter = 1;
 	} else if (self->counter < LAST_FREES) {
-		// if the same tree -> increase the counter for this
+		// if its the same tree -> increment
 		self->counter += 1;
 	} else {
 		// the heuristic does not have to be updated
