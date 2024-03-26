@@ -12,6 +12,7 @@ declare_test(child_atomic)
 		_Atomic child_t v;
 		atomic_is_lock_free(&v);
 	}));
+	check(LLFREE_TREE_CHILDREN * sizeof(child_t) % LLFREE_CACHE_SIZE == 0);
 	return success;
 }
 

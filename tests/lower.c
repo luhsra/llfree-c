@@ -374,10 +374,9 @@ declare_test(lower_huge)
 
 	// allocate the complete memory with HPs
 	for (int i = 3; i < 60; ++i) {
-		// get allocates only in chunks of 32 children. if there is no free HP in given chung it returns LLFREE_ERR_MEMORY
-		llfree_result_t pfn =
-			lower_get(&actual, i < 32 ? 0 : 32 * LLFREE_CHILD_SIZE,
-				  LLFREE_HUGE_ORDER);
+		// get allocates only in chunks of N children. if there is no free HP in given chung it returns LLFREE_ERR_MEMORY
+		llfree_result_t pfn = lower_get(
+			&actual, (i / LLFREE_TREE_CHILDREN) * LLFREE_TREE_SIZE, LLFREE_HUGE_ORDER);
 		check(llfree_ok(pfn));
 	}
 

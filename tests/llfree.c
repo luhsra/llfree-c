@@ -97,7 +97,7 @@ declare_test(llfree_general_function)
 	llfree_result_t ret;
 
 	llfree_t upper = llfree_new(4, 132000, LLFREE_INIT_FREE);
-	check(upper.trees_len == 9);
+	check_equal(upper.trees_len, div_ceil(132000, LLFREE_TREE_SIZE));
 	check(upper.cores == 4);
 	check(llfree_frames(&upper) == 132000);
 	check_m(llfree_free_frames(&upper) == 132000,
