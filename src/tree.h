@@ -33,7 +33,7 @@ bool tree_inc(tree_t *self, size_t free);
 bool tree_reserve(tree_t *self, size_t min, size_t max, size_t span, bool movable);
 
 /// Adds the given counter and clears reserved
-bool tree_writeback(tree_t *self, size_t free, bool movable);
+bool tree_writeback(tree_t *self, size_t free, size_t span, bool movable);
 
 // Steals the counter of a reserved tree
 bool tree_steal_counter(tree_t *self, size_t min);

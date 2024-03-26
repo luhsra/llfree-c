@@ -94,7 +94,7 @@ declare_test(tree_unreserve)
 	frees = 987;
 	actual = tree_new(free, true, false);
 	expect = tree_new(free + frees, false, false);
-	ret = tree_writeback(&actual, frees, false);
+	ret = tree_writeback(&actual, frees, LLFREE_TREE_SIZE, false);
 	check(ret);
 	equal_trees(actual, expect);
 
@@ -102,7 +102,7 @@ declare_test(tree_unreserve)
 	frees = 987;
 	actual = tree_new(free, true, false);
 	expect = tree_new(free + frees, false, false);
-	ret = tree_writeback(&actual, frees, false);
+	ret = tree_writeback(&actual, frees, LLFREE_TREE_SIZE, false);
 	check(ret);
 	equal_trees(actual, expect);
 

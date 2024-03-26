@@ -21,13 +21,13 @@ bool tree_steal_counter(tree_t *self, size_t min)
 	return false;
 }
 
-bool tree_writeback(tree_t *self, size_t free, bool movable)
+bool tree_writeback(tree_t *self, size_t free, size_t span, bool movable)
 {
 	size_t f = self->free + free;
 	assert(f <= LLFREE_TREE_SIZE);
 	assert(self->reserved);
 
-	*self = tree_new(f, false, movable && f < LLFREE_TREE_SIZE);
+	*self = tree_new(f, false, movable && f < span);
 	return true;
 }
 
@@ -36,6 +36,8 @@ bool tree_inc(tree_t *self, size_t free)
 	assert(self->free + free <= LLFREE_TREE_SIZE);
 
 	self->free += free;
+	if (self->free == LLFREE_TREE_SIZE)
+		self->movable = false;
 	return true;
 }
 

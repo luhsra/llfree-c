@@ -60,7 +60,7 @@ enum {
 
 /// Allocation flags
 typedef struct llflags {
-	uint8_t order;
+	uint8_t order : 8;
 	bool movable : 1;
 	bool reported : 1;
 	bool set_reported : 1;
@@ -140,7 +140,5 @@ size_t llfree_free_huge(llfree_t *self);
 void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
 			void *arg);
 
-#ifdef STD
 /// Prints detailed stats about the allocator state
 void llfree_print(llfree_t *self);
-#endif

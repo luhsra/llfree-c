@@ -207,7 +207,7 @@ static llfree_result_t split_huge(_Atomic(child_t) *child, bitfield_t *field)
 	// synchronize multiple threads on the first row
 	bool success = atom_cmp_exchange(&field->rows[0], &zero, UINT64_MAX);
 	if (success) {
-		llfree_info("split huge");
+		llfree_debug("split huge");
 
 		for (size_t i = 1; i < FIELD_N; ++i) {
 			atom_store(&field->rows[i], UINT64_MAX);
@@ -218,7 +218,7 @@ static llfree_result_t split_huge(_Atomic(child_t) *child, bitfield_t *field)
 					    child_new(0, false));
 		assert(success);
 	} else {
-		llfree_info("split huge: wait");
+		llfree_debug("split huge: wait");
 		// another thread ist trying to breakup this HP
 		// -> wait for their completion
 		for (size_t i = 0; i < RETRIES; i++) {
@@ -321,22 +321,22 @@ size_t lower_free_frames(lower_t *self)
 	return counter;
 };
 
-#ifdef STD
 void lower_print(lower_t *self)
 {
-	printf("lower_t {\n");
+	llfree_info_start();
+	llfree_info_cont("lower_t {\n");
 	for (size_t i = 0;
 	     i < align_up(self->children_len, LLFREE_TREE_CHILDREN); i++) {
 		if (i % LLFREE_TREE_CHILDREN == 0)
-			printf("\n");
+			llfree_info_cont("\n");
 
 		child_t child = atom_load(&self->children[i]);
-		printf("    %6ju: free=%u, huge=%d\n", i, child.free,
-		       child.huge);
+		llfree_info_cont("    %" PRIuS ": free=%" PRIuS ", huge=%d\n",
+				 i, (size_t)child.free, child.huge);
 	}
-	printf("}\n");
+	llfree_info_cont("}\n");
+	llfree_info_end();
 }
-#endif
 
 size_t lower_free_huge(lower_t *self)
 {

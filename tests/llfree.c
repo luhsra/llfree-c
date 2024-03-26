@@ -52,6 +52,39 @@ declare_test(llfree_init)
 	return success;
 }
 
+declare_test(llfree_init_alloc)
+{
+	bool success = true;
+
+	const size_t FRAMES = (1 << 30) / LLFREE_FRAME_SIZE;
+
+	llfree_t upper = llfree_new(4, FRAMES, LLFREE_INIT_ALLOC);
+	check(llfree_frames(&upper) == FRAMES);
+	check(llfree_free_frames(&upper) == 0);
+
+	for (size_t hp = 0; hp < (FRAMES >> LLFREE_HUGE_ORDER) - 1; hp++) {
+		check(llfree_ok(llfree_put(&upper, 0, hp << LLFREE_HUGE_ORDER,
+					   llflags(LLFREE_HUGE_ORDER))));
+	}
+	for (size_t page = FRAMES - (1 << LLFREE_HUGE_ORDER); page < FRAMES;
+	     page++) {
+		check(llfree_ok(llfree_put(&upper, 0, page, llflags(0))));
+	}
+	check(llfree_free_frames(&upper) == FRAMES);
+
+	llflags_t llf = llflags(0);
+	llf.movable = true;
+	check(llfree_ok(llfree_get(&upper, 0, llf)));
+
+	check(llfree_ok(llfree_get(&upper, 0, llflags(0))));
+
+	check(llfree_ok(llfree_get(&upper, 0, llf)));
+
+	llfree_print(&upper);
+
+	return success;
+}
+
 declare_test(llfree_alloc_s)
 {
 	bool success = true;

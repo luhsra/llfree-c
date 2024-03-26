@@ -41,10 +41,16 @@
 	       ##__VA_ARGS__)
 
 #ifdef VERBOSE
+#define llfree_info_start() printf("\x1b[90m%s:%d: ", __FILE__, __LINE__)
+#define llfree_info_cont(str, ...) printf(str, ##__VA_ARGS__)
+#define llfree_info_end() printf("\x1b[0m\n")
 #define llfree_info(str, ...)                                         \
 	printf("\x1b[90m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
 	       ##__VA_ARGS__)
 #else
+#define llfree_info_start()
+#define llfree_info_cont(str, ...)
+#define llfree_info_end()
 #define llfree_info(str, ...)
 #endif
 
@@ -82,13 +88,13 @@ static const int ATOM_STORE_ORDER = memory_order_release;
 							ATOM_UPDATE_ORDER, \
 							ATOM_LOAD_ORDER);  \
 	})
-#define atom_cmp_exchange_weak(obj, expected, desired)                          \
-	({                                                                 \
-		llfree_debug("cmpxchg");                                   \
+#define atom_cmp_exchange_weak(obj, expected, desired)                   \
+	({                                                               \
+		llfree_debug("cmpxchg");                                 \
 		atomic_compare_exchange_weak_explicit((obj), (expected), \
-							(desired),         \
-							ATOM_UPDATE_ORDER, \
-							ATOM_LOAD_ORDER);  \
+						      (desired),         \
+						      ATOM_UPDATE_ORDER, \
+						      ATOM_LOAD_ORDER);  \
 	})
 
 #define atom_load(obj)                                      \
