@@ -7,7 +7,8 @@ void ll_local_init(local_t *self)
 	self->skip_near_counter = 0;
 	self->last_frees = 0;
 	self->last_idx = 0;
-	self->reserved = (reserved_t){ 0, 0, false };
+	self->movable = (reserved_t){ 0, 0, false };
+	self->fixed = (reserved_t){ 0, 0, false };
 }
 
 void ll_local_lock(local_t *self)

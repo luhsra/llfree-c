@@ -58,6 +58,23 @@ enum {
 	LLFREE_INIT_RECOVER_CRASH = 3,
 };
 
+/// Allocation flags
+typedef struct llflags {
+	uint8_t order;
+	bool movable : 1;
+	bool reported : 1;
+	bool set_reported : 1;
+	// Reserved for future use
+} llflags_t;
+
+static inline llflags_t llflags(size_t order)
+{
+	return (llflags_t){ .order = order,
+			    .movable = false,
+			    .reported = false,
+			    .set_reported = false };
+}
+
 /// Allocate and initialize the data structures of the allocator.
 ///
 /// `offset` is the number of the first page to be managed and `len` determins
@@ -93,32 +110,29 @@ typedef struct llfree_meta {
 llfree_meta_t llfree_metadata(llfree_t *self);
 
 /// Allocates a frame and returns its number, or a negative error code
-llfree_result_t llfree_get(llfree_t *self, size_t core, size_t order);
-
+llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags);
 /// Frees a frame, returning 0 on success or a negative error code
 llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
-			   size_t order);
+			   llflags_t flags);
 
 /// Unreserves all cpu-local reservations
 llfree_result_t llfree_drain(llfree_t *self, size_t core);
 
-/// Checks if a frame is allocated, returning 0 if not
-bool llfree_is_free(llfree_t *self, uint64_t frame, size_t order);
-
 /// Returns the number of cores this allocator was initialized with
 size_t llfree_cores(llfree_t *self);
-
 /// Returns the total number of frames the allocator can allocate
 size_t llfree_frames(llfree_t *self);
+
+/// Checks if a frame is allocated, returning 0 if not
+bool llfree_is_free(llfree_t *self, uint64_t frame, size_t order);
+/// Returns the number of frames in the given chunk.
+/// Note: This is only implemented for 0, HUGE_ORDER and TREE_ORDER.
+size_t llfree_free_at(llfree_t *self, uint64_t frame, size_t order);
 
 /// Returns number of currently free frames
 size_t llfree_free_frames(llfree_t *self);
 /// Returns number of currently free frames
 size_t llfree_free_huge(llfree_t *self);
-
-/// Returns the number of frames in the given chunk.
-/// This is only implemented for 0, HUGE_ORDER and TREE_ORDER.
-size_t llfree_free_at(llfree_t *self, uint64_t frame, size_t order);
 
 // == Debugging ==
 

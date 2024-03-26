@@ -12,7 +12,7 @@ size_t lower_metadata_size(size_t frames)
 	uint64_t size_children =
 		align_up(children * sizeof(child_t),
 			 LL_MAX(LLFREE_TREE_CHILDREN * sizeof(child_t),
-			     sizeof(bitfield_t)));
+				sizeof(bitfield_t)));
 	return size_bitfields + size_children;
 }
 
@@ -165,14 +165,14 @@ static llfree_result_t get_huge(lower_t *self, uint64_t pfn)
 }
 
 llfree_result_t lower_get(lower_t *self, const uint64_t start_frame,
-			  const size_t order)
+			  llflags_t flags)
 {
-	assert(order <= LLFREE_MAX_ORDER);
+	assert(flags.order <= LLFREE_MAX_ORDER);
 	assert(start_frame < self->frames);
 
-	if (order == LLFREE_MAX_ORDER)
+	if (flags.order == LLFREE_MAX_ORDER)
 		return get_max(self, start_frame);
-	if (order == LLFREE_HUGE_ORDER)
+	if (flags.order == LLFREE_HUGE_ORDER)
 		return get_huge(self, start_frame);
 
 	const size_t idx = child_from_pfn(start_frame);
@@ -180,16 +180,17 @@ llfree_result_t lower_get(lower_t *self, const uint64_t start_frame,
 	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
 		child_t old;
 		if (atom_update(&self->children[current_i], old, child_dec,
-				order)) {
-			llfree_result_t pos = field_set_next(
-				&self->fields[current_i], start_frame, order);
+				flags.order)) {
+			llfree_result_t pos =
+				field_set_next(&self->fields[current_i],
+					       start_frame, flags.order);
 			if (llfree_ok(pos)) {
 				return llfree_result(pfn_from_child(current_i) +
 						     pos.val);
 			}
 
 			if (!atom_update(&self->children[current_i], old,
-					 child_inc, order)) {
+					 child_inc, flags.order)) {
 				llfree_warn("Undo failed!");
 				assert(false);
 			}
@@ -231,10 +232,11 @@ static llfree_result_t split_huge(_Atomic(child_t) *child, bitfield_t *field)
 	return llfree_result(LLFREE_ERR_OK);
 }
 
-llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order)
+llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags)
 {
-	assert(order <= LLFREE_MAX_ORDER);
-	if (frame + (1 << order) > self->frames || frame % (1 << order) != 0) {
+	assert(flags.order <= LLFREE_MAX_ORDER);
+	if (frame + (1 << flags.order) > self->frames ||
+	    frame % (1 << flags.order) != 0) {
 		llfree_warn("invalid pfn %" PRIu64 "\n", frame);
 		return llfree_result(LLFREE_ERR_ADDRESS);
 	}
@@ -242,7 +244,7 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 	const size_t child_idx = child_from_pfn(frame);
 	_Atomic(child_t) *child = &self->children[child_idx];
 
-	if (order == LLFREE_MAX_ORDER) {
+	if (flags.order == LLFREE_MAX_ORDER) {
 		child_pair_t old = { child_new(0, true), child_new(0, true) };
 		child_pair_t new = { child_new(LLFREE_CHILD_SIZE, false),
 				     child_new(LLFREE_CHILD_SIZE, false) };
@@ -253,7 +255,7 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 
 		return llfree_result(LLFREE_ERR_MEMORY);
 	}
-	if (order == LLFREE_HUGE_ORDER) {
+	if (flags.order == LLFREE_HUGE_ORDER) {
 		child_t old = child_new(0, true);
 		child_t new = child_new(LLFREE_CHILD_SIZE, false);
 
@@ -273,11 +275,12 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 	}
 
 	size_t field_index = frame % LLFREE_CHILD_SIZE;
-	llfree_result_t ret = field_toggle(field, field_index, order, true);
+	llfree_result_t ret =
+		field_toggle(field, field_index, flags.order, true);
 	if (!llfree_ok(ret))
 		return ret;
 
-	if (!atom_update(child, old, child_inc, order)) {
+	if (!atom_update(child, old, child_inc, flags.order)) {
 		llfree_warn("Undo failed!");
 		assert(false);
 	}
@@ -322,8 +325,8 @@ size_t lower_free_frames(lower_t *self)
 void lower_print(lower_t *self)
 {
 	printf("lower_t {\n");
-	for (size_t i = 0; i < align_up(self->children_len, LLFREE_TREE_CHILDREN);
-	     i++) {
+	for (size_t i = 0;
+	     i < align_up(self->children_len, LLFREE_TREE_CHILDREN); i++) {
 		if (i % LLFREE_TREE_CHILDREN == 0)
 			printf("\n");
 

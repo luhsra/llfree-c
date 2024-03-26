@@ -4,15 +4,16 @@
 
 /// Index entry for every bitfield
 typedef struct child {
-	uint32_t free : 31;
+	uint16_t free : 16;
 	bool huge : 1;
+	uint32_t flags : 15;
 } child_t;
 
 /// Initializes the child entry with the given parameters
-static inline child_t _unused child_new(uint32_t free, bool huge)
+static inline child_t _unused child_new(uint16_t free, bool huge)
 {
 	assert(free <= LLFREE_CHILD_SIZE);
-	return (child_t){ .free = free, .huge = huge };
+	return (child_t){ .free = free, .huge = huge, .flags = 0 };
 }
 
 /// Increment the free counter if possible

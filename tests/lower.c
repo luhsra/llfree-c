@@ -93,27 +93,27 @@ declare_test(lower_get)
 
 	int order = 0;
 
-	ret = lower_get(&actual, 0, order);
+	ret = lower_get(&actual, 0, llflags(order));
 	check_equal((int)ret.val, 0);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 }));
 	return success;
 
-	ret = lower_get(&actual, 0, order);
+	ret = lower_get(&actual, 0, llflags(order));
 	check_equal((int)ret.val, 1);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ 0x3, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 }));
 
-	ret = lower_get(&actual, 320, order);
+	ret = lower_get(&actual, 320, llflags(order));
 	check_equal((int)ret.val, 320);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ 0x3, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0 }));
 
 	for (int i = 0; i < 954; i++) {
-		ret = lower_get(&actual, 0, order);
+		ret = lower_get(&actual, 0, llflags(order));
 		check_equal((int)ret.val, (i + (i < 318 ? 2 : 3)));
 	}
 	check_equal_bitfield(actual.fields[0],
@@ -130,7 +130,7 @@ declare_test(lower_get)
 	frames = 2;
 	actual = lower_new(frames, LLFREE_INIT_FREE);
 
-	ret = lower_get(&actual, 0, order);
+	ret = lower_get(&actual, 0, llflags(order));
 	check_equal((int)ret.val, 0);
 	check_equal_bitfield(actual.fields[0],
 			     ((bitfield_t){ 0xfffffffffffffffd, UINT64_MAX,
@@ -138,14 +138,14 @@ declare_test(lower_get)
 					    UINT64_MAX, UINT64_MAX,
 					    UINT64_MAX }));
 
-	ret = lower_get(&actual, 0, order);
+	ret = lower_get(&actual, 0, llflags(order));
 	check_equal((int)ret.val, 1);
 	check_equal_bitfield(actual.fields[0],
 			     ((bitfield_t){ UINT64_MAX, UINT64_MAX, UINT64_MAX,
 					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
 					    UINT64_MAX, UINT64_MAX }));
 
-	ret = lower_get(&actual, 0, order);
+	ret = lower_get(&actual, 0, llflags(order));
 	check_equal((int)ret.val, LLFREE_ERR_MEMORY);
 	check_equal_bitfield(actual.fields[0],
 			     ((bitfield_t){ UINT64_MAX, UINT64_MAX, UINT64_MAX,
@@ -156,9 +156,9 @@ declare_test(lower_get)
 	frames = 166120;
 	actual = lower_new(frames, LLFREE_INIT_FREE);
 
-	ret = lower_get(&actual, 0, 0);
+	ret = lower_get(&actual, 0, llflags(0));
 	check(ret.val == 0);
-	ret = lower_get(&actual, 0, LLFREE_HUGE_ORDER);
+	ret = lower_get(&actual, 0, llflags(LLFREE_HUGE_ORDER));
 
 	child_t child = atom_load(&actual.children[1]);
 	check_equal(child.huge, true);
@@ -183,7 +183,7 @@ declare_test(lower_put)
 	int order = 0;
 
 	for (int i = 0; i < 957; i++) {
-		ret = lower_get(&actual, 0, order);
+		ret = lower_get(&actual, 0, llflags(order));
 		assert(llfree_ok(ret));
 	}
 	check_equal_bitfield(actual.fields[0],
@@ -196,7 +196,7 @@ declare_test(lower_put)
 					    0x1fffffffffffffff, 0x0 }));
 
 	pfn = 0;
-	ret = lower_put(&actual, pfn, order);
+	ret = lower_put(&actual, pfn, llflags(order));
 	check(llfree_ok(ret));
 	check_equal_bitfield(actual.fields[0],
 			     ((bitfield_t){ 0xfffffffffffffffe, UINT64_MAX,
@@ -210,7 +210,7 @@ declare_test(lower_put)
 
 	// repeat the same address
 	pfn = 0;
-	ret = lower_put(&actual, pfn, order);
+	ret = lower_put(&actual, pfn, llflags(order));
 	check_equal((int)ret.val, LLFREE_ERR_ADDRESS);
 	check_equal_bitfield(actual.fields[0],
 			     ((bitfield_t){ 0xfffffffffffffffe, UINT64_MAX,
@@ -223,7 +223,7 @@ declare_test(lower_put)
 					    0x1fffffffffffffff, 0x0 }));
 
 	pfn = 957;
-	ret = lower_put(&actual, pfn, order);
+	ret = lower_put(&actual, pfn, llflags(order));
 	check_equal((int)ret.val, LLFREE_ERR_ADDRESS);
 	check_equal_bitfield(actual.fields[0],
 			     ((bitfield_t){ 0xfffffffffffffffe, UINT64_MAX,
@@ -236,7 +236,7 @@ declare_test(lower_put)
 					    0x1fffffffffffffff, 0x0 }));
 
 	pfn = 561;
-	ret = lower_put(&actual, pfn, order);
+	ret = lower_put(&actual, pfn, llflags(order));
 	check(llfree_ok(ret));
 	check_equal_bitfield(actual.fields[0],
 			     ((bitfield_t){ 0xfffffffffffffffe, UINT64_MAX,
@@ -251,7 +251,7 @@ declare_test(lower_put)
 
 	// outside the range
 	pfn = 1361;
-	ret = lower_put(&actual, pfn, order);
+	ret = lower_put(&actual, pfn, llflags(order));
 	check_equal((int)ret.val, LLFREE_ERR_ADDRESS);
 	check_equal_bitfield(actual.fields[0],
 			     ((bitfield_t){ 0xfffffffffffffffe, UINT64_MAX,
@@ -285,8 +285,8 @@ declare_test(lower_is_free)
 	assert(!lower_is_free(&actual, 513, 0));
 	assert(!lower_is_free(&actual, 511, 0));
 
-	assert(llfree_ok(lower_put(&actual, 513, 0)));
-	assert(llfree_ok(lower_put(&actual, 511, 0)));
+	assert(llfree_ok(lower_put(&actual, 513, llflags(0))));
+	assert(llfree_ok(lower_put(&actual, 511, llflags(0))));
 
 	assert(lower_is_free(&actual, 513, 0));
 	assert(lower_is_free(&actual, 511, 0));
@@ -309,7 +309,8 @@ declare_test(lower_large)
 	for (size_t o = 0; o <= LLFREE_MAX_ORDER; o++) {
 		llfree_result_t pfn;
 		do {
-			pfn = lower_get(&lower, tree << LLFREE_TREE_ORDER, o);
+			pfn = lower_get(&lower, tree << LLFREE_TREE_ORDER,
+					llflags(o));
 			if (pfn.val == LLFREE_ERR_MEMORY) {
 				tree += 1;
 				check(tree < FRAMES);
@@ -323,7 +324,7 @@ declare_test(lower_large)
 	}
 
 	for (size_t o = 0; o <= LLFREE_MAX_ORDER; o++) {
-		llfree_result_t ret = lower_put(&lower, frames[o], o);
+		llfree_result_t ret = lower_put(&lower, frames[o], llflags(o));
 		check_m(llfree_ok(ret), "%zu -> 0x%" PRIx64, o, frames[o]);
 	}
 
@@ -337,11 +338,13 @@ declare_test(lower_huge)
 	const size_t FRAMES = LLFREE_CHILD_SIZE * 60;
 	lower_t actual = lower_new(FRAMES, LLFREE_INIT_FREE);
 
-	llfree_result_t pfn1 = lower_get(&actual, 0, LLFREE_HUGE_ORDER);
+	llfree_result_t pfn1 =
+		lower_get(&actual, 0, llflags(LLFREE_HUGE_ORDER));
 	check(llfree_ok(pfn1));
 	uint64_t offset = pfn1.val % LLFREE_CHILD_SIZE;
 	check_equal(offset, 0ul);
-	llfree_result_t pfn2 = lower_get(&actual, 0, LLFREE_HUGE_ORDER);
+	llfree_result_t pfn2 =
+		lower_get(&actual, 0, llflags(LLFREE_HUGE_ORDER));
 	check(llfree_ok(pfn2));
 	offset = pfn2.val % LLFREE_CHILD_SIZE;
 	check_equal(offset, 0ul);
@@ -350,33 +353,37 @@ declare_test(lower_huge)
 		    2ul * LLFREE_CHILD_SIZE);
 
 	// request a regular frame
-	llfree_result_t regular = lower_get(&actual, 0, 0);
+	llfree_result_t regular = lower_get(&actual, 0, llflags(0));
 	assert(llfree_ok(regular));
 	// regular frame cannot be returned as HP
-	assert(!llfree_ok(lower_put(&actual, regular.val, LLFREE_HUGE_ORDER)));
+	assert(!llfree_ok(
+		lower_put(&actual, regular.val, llflags(LLFREE_HUGE_ORDER))));
 
 	// this HF must be in another child than the regular frame.
-	llfree_result_t pfn3 =
-		lower_get(&actual, pfn_from_row(10), LLFREE_HUGE_ORDER);
+	llfree_result_t pfn3 = lower_get(&actual, pfn_from_row(10),
+					 llflags(LLFREE_HUGE_ORDER));
 	check(llfree_ok(pfn3));
 	offset = pfn3.val % LLFREE_CHILD_SIZE;
 	check_equal(offset, 0ul);
 	check_equal((uint64_t)pfn3.val, 3 * LLFREE_CHILD_SIZE);
 
 	// free regular page und try get this child as complete HP
-	assert(llfree_ok(lower_put(&actual, regular.val, 0)));
-	llfree_result_t pfn4 = lower_get(&actual, 0, LLFREE_HUGE_ORDER);
+	assert(llfree_ok(lower_put(&actual, regular.val, llflags(0))));
+	llfree_result_t pfn4 =
+		lower_get(&actual, 0, llflags(LLFREE_HUGE_ORDER));
 	check(llfree_ok(pfn4));
 	check(pfn4.val == regular.val);
 
-	llfree_result_t ret = lower_put(&actual, pfn2.val, LLFREE_HUGE_ORDER);
+	llfree_result_t ret =
+		lower_put(&actual, pfn2.val, llflags(LLFREE_HUGE_ORDER));
 	check(llfree_ok(ret));
 
 	// allocate the complete memory with HPs
 	for (int i = 3; i < 60; ++i) {
 		// get allocates only in chunks of N children. if there is no free HP in given chung it returns LLFREE_ERR_MEMORY
 		llfree_result_t pfn = lower_get(
-			&actual, (i / LLFREE_TREE_CHILDREN) * LLFREE_TREE_SIZE, LLFREE_HUGE_ORDER);
+			&actual, (i / LLFREE_TREE_CHILDREN) * LLFREE_TREE_SIZE,
+			llflags(LLFREE_HUGE_ORDER));
 		check(llfree_ok(pfn));
 	}
 
@@ -384,22 +391,24 @@ declare_test(lower_huge)
 		      "fully allocated with huge frames");
 
 	// reservation at full memory must fail
-	llfree_result_t pfn = lower_get(&actual, 0, LLFREE_HUGE_ORDER);
+	llfree_result_t pfn = lower_get(&actual, 0, llflags(LLFREE_HUGE_ORDER));
 	check(pfn.val == LLFREE_ERR_MEMORY);
 
 	// return HP as regular Frame must succseed
-	check(llfree_ok(lower_put(&actual, pfn2.val, 0)));
+	check(llfree_ok(lower_put(&actual, pfn2.val, llflags(0))));
 	// HP ist converted into regular frames so returning the whole page must fail
-	check(lower_put(&actual, pfn2.val, LLFREE_HUGE_ORDER).val ==
+	check(lower_put(&actual, pfn2.val, llflags(LLFREE_HUGE_ORDER)).val ==
 	      LLFREE_ERR_ADDRESS);
 
-	check(llfree_ok(lower_put(&actual, pfn1.val, LLFREE_HUGE_ORDER)));
+	check(llfree_ok(
+		lower_put(&actual, pfn1.val, llflags(LLFREE_HUGE_ORDER))));
 
 	// check if right amout of free regular frames are present
 	check_equal(lower_free_frames(&actual), LLFREE_CHILD_SIZE + 1ul);
 
 	// new acquired frame should be in same positon as the old no 1
-	check(lower_get(&actual, 0, LLFREE_HUGE_ORDER).val == pfn1.val);
+	check(lower_get(&actual, 0, llflags(LLFREE_HUGE_ORDER)).val ==
+	      pfn1.val);
 
 	return success;
 }
@@ -412,16 +421,18 @@ declare_test(lower_max)
 	lower_t lower = lower_new(FRAMES, LLFREE_INIT_FREE);
 
 	for (size_t i = 0; i < FRAMES / (1 << LLFREE_MAX_ORDER); ++i) {
-		llfree_result_t pfn = lower_get(
-			&lower, i * (1 << LLFREE_MAX_ORDER), LLFREE_MAX_ORDER);
+		llfree_result_t pfn = lower_get(&lower,
+						i * (1 << LLFREE_MAX_ORDER),
+						llflags(LLFREE_MAX_ORDER));
 		check_m(llfree_ok(pfn), "%zu", i);
 	}
 
 	check_equal(lower_free_frames(&lower), 0);
 
 	for (size_t i = 0; i < FRAMES / (1 << LLFREE_MAX_ORDER); ++i) {
-		llfree_result_t ret = lower_put(
-			&lower, i * (1 << LLFREE_MAX_ORDER), LLFREE_MAX_ORDER);
+		llfree_result_t ret = lower_put(&lower,
+						i * (1 << LLFREE_MAX_ORDER),
+						llflags(LLFREE_MAX_ORDER));
 		check_m(llfree_ok(ret), "%zu", i);
 	}
 
@@ -440,7 +451,7 @@ declare_test(lower_free_all)
 	// free all HPs
 	llfree_result_t ret;
 	for (size_t i = 0; i < 15; ++i) {
-		ret = lower_put(&lower, i * 512, LLFREE_HUGE_ORDER);
+		ret = lower_put(&lower, i * 512, llflags(LLFREE_HUGE_ORDER));
 		check(llfree_ok(ret));
 	}
 	check_equal_m(lower_free_frames(&lower), lower.frames - (512ul + 35),
@@ -449,7 +460,7 @@ declare_test(lower_free_all)
 	// free last HP as regular frame and regular frames
 	const uint64_t start = 15 * 512;
 	for (size_t i = 0; i < 512 + 35; ++i) {
-		ret = lower_put(&lower, start + i, 0);
+		ret = lower_put(&lower, start + i, llflags(0));
 		check(llfree_ok(ret));
 	}
 
