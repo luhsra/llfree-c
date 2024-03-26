@@ -23,8 +23,8 @@
 /// Number of retries
 #define RETRIES 4
 
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-#define MIN(a, b) ((a) > (b) ? (b) : (a))
+#define LL_MAX(a, b) ((a) > (b) ? (a) : (b))
+#define LL_MIN(a, b) ((a) > (b) ? (b) : (a))
 
 /// Devides a by b, rounding up the llfree_result
 static inline _unused size_t div_ceil(uint64_t a, size_t b)

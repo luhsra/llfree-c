@@ -11,7 +11,7 @@ size_t lower_metadata_size(size_t frames)
 			 LLFREE_TREE_CHILDREN * sizeof(child_t));
 	uint64_t size_children =
 		align_up(children * sizeof(child_t),
-			 MAX(LLFREE_TREE_CHILDREN * sizeof(child_t),
+			 LL_MAX(LLFREE_TREE_CHILDREN * sizeof(child_t),
 			     sizeof(bitfield_t)));
 	return size_bitfields + size_children;
 }

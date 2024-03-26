@@ -38,7 +38,7 @@ llfree_meta_size_t llfree_metadata_size(size_t cores, size_t frames)
 	size_t tree_len = div_ceil(frames, LLFREE_TREE_SIZE);
 	size_t tree_size =
 		align_up(sizeof(tree_t) * tree_len, LLFREE_CACHE_SIZE);
-	size_t local_len = MIN(cores, tree_len);
+	size_t local_len = LL_MIN(cores, tree_len);
 	size_t local_size =
 		align_up(sizeof(local_t), LLFREE_CACHE_SIZE) * local_len;
 	llfree_meta_size_t meta = {
@@ -78,7 +78,7 @@ llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
 
 	// check if more cores than trees -> if not shared locale data
 	self->trees_len = div_ceil(frames, LLFREE_TREE_SIZE);
-	self->cores = MIN(cores, self->trees_len);
+	self->cores = LL_MIN(cores, self->trees_len);
 	size_t local_size =
 		align_up(sizeof(local_t), LLFREE_CACHE_SIZE) * self->cores;
 
@@ -132,7 +132,7 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, local_t *local,
 					    p_range_t free)
 {
 	assert(idx < self->trees_len);
-	free.min = MAX(free.min, 1 << order);
+	free.min = LL_MAX(free.min, 1 << order);
 
 	tree_t old;
 	if (!atom_update(&self->trees[idx], old, tree_reserve, free.min,
@@ -195,13 +195,13 @@ static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
 	uint64_t base_idx = align_down(start_idx, cl_trees);
 
 	uint64_t near =
-		MIN(MAX((self->trees_len / self->cores / 4), cl_trees / 4),
+		LL_MIN(LL_MAX((self->trees_len / self->cores / 4), cl_trees / 4),
 		    cl_trees * 2);
 
 	llfree_result_t res;
-	p_range_t half = { MAX(4 << order, LLFREE_TREE_SIZE / 32),
+	p_range_t half = { LL_MAX(4 << order, LLFREE_TREE_SIZE / 32),
 			   LLFREE_TREE_SIZE / 2 };
-	p_range_t partial = { MAX(2 << order, LLFREE_TREE_SIZE / 128),
+	p_range_t partial = { LL_MAX(2 << order, LLFREE_TREE_SIZE / 128),
 			      LLFREE_TREE_SIZE - LLFREE_TREE_SIZE / 32 };
 	p_range_t nofree = { 0, LLFREE_TREE_SIZE - 8 };
 	p_range_t any = { 0, LLFREE_TREE_SIZE };
