@@ -330,7 +330,7 @@ void lower_print(lower_t *self)
 		if (i % LLFREE_TREE_CHILDREN == 0)
 			llfree_info_cont("\n");
 
-		child_t child = atom_load(&self->children[i]);
+		child_t _unused child = atom_load(&self->children[i]);
 		llfree_info_cont("    %" PRIuS ": free=%" PRIuS ", huge=%d\n",
 				 i, (size_t)child.free, child.huge);
 	}

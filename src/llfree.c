@@ -166,6 +166,93 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, local_t *local,
 	return res;
 }
 
+static bool tree_better(tree_t a, reserved_t b, size_t order)
+{
+	const size_t min_pages = LL_MAX(2 << order, 8);
+	if (a.free < min_pages)
+		return false;
+	if (!b.present)
+		return true;
+	return a.free < b.free;
+}
+
+/// Searches the tree array starting at base_idx for a tree with a
+/// free counter in the provided range, reserves it, and allocates from it.
+static llfree_result_t search_best(llfree_t *self, local_t *local,
+				   size_t base_idx, llflags_t flags)
+{
+	size_t total_free = 0;
+	const size_t cl_trees = LLFREE_CACHE_SIZE / sizeof(tree_t);
+	size_t near = LL_MIN(LL_MAX((self->trees_len / self->cores / 4),
+				    cl_trees / 4),
+			     cl_trees * 2);
+
+	reserved_t best[3] = { { .present = false },
+			       { .present = false },
+			       { .present = false } };
+
+	for (int64_t i = 1; i < self->trees_len; ++i) {
+		// Search alternating left and right from base_idx
+		int64_t toggle = i % 2 == 0 ? i / 2 : -(i + 1) / 2;
+		size_t idx =
+			(self->trees_len + base_idx + toggle) % self->trees_len;
+		tree_t tree = atom_load(&self->trees[idx]);
+		total_free += tree.free;
+
+		if (tree_better(tree, best[0], flags.order)) {
+			best[2] = best[1];
+			best[1] = best[0];
+			best[0] = (reserved_t){
+				.free = tree.free,
+				.start_row = row_from_tree(idx),
+				.present = true,
+			};
+		} else if (tree_better(tree, best[1], flags.order)) {
+			best[2] = best[1];
+			best[1] = (reserved_t){
+				.free = tree.free,
+				.start_row = row_from_tree(idx),
+				.present = true,
+			};
+		} else if (tree_better(tree, best[2], flags.order)) {
+			best[2] = (reserved_t){
+				.free = tree.free,
+				.start_row = row_from_tree(idx),
+				.present = true,
+			};
+		}
+
+		if (!(i % near == 0 || i == self->trees_len - 1))
+			continue;
+
+		size_t average_free = total_free / i;
+		const size_t max_free = LL_MIN(
+			LLFREE_TREE_SIZE,
+			average_free +
+				LLFREE_TREE_SIZE / (self->trees_len / (i + 1)));
+
+		for (size_t i = 0; i < 3; i++) {
+			if (best[i].present && best[i].free <= max_free) {
+				p_range_t range = { 1 << flags.order,
+						    max_free };
+				llfree_result_t res = reserve_tree_and_get(
+					self, local,
+					tree_from_row(best[i].start_row), flags,
+					range);
+				if (res.val != LLFREE_ERR_MEMORY)
+					return res;
+			}
+		}
+
+		// Allocation failed, reset best
+		best[0].present = false;
+		best[1].present = false;
+		best[2].present = false;
+	}
+
+	return llfree_result(LLFREE_ERR_MEMORY);
+}
+
 /// Searches the tree array starting at base_idx for a tree with a
 /// free counter in the provided range, reserves it, and allocates from it.
 static llfree_result_t search(llfree_t *self, local_t *local, uint64_t base_idx,
@@ -193,6 +280,7 @@ static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
 {
 	local_t *local = get_local(self, core);
 	reserved_t old = *ll_local_reserved(local, flags.movable);
+	llfree_result_t res;
 
 	uint64_t start_idx =
 		old.present ?
@@ -200,63 +288,14 @@ static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
 			(self->trees_len / self->cores * (core % self->cores));
 	assert(start_idx < self->trees_len);
 
-	const uint64_t cl_trees = LLFREE_CACHE_SIZE / sizeof(tree_t);
+	const size_t cl_trees = LLFREE_CACHE_SIZE / sizeof(tree_t);
 	uint64_t base_idx = align_down(start_idx, cl_trees);
 
-	uint64_t near = LL_MIN(LL_MAX((self->trees_len / self->cores / 4),
-				      cl_trees / 4),
-			       cl_trees * 2);
-
-	llfree_result_t res;
-	p_range_t half = { LL_MAX(4 << flags.order, LLFREE_TREE_SIZE / 32),
-			   LLFREE_TREE_SIZE / 2 };
-	p_range_t partial = { LL_MAX(2 << flags.order, LLFREE_TREE_SIZE / 128),
-			      LLFREE_TREE_SIZE - LLFREE_TREE_SIZE / 32 };
-	p_range_t nofree = { 0, LLFREE_TREE_SIZE - 8 };
-	p_range_t any = { 0, LLFREE_TREE_SIZE };
-
-	// Search near trees (skip every n allocs to reduce global fragmentation)
-	if (local->skip_near_counter < SKIP_NEAR_FREQ) {
-		local->skip_near_counter += 1;
-		// Half full
-		res = search(self, local, base_idx, flags, half, 1, near);
-		if (res.val != LLFREE_ERR_MEMORY)
-			return res;
-		// Neither filled nor free
-		res = search(self, local, base_idx, flags, partial, 1, near);
-		if (res.val != LLFREE_ERR_MEMORY)
-			return res;
-		// Trees that are not free
-		res = search(self, local, base_idx, flags, nofree, 1, near);
-		if (res.val != LLFREE_ERR_MEMORY)
-			return res;
-		// Any tree
-		res = search(self, local, base_idx, flags, any, 1, near);
-		if (res.val != LLFREE_ERR_MEMORY)
-			return res;
-	} else {
-		near = 0;
-		local->skip_near_counter = 0;
-	}
-
-	// Search global trees
-
-	// Half full
-	res = search(self, local, base_idx, flags, half, near, self->trees_len);
+	res = search_best(self, local, base_idx, flags);
 	if (res.val != LLFREE_ERR_MEMORY)
 		return res;
-	// Neither filled nor free
-	res = search(self, local, base_idx, flags, partial, near,
-		     self->trees_len);
-	if (res.val != LLFREE_ERR_MEMORY)
-		return res;
-	// Trees that are not free
-	res = search(self, local, base_idx, flags, nofree, near,
-		     self->trees_len);
-	if (res.val != LLFREE_ERR_MEMORY)
-		return res;
-
 	// Any tree
+	p_range_t any = { 0, LLFREE_TREE_SIZE };
 	res = search(self, local, base_idx, flags, any, 0, self->trees_len);
 	if (res.val != LLFREE_ERR_MEMORY)
 		return res;
@@ -515,12 +554,13 @@ void llfree_print(llfree_t *self)
 	llfree_info_cont("    frames: %" PRIuS "\n", self->lower.frames);
 	llfree_info_cont("    trees: %" PRIuS " (%u) {\n", self->trees_len,
 			 LLFREE_TREE_SIZE);
-	size_t free_huge = llfree_free_huge(self);
-	size_t free_trees = 0;
+	size_t _unused free_huge = llfree_free_huge(self);
+	size_t _unused free_trees = 0;
 	for (size_t i = 0; i < self->trees_len; i++) {
 		tree_t tree = atom_load(&self->trees[i]);
-		llfree_info_cont("        %3"PRIuS": free: %"PRIuS", reserved: %d\n", i,
-				 (size_t)tree.free, tree.reserved);
+		llfree_info_cont("        %3" PRIuS ": free: %" PRIuS
+				 ", reserved: %d\n",
+				 i, (size_t)tree.free, tree.reserved);
 		if (tree.free == LLFREE_TREE_SIZE)
 			free_trees += 1;
 	}
@@ -531,8 +571,8 @@ void llfree_print(llfree_t *self)
 			 llfree_free_frames(self), free_huge, free_trees);
 
 	for (size_t i = 0; i < self->cores; i++) {
-		reserved_t rf = self->local[i].fixed;
-		reserved_t rm = self->local[i].movable;
+		reserved_t _unused rf = self->local[i].fixed;
+		reserved_t _unused rm = self->local[i].movable;
 		llfree_info_cont("    local %" PRIuS " (%d): ", i,
 				 atom_load(&self->local[i].lock));
 		llfree_info_cont("f={ present: %d, free: %" PRIu64
