@@ -1,6 +1,5 @@
 #include "check.h"
 #include "tree.h"
-#include "utils.h"
 
 #define equal_trees(actual, expect)            \
 	check_equal(actual.free, expect.free); \
@@ -45,7 +44,7 @@ declare_test(tree_reserve)
 	int success = true;
 	bool ret = false;
 
-	tree_t actual = tree_new(7645, false, false);
+	tree_t actual = tree_new(764, false, false);
 	tree_t expect = tree_new(0, true, false);
 
 	ret = tree_reserve(&actual, 0, (1 << LLFREE_TREE_ORDER),
@@ -94,7 +93,7 @@ declare_test(tree_unreserve)
 	frees = 987;
 	actual = tree_new(free, true, false);
 	expect = tree_new(free + frees, false, false);
-	ret = tree_writeback(&actual, frees, LLFREE_TREE_SIZE, false);
+	ret = tree_writeback(&actual, frees, false);
 	check(ret);
 	equal_trees(actual, expect);
 
@@ -102,7 +101,7 @@ declare_test(tree_unreserve)
 	frees = 987;
 	actual = tree_new(free, true, false);
 	expect = tree_new(free + frees, false, false);
-	ret = tree_writeback(&actual, frees, LLFREE_TREE_SIZE, false);
+	ret = tree_writeback(&actual, frees, false);
 	check(ret);
 	equal_trees(actual, expect);
 

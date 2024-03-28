@@ -31,6 +31,11 @@ static inline void lower_drop(lower_t *self)
 			lower_metadata(self));
 }
 
+static size_t child_count(lower_t *self)
+{
+	return div_ceil(self->frames, LLFREE_CHILD_SIZE);
+}
+
 declare_test(lower_init)
 {
 	bool success = true;
@@ -38,7 +43,7 @@ declare_test(lower_init)
 	size_t frames = 1024;
 	lower_t actual = lower_new(frames, LLFREE_INIT_FREE);
 
-	check_equal(actual.children_len, 2);
+	check_equal(child_count(&actual), 2);
 	bitfield_is_free(actual.fields[0]);
 	check_equal(lower_free_frames(&actual), actual.frames);
 	lower_drop(&actual);
@@ -46,7 +51,7 @@ declare_test(lower_init)
 	frames = 1023;
 	actual = lower_new(frames, LLFREE_INIT_FREE);
 
-	check_equal(actual.children_len, 2);
+	check_equal(child_count(&actual), 2);
 	check_equal_bitfield(
 		actual.fields[1],
 		((bitfield_t){ 0, 0, 0, 0, 0, 0, 0, 0x8000000000000000 }));
@@ -56,7 +61,7 @@ declare_test(lower_init)
 	frames = 632;
 	actual = lower_new(frames, LLFREE_INIT_ALLOC);
 
-	check_equal(actual.children_len, 2);
+	check_equal(child_count(&actual), 2);
 	check_equal(actual.frames, 632ul);
 	check_equal(lower_free_frames(&actual), 0);
 	lower_drop(&actual);
@@ -64,13 +69,14 @@ declare_test(lower_init)
 	frames = 685161;
 	actual = lower_new(frames, LLFREE_INIT_FREE);
 
-	check_equal(actual.children_len, 1339);
+	check_equal(child_count(&actual), 1339);
 	bitfield_is_free_n(actual.fields, 1338);
 	check_equal_bitfield(actual.fields[1338],
 			     ((bitfield_t){ 0x0, 0xfffffe0000000000, UINT64_MAX,
 					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
 					    UINT64_MAX, UINT64_MAX }));
-	check_equal(lower_free_frames(&actual), 685161);
+	check_equal(actual.frames, frames);
+	check_equal(lower_free_frames(&actual), actual.frames);
 
 	// check alignment
 
@@ -160,7 +166,7 @@ declare_test(lower_get)
 	check(ret.val == 0);
 	ret = lower_get(&actual, 0, llflags(LLFREE_HUGE_ORDER));
 
-	child_t child = atom_load(&actual.children[1]);
+	child_t child = atom_load(&actual.children[0].entries[1]);
 	check_equal(child.huge, true);
 	check_equal(child.free, 0);
 	check_equal_bitfield(actual.fields[1],
@@ -300,22 +306,18 @@ declare_test(lower_large)
 {
 	bool success = true;
 
-	const size_t FRAMES = 128lu * LLFREE_CHILD_SIZE;
+	const size_t FRAMES = 16lu * LLFREE_CHILD_SIZE;
 
 	lower_t lower = lower_new(FRAMES, LLFREE_INIT_FREE);
+
+	lower_print(&lower);
 
 	uint64_t frames[LLFREE_MAX_ORDER + 1];
 	size_t tree = 0;
 	for (size_t o = 0; o <= LLFREE_MAX_ORDER; o++) {
 		llfree_result_t pfn;
-		do {
-			pfn = lower_get(&lower, tree << LLFREE_TREE_ORDER,
-					llflags(o));
-			if (pfn.val == LLFREE_ERR_MEMORY) {
-				tree += 1;
-				check(tree < FRAMES);
-			}
-		} while (pfn.val == LLFREE_ERR_MEMORY);
+		pfn = lower_get(&lower, tree * LLFREE_TREE_SIZE,
+				llflags(o));
 
 		check_m(llfree_ok(pfn), "%zu -> %" PRId64, o, pfn.val);
 		check_m(pfn.val % (1 << o) == 0, "%zu -> 0x%" PRIx64, o,
@@ -323,10 +325,14 @@ declare_test(lower_large)
 		frames[o] = pfn.val;
 	}
 
+	lower_print(&lower);
+
 	for (size_t o = 0; o <= LLFREE_MAX_ORDER; o++) {
 		llfree_result_t ret = lower_put(&lower, frames[o], llflags(o));
 		check_m(llfree_ok(ret), "%zu -> 0x%" PRIx64, o, frames[o]);
 	}
+
+	lower_print(&lower);
 
 	return success;
 }

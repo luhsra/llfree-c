@@ -1,5 +1,6 @@
 #include "child.h"
 #include "check.h"
+#include "lower.h"
 
 #define check_counter(actual, expect)                \
 	check_equal(actual.counter, expect.counter); \
@@ -12,7 +13,7 @@ declare_test(child_atomic)
 		_Atomic child_t v;
 		atomic_is_lock_free(&v);
 	}));
-	check(LLFREE_TREE_CHILDREN * sizeof(child_t) % LLFREE_CACHE_SIZE == 0);
+	check(sizeof(children_t) % LLFREE_CACHE_SIZE == 0);
 	return success;
 }
 

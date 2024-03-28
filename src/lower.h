@@ -3,15 +3,18 @@
 #include "bitfield.h"
 #include "child.h"
 
+typedef struct children {
+	_Alignas(LLFREE_CACHE_SIZE) _Atomic(child_t)
+		entries[LLFREE_TREE_CHILDREN];
+} children_t;
+
 typedef struct lower {
 	/// number of managed frames
 	size_t frames;
-	/// array length for fields and childs
-	size_t children_len;
 	/// bitfields storing the allocation states of the pages
 	bitfield_t *fields;
 	/// index per bitfield
-	_Atomic(child_t) *children;
+	children_t *children;
 } lower_t;
 
 /// Allocate and initialize the data structures of the lower allocator.

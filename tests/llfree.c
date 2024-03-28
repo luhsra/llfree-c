@@ -1,10 +1,8 @@
-#include "child.h"
 #include "llfree_inner.h"
 
 #include "check.h"
 #include "local.h"
 #include "lower.h"
-#include "utils.h"
 
 #include <memory.h>
 #include <pthread.h>
@@ -112,10 +110,11 @@ declare_test(llfree_alloc_s)
 	for (size_t i = 0; i < upper.trees_len; i++) {
 		size_t free = 0;
 		for (size_t j = 0; j < LLFREE_TREE_CHILDREN; j++) {
-			size_t idx = i * LLFREE_TREE_CHILDREN + j;
-			child_t child = atom_load(&upper.lower.children[idx]);
-			free += child.free;
+			free += lower_free_at_huge(
+				&upper.lower,
+				i * LLFREE_TREE_SIZE + j * LLFREE_CHILD_SIZE);
 		}
+
 		tree_t tree = atom_load(&upper.trees[i]);
 		if (!tree.reserved)
 			check_equal_m(free, tree.free, "tree %lu", i);
