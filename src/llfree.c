@@ -146,6 +146,11 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, local_t *local,
 {
 	assert(idx < self->trees_len);
 
+	// early return check for unreported page allocation
+	if (flags.get_unreported &&
+	    !lower_unreported_huge_in_tree(&self->lower, pfn_from_tree(idx)))
+		return llfree_result(LLFREE_ERR_MEMORY);
+
 	uint8_t kind = tree_kind(self, flags);
 
 	tree_t old;

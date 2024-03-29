@@ -62,7 +62,7 @@ static void lower_clear(lower_t *self, bool free_all)
 			free_all ? LL_MIN(CHILD_N, self->frames - i * CHILD_N) :
 				   0;
 
-		*get_child(self, i) = child_new((uint16_t)free, free == 0);
+		*get_child(self, i) = child_new((uint16_t)free, free == 0, false);
 
 		if (free == 0)
 			zero_field(&self->fields[i]);
@@ -72,7 +72,7 @@ static void lower_clear(lower_t *self, bool free_all)
 	// Leftover children are initialized to 0
 	for (size_t i = child_c; i < align_up(child_c, LLFREE_TREE_CHILDREN);
 	     i++) {
-		*get_child(self, i) = child_new(0, true);
+		*get_child(self, i) = child_new(0, true, false);
 	}
 }
 
@@ -82,7 +82,7 @@ static void lower_recover(lower_t *self)
 		child_t child = atom_load(get_child(self, i));
 		if (child.huge) {
 			// if this was reserved as Huge Page set counter and all frames to 0
-			atom_store(get_child(self, i), child_new(0, true));
+			atom_store(get_child(self, i), child_new(0, true, child.reported));
 			field_init(&self->fields[i]);
 		} else {
 			// not a Huge Page -> count free Frames and set as counter
@@ -90,7 +90,7 @@ static void lower_recover(lower_t *self)
 				(uint16_t)(CHILD_N -
 					   field_count_ones(&self->fields[i]));
 			atom_store(get_child(self, i),
-				   child_new(counter, false));
+				   child_new(counter, false, false));
 		}
 	}
 }
@@ -133,7 +133,7 @@ uint8_t *lower_metadata(lower_t *self)
 	return (uint8_t *)self->fields;
 }
 
-static llfree_result_t get_max(lower_t *self, uint64_t pfn)
+static llfree_result_t get_max(lower_t *self, uint64_t pfn, llflags_t flags)
 {
 	assert(self != 0);
 
@@ -143,7 +143,7 @@ static llfree_result_t get_max(lower_t *self, uint64_t pfn)
 		child_pair_t old;
 		if (atom_update((_Atomic(child_pair_t) *)get_child(
 					self, current_i * 2),
-				old, child_reserve_max)) {
+				old, child_reserve_max, flags)) {
 			return llfree_result(
 				(int64_t)pfn_from_child(current_i * 2));
 		}
@@ -152,7 +152,7 @@ static llfree_result_t get_max(lower_t *self, uint64_t pfn)
 	return llfree_result(LLFREE_ERR_MEMORY);
 }
 
-static llfree_result_t get_huge(lower_t *self, uint64_t pfn)
+static llfree_result_t get_huge(lower_t *self, uint64_t pfn, llflags_t flags)
 {
 	assert(self != 0);
 
@@ -161,7 +161,7 @@ static llfree_result_t get_huge(lower_t *self, uint64_t pfn)
 	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
 		child_t old;
 		if (atom_update(get_child(self, current_i), old,
-				child_reserve_huge)) {
+				child_reserve_huge, flags)) {
 			return llfree_result(
 				(int64_t)pfn_from_child(current_i));
 		}
@@ -177,9 +177,9 @@ llfree_result_t lower_get(lower_t *self, const uint64_t start_frame,
 	assert(start_frame < self->frames);
 
 	if (flags.order == LLFREE_MAX_ORDER)
-		return get_max(self, start_frame);
+		return get_max(self, start_frame, flags);
 	if (flags.order == LLFREE_HUGE_ORDER)
-		return get_huge(self, start_frame);
+		return get_huge(self, start_frame, flags);
 
 	const size_t idx = child_from_pfn(start_frame);
 	assert(idx < child_count(self));
@@ -207,7 +207,8 @@ llfree_result_t lower_get(lower_t *self, const uint64_t start_frame,
 	return llfree_result(LLFREE_ERR_MEMORY);
 }
 
-static llfree_result_t split_huge(_Atomic(child_t) *child, bitfield_t *field)
+static llfree_result_t split_huge(_Atomic(child_t) *child, bitfield_t *field,
+				  llflags_t flags)
 {
 	uint64_t zero = 0;
 
@@ -220,9 +221,10 @@ static llfree_result_t split_huge(_Atomic(child_t) *child, bitfield_t *field)
 			atom_store(&field->rows[i], UINT64_MAX);
 		}
 
-		child_t expected = child_new(0, true);
-		success = atom_cmp_exchange(child, &expected,
-					    child_new(0, false));
+		child_t expected = child_new(0, true, false);
+		success = atom_cmp_exchange(
+			child, &expected,
+			child_new(0, false, flags.set_reported));
 		assert(success);
 	} else {
 		llfree_debug("split huge: wait");
@@ -252,9 +254,9 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags)
 	_Atomic(child_t) *child = get_child(self, child_idx);
 
 	if (flags.order == LLFREE_MAX_ORDER) {
-		child_pair_t old = { child_new(0, true), child_new(0, true) };
-		child_pair_t new = { child_new(CHILD_N, false),
-				     child_new(CHILD_N, false) };
+		child_pair_t old = { child_new(0, true, false), child_new(0, true, false) };
+		child_pair_t new = { child_new(CHILD_N, false, flags.set_reported),
+				     child_new(CHILD_N, false, flags.set_reported) };
 
 		if (atom_cmp_exchange((_Atomic(child_pair_t) *)child, &old,
 				      new))
@@ -263,8 +265,8 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags)
 		return llfree_result(LLFREE_ERR_MEMORY);
 	}
 	if (flags.order == LLFREE_HUGE_ORDER) {
-		child_t old = child_new(0, true);
-		child_t new = child_new(CHILD_N, false);
+		child_t old = child_new(0, true, false);
+		child_t new = child_new(CHILD_N, false, flags.set_reported);
 
 		if (atom_cmp_exchange(child, &old, new))
 			return llfree_result(LLFREE_ERR_OK);
@@ -276,7 +278,7 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags)
 
 	child_t old = atom_load(child);
 	if (old.huge) {
-		llfree_result_t res = split_huge(child, field);
+		llfree_result_t res = split_huge(child, field, flags);
 		if (!llfree_ok(res))
 			return res;
 	}
@@ -353,6 +355,25 @@ size_t lower_free_huge(lower_t *self)
 		if (child.free == CHILD_N)
 			++count;
 	}
+	return count;
+}
+
+size_t lower_unreported_huge_in_tree(lower_t *self, uint64_t pfn)
+{
+	assert(self != 0);
+
+	size_t idx = child_from_pfn(pfn);
+	// assert(idx < self->childs_len);
+
+	size_t count = 0;
+	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
+		child_t child = atom_load(get_child(self, current_i));
+		if (child.free == CHILD_N &&
+		    child.reported == false) {
+			++count;
+		}
+	}
+
 	return count;
 }
 

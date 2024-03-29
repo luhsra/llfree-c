@@ -62,7 +62,7 @@ enum {
 typedef struct llflags {
 	uint8_t order : 8;
 	bool movable : 1;
-	bool reported : 1;
+	bool get_unreported : 1;
 	bool set_reported : 1;
 	// Reserved for future use
 } llflags_t;
@@ -71,7 +71,7 @@ static inline llflags_t llflags(size_t order)
 {
 	return (llflags_t){ .order = (uint8_t)order,
 			    .movable = false,
-			    .reported = false,
+			    .get_unreported = false,
 			    .set_reported = false };
 }
 
