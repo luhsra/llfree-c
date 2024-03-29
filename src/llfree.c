@@ -471,6 +471,12 @@ size_t llfree_frames(llfree_t *self)
 	return self->lower.frames;
 }
 
+size_t llfree_huge(llfree_t *self)
+{
+	assert(self != NULL);
+	return lower_huge(&self->lower);
+}
+
 size_t llfree_free_frames(llfree_t *self)
 {
 	assert(self != NULL);

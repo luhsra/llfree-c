@@ -397,3 +397,8 @@ size_t lower_free_at_tree(lower_t *self, uint64_t frame)
 	}
 	return free;
 }
+
+size_t lower_huge(lower_t *self) {
+    assert(self != NULL);
+    return child_count(self);
+}

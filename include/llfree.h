@@ -120,8 +120,12 @@ llfree_result_t llfree_drain(llfree_t *self, size_t core);
 
 /// Returns the number of cores this allocator was initialized with
 size_t llfree_cores(llfree_t *self);
+
 /// Returns the total number of frames the allocator can allocate
 size_t llfree_frames(llfree_t *self);
+
+/// Returns the total number of huge frames the allocator can allocate
+size_t llfree_huge(llfree_t *self);
 
 /// Checks if a frame is allocated, returning 0 if not
 bool llfree_is_free(llfree_t *self, uint64_t frame, size_t order);

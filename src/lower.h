@@ -46,6 +46,9 @@ size_t lower_free_at_huge(lower_t *self, uint64_t frame);
 /// Returns the number of free pages in the huge page
 size_t lower_free_at_tree(lower_t *self, uint64_t frame);
 
+// Returns the number of huge frames 
+size_t lower_huge(lower_t *self);
+
 /// Returns the number of unreported, free huge frames in a tree
 size_t lower_unreported_huge_in_tree(lower_t *self, uint64_t pfn);
 
