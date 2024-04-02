@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils.h"
+#include "tree.h"
 
 /// Reservation heuristic: number of frees in the same tree before reserving it
 #define LAST_FREES 4U
@@ -27,18 +28,11 @@ typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) local {
 	uint8_t last_frees;
 	/// Counter that triggers full scans (fragmentation heuristic)
 	uint8_t skip_near_counter;
-	/// Reserved tree for movable allocations
-	reserved_t fixed;
+	/// Reserved trees
+	reserved_t reserved[TREE_KINDS];
 	/// Index of the last tree where a frame was freed
-	reserved_t movable;
-	/// Reserved tree for immovable allocations
 	uint64_t last_idx;
 } local_t;
-
-static inline reserved_t *ll_local_reserved(local_t *self, bool movable)
-{
-	return movable ? &self->movable : &self->fixed;
-}
 
 /// Initialize the per-cpu data
 void ll_local_init(local_t *self);

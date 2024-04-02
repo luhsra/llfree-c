@@ -174,7 +174,7 @@ declare_test(llfree_general_function)
 	// reserve first frame in new tree
 	ret = llfree_get(&upper, 0, llflags(0));
 	check(llfree_ok(ret));
-	reserved_t reserved = upper.local[0].fixed;
+	reserved_t reserved = upper.local[0].reserved[0];
 	check_m(reserved.start_row == row_from_pfn(LLFREE_TREE_SIZE),
 		"second tree must be allocated");
 
@@ -230,7 +230,7 @@ declare_test(llfree_put)
 	}
 
 	// core 2 must have now this first tree reserved
-	reserved_t res = upper.local[2].fixed;
+	reserved_t res = upper.local[2].reserved[0];
 	check_equal(tree_from_row(res.start_row),
 		    (uint64_t)tree_from_pfn(reserved[0]));
 	if (!success)
