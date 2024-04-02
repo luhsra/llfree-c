@@ -432,7 +432,8 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 	bool reserve = ll_local_free_inc(local, tree_idx);
 
 	// Increment local or otherwise global counter
-	for (int kind = TREE_FIXED; kind < TREE_KINDS; kind++) {
+	int kind = tree_kind(self, flags);
+	if (kind == TREE_HUGE) {
 		reserved_t *reserved = &local->reserved[kind];
 		if (reserved->present &&
 		    tree_from_row(reserved->start_row) == tree_idx) {
@@ -440,6 +441,17 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 			assert(reserved->free <= LLFREE_TREE_SIZE);
 			ll_local_unlock(local);
 			return llfree_result(LLFREE_ERR_OK);
+		}
+	} else {
+		for (; kind <= TREE_MOVABLE; kind++) {
+			reserved_t *reserved = &local->reserved[kind];
+			if (reserved->present &&
+			tree_from_row(reserved->start_row) == tree_idx) {
+				reserved->free += 1 << flags.order;
+				assert(reserved->free <= LLFREE_TREE_SIZE);
+				ll_local_unlock(local);
+				return llfree_result(LLFREE_ERR_OK);
+			}
 		}
 	}
 
@@ -455,11 +467,10 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 		size_t free = old_t.free + (1 << flags.order);
 		assert(!old_t.reserved && free <= LLFREE_TREE_SIZE);
 
-		int kind = tree_kind(self, flags);
 		reserved_t new = { .free = free,
 				   .start_row = row_from_tree(tree_idx),
 				   .present = true };
-		swap_reserved(self, local, new, kind);
+		swap_reserved(self, local, new, old_t.kind);
 	}
 	ll_local_unlock(local);
 	return llfree_result(LLFREE_ERR_OK);
