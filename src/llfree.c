@@ -272,7 +272,7 @@ static llfree_result_t search(llfree_t *self, local_t *local, uint64_t base_idx,
 /// Reserves a new tree and allocates from it.
 ///
 /// The search for a new tree aims to be both fast and avoid fragmentation.
-static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
+static _unused llfree_result_t reserve_and_get_old(llfree_t *self, uint64_t core,
 				       llflags_t flags)
 {
 	local_t *local = get_local(self, core);
@@ -315,6 +315,90 @@ static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
 
 	// Any tree
 	p_range_t any = { 0, LLFREE_TREE_SIZE };
+	res = search(self, local, base_idx, flags, any, 0, self->trees_len);
+	if (res.val != LLFREE_ERR_MEMORY)
+		return res;
+
+	// Drain other cores for a tree
+	for (uint64_t i = 1; i < self->cores; ++i) {
+		res = llfree_drain(self, (core + i) % self->cores);
+	}
+	// Repeat search
+	res = search(self, local, base_idx, flags, any, 0, self->trees_len);
+
+	return res;
+}
+
+static llfree_result_t reserve_and_get(llfree_t *self, uint64_t core,
+				       llflags_t flags)
+{
+	local_t *local = get_local(self, core);
+	int kind = tree_kind(self, flags);
+	reserved_t old = local->reserved[kind];
+
+	uint64_t start_idx =
+		old.present ?
+			tree_from_row(old.start_row) :
+			(self->trees_len / self->cores * (core % self->cores));
+	assert(start_idx < self->trees_len);
+
+	const uint64_t cl_trees = LLFREE_CACHE_SIZE / sizeof(tree_t);
+	uint64_t base_idx = align_down(start_idx, cl_trees);
+
+	uint64_t near = LL_MIN(LL_MAX((self->trees_len / self->cores / 4),
+				      cl_trees / 4),
+			       cl_trees * 2);
+
+	llfree_result_t res;
+	p_range_t half = { LL_MAX(2 << flags.order, LLFREE_TREE_SIZE / 32),
+			   LLFREE_TREE_SIZE / 2 };
+	p_range_t partial = { LL_MAX(2 << flags.order, LLFREE_TREE_SIZE / 128),
+			      LLFREE_TREE_SIZE - LLFREE_TREE_SIZE / 32 };
+	p_range_t nofree = { 0, LLFREE_TREE_SIZE - 1 };
+	p_range_t any = { 0, LLFREE_TREE_SIZE };
+
+	// Search near trees (skip every n allocs to reduce global fragmentation)
+	if (local->skip_near_counter < SKIP_NEAR_FREQ) {
+		local->skip_near_counter += 1;
+		// Half full
+		res = search(self, local, base_idx, flags, half, 1, near);
+		if (res.val != LLFREE_ERR_MEMORY)
+			return res;
+		// Neither filled nor free
+		res = search(self, local, base_idx, flags, partial, 1, near);
+		if (res.val != LLFREE_ERR_MEMORY)
+			return res;
+		// Trees that are not free
+		res = search(self, local, base_idx, flags, nofree, 1, near);
+		if (res.val != LLFREE_ERR_MEMORY)
+			return res;
+		// Any tree
+		res = search(self, local, base_idx, flags, any, 1, near);
+		if (res.val != LLFREE_ERR_MEMORY)
+			return res;
+	} else {
+		near = 0;
+		local->skip_near_counter = 0;
+	}
+
+	// Search global trees
+
+	// Half full
+	res = search(self, local, base_idx, flags, half, near, self->trees_len);
+	if (res.val != LLFREE_ERR_MEMORY)
+		return res;
+	// Neither filled nor free
+	res = search(self, local, base_idx, flags, partial, near,
+		     self->trees_len);
+	if (res.val != LLFREE_ERR_MEMORY)
+		return res;
+	// Trees that are not free
+	res = search(self, local, base_idx, flags, nofree, near,
+		     self->trees_len);
+	if (res.val != LLFREE_ERR_MEMORY)
+		return res;
+
+	// Any tree
 	res = search(self, local, base_idx, flags, any, 0, self->trees_len);
 	if (res.val != LLFREE_ERR_MEMORY)
 		return res;
