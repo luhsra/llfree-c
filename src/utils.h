@@ -48,7 +48,7 @@ static inline _unused int leading_zeros(uint64_t val)
 /// Count the total number of ones
 static inline _unused size_t count_ones(uint64_t val)
 {
-	return __builtin_popcountll(val);
+	return (size_t)__builtin_popcountll(val);
 }
 /// Returns the largest multiple of align, less or equal to val
 static inline _unused size_t align_down(size_t val, size_t align)

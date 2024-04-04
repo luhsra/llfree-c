@@ -1,6 +1,6 @@
 #include "tree.h"
 
-bool tree_reserve(tree_t *self, size_t min, size_t max, int kind)
+bool tree_reserve(tree_t *self, uint16_t min, uint16_t max, uint8_t kind)
 {
 	assert(min < max);
 
@@ -12,7 +12,7 @@ bool tree_reserve(tree_t *self, size_t min, size_t max, int kind)
 	return false;
 }
 
-bool tree_steal_counter(tree_t *self, size_t min)
+bool tree_steal_counter(tree_t *self, uint16_t min)
 {
 	if (self->reserved && self->free >= min) {
 		*self = tree_new(0, true, self->kind);
@@ -21,9 +21,9 @@ bool tree_steal_counter(tree_t *self, size_t min)
 	return false;
 }
 
-bool tree_writeback(tree_t *self, size_t free, int kind)
+bool tree_writeback(tree_t *self, uint16_t free, uint8_t kind)
 {
-	size_t f = self->free + free;
+	uint16_t f = self->free + free;
 	assert(f <= LLFREE_TREE_SIZE);
 	assert(self->reserved);
 
@@ -31,7 +31,7 @@ bool tree_writeback(tree_t *self, size_t free, int kind)
 	return true;
 }
 
-bool tree_inc(tree_t *self, size_t free)
+bool tree_inc(tree_t *self, uint16_t free)
 {
 	assert(self->free + free <= LLFREE_TREE_SIZE);
 
@@ -39,7 +39,8 @@ bool tree_inc(tree_t *self, size_t free)
 	return true;
 }
 
-bool tree_inc_or_reserve(tree_t *self, size_t free, bool *reserve, size_t min)
+bool tree_inc_or_reserve(tree_t *self, uint16_t free, bool *reserve,
+			 uint16_t min)
 {
 	_unused bool success = tree_inc(self, free); // update counter
 	assert(success);

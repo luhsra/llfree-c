@@ -2,6 +2,8 @@
 
 #include <stdio.h>
 #include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdatomic.h>
 
 #define PRIuS "zu"

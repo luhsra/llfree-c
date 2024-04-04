@@ -155,7 +155,7 @@ declare_test(llfree_general_function)
 
 	llfree_info("After get mit core 0\n");
 
-	ret = llfree_put(&upper, 0, frame.val, llflags(0));
+	ret = llfree_put(&upper, 0, (uint64_t)frame.val, llflags(0));
 
 	return success;
 
@@ -184,8 +184,8 @@ declare_test(llfree_general_function)
 	check(llfree_ok(frame));
 	check_equal(llfree_free_frames(&upper),
 		    free_frames - LLFREE_CHILD_SIZE);
-	check(llfree_ok(
-		llfree_put(&upper, 0, frame.val, llflags(LLFREE_HUGE_ORDER))));
+	check(llfree_ok(llfree_put(&upper, 0, (uint64_t)frame.val,
+				   llflags(LLFREE_HUGE_ORDER))));
 	check_equal(llfree_free_frames(&upper), free_frames);
 
 	llfree_drop(&upper);
@@ -198,13 +198,13 @@ declare_test(llfree_put)
 	llfree_result_t ret;
 
 	llfree_t upper = llfree_new(4, LLFREE_TREE_SIZE << 4, LLFREE_INIT_FREE);
-	int64_t reserved[LLFREE_TREE_SIZE + 5];
+	uint64_t reserved[LLFREE_TREE_SIZE + 5];
 
 	// reserve more frames than one tree
 	for (size_t i = 0; i < LLFREE_TREE_SIZE + 5; ++i) {
 		ret = llfree_get(&upper, 1, llflags(0));
 		check(llfree_ok(ret));
-		reserved[i] = ret.val;
+		reserved[i] = (uint64_t)ret.val;
 	}
 
 	check_equal(tree_from_pfn(reserved[0]),
@@ -272,26 +272,25 @@ declare_test(llfree_alloc_all)
 }
 
 struct arg {
-	int core;
-	int order;
+	size_t core;
+	size_t order;
 	size_t amount;
 	size_t allocations;
 	llfree_t *upper;
 };
 struct ret {
-	int64_t *pfns;
+	uint64_t *pfns;
 	size_t sp;
-	size_t amount_ENOMEM;
 };
 
-static int64_t contains(int64_t const *sorted_list, size_t len, int64_t item)
+static int64_t contains(uint64_t const *sorted_list, size_t len, uint64_t item)
 {
 	if (item < sorted_list[0] || item > sorted_list[len - 1])
 		return -1;
 
 	for (size_t i = 0; i < len; ++i) {
 		if (sorted_list[i] == item)
-			return i;
+			return (int64_t)i;
 		if (sorted_list[i] > item)
 			return -1;
 	}
@@ -316,12 +315,12 @@ static void *alloc_frames(void *arg)
 	ret->pfns = malloc(args->amount * sizeof(int64_t));
 	assert(ret->pfns != NULL);
 
-	srand(args->core);
+	srand((unsigned int)args->core);
 	for (size_t i = 0; i < args->allocations; ++i) {
 		// if full or in 1/3 times free a random reserved frame;
 		if (ret->sp == args->amount ||
 		    (ret->sp > 0 && rand() % 8 > 4)) {
-			size_t random_idx = rand() % ret->sp;
+			size_t random_idx = (size_t)rand() % ret->sp;
 			llfree_result_t res = llfree_put(args->upper,
 							 args->core,
 							 ret->pfns[random_idx],
@@ -334,11 +333,8 @@ static void *alloc_frames(void *arg)
 			llfree_result_t res = llfree_get(
 				args->upper, args->core, llflags(args->order));
 			assert(llfree_ok(res));
-			ret->pfns[ret->sp] = res.val;
-			if (ret->pfns[ret->sp] == LLFREE_ERR_MEMORY)
-				++ret->amount_ENOMEM;
-			else
-				++ret->sp;
+			ret->pfns[ret->sp] = (uint64_t)res.val;
+			++ret->sp;
 		}
 	}
 	qsort(ret->pfns, ret->sp, sizeof(int64_t), comp);
@@ -361,7 +357,7 @@ declare_test(llfree_parallel_alloc)
 
 	pthread_t threads[CORES];
 	struct arg args[CORES];
-	for (int i = 0; i < CORES; ++i) {
+	for (size_t i = 0; i < CORES; ++i) {
 		args[i] = (struct arg){ .core = i,
 					.order = 0,
 					.amount = (LLFREE_TREE_SIZE + 500),
@@ -378,10 +374,8 @@ declare_test(llfree_parallel_alloc)
 	}
 
 	size_t still_reserved = 0;
-	size_t err = 0;
 	for (int i = 0; i < CORES; ++i) {
 		still_reserved += rets[i]->sp;
-		err += rets[i]->amount_ENOMEM;
 	}
 	// now all threads are terminated
 	check_equal(llfree_frames(&upper) - llfree_free_frames(&upper),
@@ -393,7 +387,7 @@ declare_test(llfree_parallel_alloc)
 	for (size_t core = 0; core < CORES; ++core) {
 		for (size_t i = core + 1; i < CORES; ++i) {
 			for (size_t idx = 0; idx < rets[core]->sp; ++idx) {
-				int64_t frame = rets[core]->pfns[idx];
+				uint64_t frame = rets[core]->pfns[idx];
 				int64_t same = contains(rets[i]->pfns,
 							rets[i]->sp, frame);
 				if (same <= 0)
@@ -413,7 +407,6 @@ end:
 
 	if (!success) {
 		llfree_print(&upper);
-		printf("%zu times LLFREE_ERR_MEMORY was returned\n", err);
 	}
 	for (size_t i = 0; i < CORES; ++i) {
 		free(rets[i]->pfns);
@@ -453,7 +446,7 @@ static void *parallel_alloc_all(void *input)
 		}
 		assert((uint64_t)ret.val < total);
 
-		(*(args->frames))[i] = ret.val;
+		(*(args->frames))[i] = (uint64_t)ret.val;
 	}
 	llfree_info("finish %zu (%zu)", args->core, i);
 	return (void *)i;
@@ -558,7 +551,7 @@ static void *llfree_less_mem_par(void *input)
 		llfree_result_t res =
 			llfree_get(shared->llfree, data->core, llflags(0));
 		assert(llfree_ok(res));
-		frames[i] = res.val;
+		frames[i] = (uint64_t)res.val;
 	}
 
 	llfree_info("sync1 on %zu", data->core);
@@ -584,9 +577,7 @@ declare_test(llfree_less_mem)
 #undef FRAMES
 #define FRAMES 4096
 
-	llfree_result_t res;
 	llfree_t llfree = llfree_new(CORES, FRAMES, LLFREE_INIT_FREE);
-	check(llfree_ok(res));
 
 	llfree_info("get");
 

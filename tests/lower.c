@@ -97,7 +97,7 @@ declare_test(lower_get)
 	size_t frames = 1360;
 	lower_t actual = lower_new(frames, LLFREE_INIT_FREE);
 
-	int order = 0;
+	size_t order = 0;
 
 	ret = lower_get(&actual, 0, llflags(order));
 	check_equal((int)ret.val, 0);
@@ -186,7 +186,7 @@ declare_test(lower_put)
 
 	uint64_t pfn;
 	llfree_result_t ret;
-	int order = 0;
+	size_t order = 0;
 
 	for (int i = 0; i < 957; i++) {
 		ret = lower_get(&actual, 0, llflags(order));
@@ -316,13 +316,12 @@ declare_test(lower_large)
 	size_t tree = 0;
 	for (size_t o = 0; o <= LLFREE_MAX_ORDER; o++) {
 		llfree_result_t pfn;
-		pfn = lower_get(&lower, tree * LLFREE_TREE_SIZE,
-				llflags(o));
+		pfn = lower_get(&lower, tree * LLFREE_TREE_SIZE, llflags(o));
 
 		check_m(llfree_ok(pfn), "%zu -> %" PRId64, o, pfn.val);
 		check_m(pfn.val % (1 << o) == 0, "%zu -> 0x%" PRIx64, o,
 			pfn.val);
-		frames[o] = pfn.val;
+		frames[o] = (uint64_t)pfn.val;
 	}
 
 	lower_print(&lower);
@@ -341,18 +340,18 @@ declare_test(lower_huge)
 {
 	bool success = true;
 
-	const size_t FRAMES = LLFREE_CHILD_SIZE * 60;
+	const size_t FRAMES = LLFREE_CHILD_SIZE * 60lu;
 	lower_t actual = lower_new(FRAMES, LLFREE_INIT_FREE);
 
 	llfree_result_t pfn1 =
 		lower_get(&actual, 0, llflags(LLFREE_HUGE_ORDER));
 	check(llfree_ok(pfn1));
-	uint64_t offset = pfn1.val % LLFREE_CHILD_SIZE;
+	uint64_t offset = (uint64_t)pfn1.val % LLFREE_CHILD_SIZE;
 	check_equal(offset, 0ul);
 	llfree_result_t pfn2 =
 		lower_get(&actual, 0, llflags(LLFREE_HUGE_ORDER));
 	check(llfree_ok(pfn2));
-	offset = pfn2.val % LLFREE_CHILD_SIZE;
+	offset = (uint64_t)pfn2.val % LLFREE_CHILD_SIZE;
 	check_equal(offset, 0ul);
 	check(pfn1.val != pfn2.val);
 	check_equal(actual.frames - lower_free_frames(&actual),
@@ -362,30 +361,31 @@ declare_test(lower_huge)
 	llfree_result_t regular = lower_get(&actual, 0, llflags(0));
 	assert(llfree_ok(regular));
 	// regular frame cannot be returned as HP
-	assert(!llfree_ok(
-		lower_put(&actual, regular.val, llflags(LLFREE_HUGE_ORDER))));
+	assert(!llfree_ok(lower_put(&actual, (uint64_t)regular.val,
+				    llflags(LLFREE_HUGE_ORDER))));
 
 	// this HF must be in another child than the regular frame.
 	llfree_result_t pfn3 = lower_get(&actual, pfn_from_row(10),
 					 llflags(LLFREE_HUGE_ORDER));
 	check(llfree_ok(pfn3));
-	offset = pfn3.val % LLFREE_CHILD_SIZE;
+	offset = (uint64_t)pfn3.val % LLFREE_CHILD_SIZE;
 	check_equal(offset, 0ul);
-	check_equal((uint64_t)pfn3.val, 3 * LLFREE_CHILD_SIZE);
+	check_equal((uint64_t)pfn3.val, 3lu * LLFREE_CHILD_SIZE);
 
 	// free regular page und try get this child as complete HP
-	assert(llfree_ok(lower_put(&actual, regular.val, llflags(0))));
+	assert(llfree_ok(
+		lower_put(&actual, (uint64_t)regular.val, llflags(0))));
 	llfree_result_t pfn4 =
 		lower_get(&actual, 0, llflags(LLFREE_HUGE_ORDER));
 	check(llfree_ok(pfn4));
 	check(pfn4.val == regular.val);
 
-	llfree_result_t ret =
-		lower_put(&actual, pfn2.val, llflags(LLFREE_HUGE_ORDER));
+	llfree_result_t ret = lower_put(&actual, (uint64_t)pfn2.val,
+					llflags(LLFREE_HUGE_ORDER));
 	check(llfree_ok(ret));
 
 	// allocate the complete memory with HPs
-	for (int i = 3; i < 60; ++i) {
+	for (size_t i = 3; i < 60; ++i) {
 		// get allocates only in chunks of N children. if there is no free HP in given chung it returns LLFREE_ERR_MEMORY
 		llfree_result_t pfn = lower_get(
 			&actual, (i / LLFREE_TREE_CHILDREN) * LLFREE_TREE_SIZE,
@@ -401,13 +401,13 @@ declare_test(lower_huge)
 	check(pfn.val == LLFREE_ERR_MEMORY);
 
 	// return HP as regular Frame must succseed
-	check(llfree_ok(lower_put(&actual, pfn2.val, llflags(0))));
+	check(llfree_ok(lower_put(&actual, (uint64_t)pfn2.val, llflags(0))));
 	// HP ist converted into regular frames so returning the whole page must fail
-	check(lower_put(&actual, pfn2.val, llflags(LLFREE_HUGE_ORDER)).val ==
-	      LLFREE_ERR_ADDRESS);
+	check(lower_put(&actual, (uint64_t)pfn2.val, llflags(LLFREE_HUGE_ORDER))
+		      .val == LLFREE_ERR_ADDRESS);
 
-	check(llfree_ok(
-		lower_put(&actual, pfn1.val, llflags(LLFREE_HUGE_ORDER))));
+	check(llfree_ok(lower_put(&actual, (uint64_t)pfn1.val,
+				  llflags(LLFREE_HUGE_ORDER))));
 
 	// check if right amout of free regular frames are present
 	check_equal(lower_free_frames(&actual), LLFREE_CHILD_SIZE + 1ul);
@@ -423,7 +423,7 @@ declare_test(lower_max)
 {
 	bool success = true;
 
-	const size_t FRAMES = LLFREE_CHILD_SIZE * 60;
+	const size_t FRAMES = LLFREE_CHILD_SIZE * 60lu;
 	lower_t lower = lower_new(FRAMES, LLFREE_INIT_FREE);
 
 	for (size_t i = 0; i < FRAMES / (1 << LLFREE_MAX_ORDER); ++i) {
@@ -464,8 +464,8 @@ declare_test(lower_free_all)
 		      "one allocated HF and the 35 regular frames");
 
 	// free last HP as regular frame and regular frames
-	const uint64_t start = 15 * 512;
-	for (size_t i = 0; i < 512 + 35; ++i) {
+	const uint64_t start = 15lu * 512lu;
+	for (size_t i = 0; i < 512lu + 35lu; ++i) {
 		ret = lower_put(&lower, start + i, llflags(0));
 		check(llfree_ok(ret));
 	}

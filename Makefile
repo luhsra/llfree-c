@@ -7,7 +7,7 @@ TESTDIR = tests
 # Compiler and flags
 CC = clang
 AR = ar
-CFLAGS = -std=c11 -Werror -Wunused-variable -Wundef -Werror=strict-prototypes -Wno-trigraphs -Werror=implicit-function-declaration -Werror=implicit-int -Werror=return-type -Wno-format-security -Wno-sign-compare -Wno-frame-address -Wno-address-of-packed-member -Wno-unused-but-set-variable -Wno-unused-const-variable -Wvla -Wno-pointer-sign -Wcast-function-type -Wimplicit-fallthrough -Werror=date-time -Werror=incompatible-pointer-types -Wno-sign-compare -fPIE -pthread
+CFLAGS = -std=c11 -Werror -Wunused-variable -Wundef -Werror=strict-prototypes -Werror=implicit-function-declaration -Werror=implicit-int -Werror=return-type -Wvla -Wcast-function-type -Wimplicit-fallthrough -Werror=date-time -Werror=incompatible-pointer-types -Wconversion -Wenum-conversion -Wint-conversion -Wimplicit-int-conversion -Wimplicit-float-conversion -Wundefined-bool-conversion -Wbitfield-enum-conversion -Wanon-enum-enum-conversion -Wmissing-field-initializers -Wall -Wextra -fPIE -pthread
 
 CFLAGS += -I $(SRCDIR) -I $(TESTDIR) -I include -I std
 CFLAGS += -DSTD

@@ -83,7 +83,7 @@ bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos)
 		break;
 	}
 	if (p >= 0) {
-		*pos = p;
+		*pos = (size_t)p;
 		return true;
 	}
 	return false;
@@ -105,7 +105,9 @@ llfree_result_t field_set_next(bitfield_t *field, uint64_t start_pfn,
 			if (atom_update(&field->rows[current_i], old,
 					first_zeros_aligned, order, &pos)) {
 				return llfree_result(
-					current_i * LLFREE_ATOMIC_SIZE + pos);
+					(int64_t)(current_i *
+							  LLFREE_ATOMIC_SIZE +
+						  pos));
 			}
 		}
 		return llfree_result(LLFREE_ERR_MEMORY);
@@ -137,8 +139,8 @@ llfree_result_t field_set_next(bitfield_t *field, uint64_t start_pfn,
 		}
 		if (!failed) {
 			// Success, we have updated all rows
-			return llfree_result(current_i * entries *
-					     LLFREE_ATOMIC_SIZE);
+			return llfree_result((int64_t)(current_i * entries *
+						       LLFREE_ATOMIC_SIZE));
 		}
 	}
 

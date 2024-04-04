@@ -62,7 +62,7 @@ static void lower_clear(lower_t *self, bool free_all)
 			free_all ? LL_MIN(CHILD_N, self->frames - i * CHILD_N) :
 				   0;
 
-		*get_child(self, i) = child_new(free, free == 0);
+		*get_child(self, i) = child_new((uint16_t)free, free == 0);
 
 		if (free == 0)
 			zero_field(&self->fields[i]);
@@ -87,7 +87,8 @@ static void lower_recover(lower_t *self)
 		} else {
 			// not a Huge Page -> count free Frames and set as counter
 			uint16_t counter =
-				CHILD_N - field_count_ones(&self->fields[i]);
+				(uint16_t)(CHILD_N -
+					   field_count_ones(&self->fields[i]));
 			atom_store(get_child(self, i),
 				   child_new(counter, false));
 		}
@@ -143,7 +144,8 @@ static llfree_result_t get_max(lower_t *self, uint64_t pfn)
 		if (atom_update((_Atomic(child_pair_t) *)get_child(
 					self, current_i * 2),
 				old, child_reserve_max)) {
-			return llfree_result(pfn_from_child(current_i * 2));
+			return llfree_result(
+				(int64_t)pfn_from_child(current_i * 2));
 		}
 	}
 
@@ -160,7 +162,8 @@ static llfree_result_t get_huge(lower_t *self, uint64_t pfn)
 		child_t old;
 		if (atom_update(get_child(self, current_i), old,
 				child_reserve_huge)) {
-			return llfree_result(pfn_from_child(current_i));
+			return llfree_result(
+				(int64_t)pfn_from_child(current_i));
 		}
 	}
 
@@ -188,8 +191,9 @@ llfree_result_t lower_get(lower_t *self, const uint64_t start_frame,
 				field_set_next(&self->fields[current_i],
 					       start_frame, flags.order);
 			if (llfree_ok(pos)) {
-				return llfree_result(pfn_from_child(current_i) +
-						     pos.val);
+				return llfree_result(
+					(int64_t)pfn_from_child(current_i) +
+					pos.val);
 			}
 
 			if (!atom_update(get_child(self, current_i), old,

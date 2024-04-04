@@ -69,7 +69,7 @@ typedef struct llflags {
 
 static inline llflags_t llflags(size_t order)
 {
-	return (llflags_t){ .order = order,
+	return (llflags_t){ .order = (uint8_t)order,
 			    .movable = false,
 			    .reported = false,
 			    .set_reported = false };

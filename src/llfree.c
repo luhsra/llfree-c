@@ -12,7 +12,7 @@ static inline local_t *get_local(llfree_t *self, size_t core)
 	return &self->local[core % self->cores];
 }
 
-static inline int tree_kind(llfree_t *self, llflags_t flags)
+static inline uint8_t tree_kind(llfree_t *self, llflags_t flags)
 {
 	// only separate if enough trees
 	if (self->trees_len < (TREE_KINDS * self->cores))
@@ -125,14 +125,14 @@ llfree_meta_t llfree_metadata(llfree_t *self)
 /// This checks first if the reserving flag has the expected value
 /// returning false if not.
 static void swap_reserved(llfree_t *self, local_t *local, reserved_t new,
-			  int kind)
+			  uint8_t kind)
 {
 	reserved_t old = local->reserved[kind];
 	local->reserved[kind] = new;
 
 	if (old.present) {
 		size_t tree_idx = tree_from_row(old.start_row);
-		size_t free = old.free;
+		uint16_t free = old.free;
 		tree_t tree;
 		atom_update(&self->trees[tree_idx], tree, tree_writeback, free,
 			    kind);
@@ -147,9 +147,9 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, local_t *local,
 					    p_range_t free)
 {
 	assert(idx < self->trees_len);
-	free.min = LL_MAX(free.min, 1 << flags.order);
+	free.min = LL_MAX(free.min, (uint16_t)(1 << flags.order));
 
-	int kind = tree_kind(self, flags);
+	uint8_t kind = tree_kind(self, flags);
 
 	tree_t old;
 	if (!atom_update(&self->trees[idx], old, tree_reserve, free.min,
@@ -162,8 +162,9 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, local_t *local,
 
 	if (llfree_ok(res)) {
 		// write back llfree_result
-		reserved_t new = { .free = old.free - (1 << flags.order),
-				   .start_row = row_from_pfn(res.val),
+		reserved_t new = { .free = old.free -
+					   (uint16_t)(1 << flags.order),
+				   .start_row = row_from_pfn((uint64_t)res.val),
 				   .present = true };
 		swap_reserved(self, local, new, kind);
 	} else {
@@ -188,7 +189,7 @@ static llfree_result_t search(llfree_t *self, local_t *local, uint64_t base_idx,
 	for (int64_t i = (int64_t)offset; i < (int64_t)len; ++i) {
 		// Search alternating left and right from base_idx
 		int64_t off = i % 2 == 0 ? i / 2 : -(i + 1) / 2;
-		uint64_t idx = (start + off) % self->trees_len;
+		uint64_t idx = (uint64_t)(start + off) % self->trees_len;
 		llfree_result_t res =
 			reserve_tree_and_get(self, local, idx, flags, free);
 		if (res.val != LLFREE_ERR_MEMORY)
@@ -200,7 +201,7 @@ static llfree_result_t search(llfree_t *self, local_t *local, uint64_t base_idx,
 /// Steal from other core
 static llfree_result_t steal_tree(llfree_t *self, size_t core, llflags_t flags)
 {
-	int kind = tree_kind(self, flags);
+	uint8_t kind = tree_kind(self, flags);
 	local_t *my_local = get_local(self, core);
 
 	for (size_t c = 1; c < self->cores; c++) {
@@ -220,9 +221,10 @@ static llfree_result_t steal_tree(llfree_t *self, size_t core, llflags_t flags)
 
 					reserved_t new = {
 						.free = reserved->free -
-							(1 << flags.order),
-						.start_row =
-							row_from_pfn(res.val),
+							(uint16_t)(1
+								   << flags.order),
+						.start_row = row_from_pfn(
+							(uint64_t)res.val),
 						.present = true,
 					};
 					swap_reserved(self, my_local, new,
@@ -262,14 +264,16 @@ static _unused llfree_result_t reserve_and_get(llfree_t *self, size_t core,
 	start = align_down(start, cl_trees);
 
 	// Over half filled trees
-	p_range_t half = { LL_MAX(LLFREE_TREE_SIZE / 16, 2 << flags.order),
+	p_range_t half = { LL_MAX(LLFREE_TREE_SIZE / 16,
+				  (uint16_t)(2 << flags.order)),
 			   LLFREE_TREE_SIZE / 2 };
 	res = search(self, local, start, flags, half, 1, near);
 	if (res.val != LLFREE_ERR_MEMORY)
 		return res;
 
 	// Partially filled tree
-	p_range_t partial = { LL_MAX(LLFREE_TREE_SIZE / 64, 2 << flags.order),
+	p_range_t partial = { LL_MAX(LLFREE_TREE_SIZE / 64,
+				     (uint16_t)(2 << flags.order)),
 			      LLFREE_TREE_SIZE - LLFREE_TREE_SIZE / 16 };
 	res = search(self, local, start, flags, partial, 1, 2 * near);
 	if (res.val != LLFREE_ERR_MEMORY)
@@ -305,7 +309,7 @@ static bool sync_with_global(llfree_t *self, local_t *local, llflags_t flags)
 
 	tree_t old_tree;
 	if (!atom_update(&self->trees[tree_idx], old_tree, tree_steal_counter,
-			 (1 << flags.order) - reserved->free))
+			 (uint16_t)(1 << flags.order) - reserved->free))
 		return false;
 
 	reserved->free += old_tree.free;
@@ -331,7 +335,8 @@ static llfree_result_t get_inner(llfree_t *self, size_t core, llflags_t flags)
 				flags);
 			if (llfree_ok(res)) {
 				reserved->free -= (1 << flags.order);
-				reserved->start_row = row_from_pfn(res.val);
+				reserved->start_row =
+					row_from_pfn((uint64_t)res.val);
 			} else if (res.val == LLFREE_ERR_MEMORY) {
 				// Current tree is fragmented!
 				res = reserve_and_get(self, core, flags);
@@ -425,21 +430,21 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 
 	tree_t old_t;
 	atom_update(&self->trees[tree_idx], old_t, tree_inc_or_reserve,
-		    1 << flags.order, &reserve, TREE_LOWER_LIM);
+		    (uint16_t)(1 << flags.order), &reserve, TREE_LOWER_LIM);
 
 	// Free-reserve heuristic:
 	// Reserve trees where a lot of frees happen, assuming locality
 	if (reserve) {
 		// fully reserve the new tree
-		size_t free = old_t.free + (1 << flags.order);
+		uint16_t free = old_t.free + (uint16_t)(1 << flags.order);
 		assert(!old_t.reserved && free <= LLFREE_TREE_SIZE);
 
 		reserved_t new = { .free = free,
 				   .start_row = row_from_tree(tree_idx),
 				   .present = true };
 
-		int kind = free < LLFREE_TREE_SIZE ? old_t.kind :
-						     tree_kind(self, flags);
+		uint8_t kind = free < LLFREE_TREE_SIZE ? old_t.kind :
+							 tree_kind(self, flags);
 		swap_reserved(self, local, new, kind);
 	}
 	ll_local_unlock(local);
@@ -482,7 +487,7 @@ size_t llfree_free_frames(llfree_t *self)
 	// Local counters
 	for (size_t core = 0; core < self->cores; core++) {
 		local_t *local = get_local(self, core);
-		for (int kind = TREE_FIXED; kind < TREE_KINDS; kind++) {
+		for (size_t kind = TREE_FIXED; kind < TREE_KINDS; kind++) {
 			reserved_t reserved = local->reserved[kind];
 			if (reserved.present)
 				free += reserved.free;
@@ -538,7 +543,7 @@ void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
 	}
 
 	char msg[256];
-	snprintf(msg, 256,
+	snprintf(msg, sizeof(msg),
 		 "LLC { cores: %" PRIuS ", frames: %" PRIuS "/%" PRIuS
 		 ", huge: %" PRIuS "/%" PRIuS ", trees: %" PRIuS "/%" PRIuS
 		 " }\n",
@@ -579,13 +584,12 @@ void llfree_print(llfree_t *self)
 	for (size_t i = 0; i < self->cores; i++) {
 		llfree_info_cont(I1 "%" PRIuS ": local (%d): {\n", i,
 				 atom_load(&self->local[i].lock));
-		for (int kind = TREE_FIXED; kind < TREE_KINDS; kind++) {
+		for (size_t kind = TREE_FIXED; kind < TREE_KINDS; kind++) {
 			reserved_t _unused res = self->local[i].reserved[kind];
 			llfree_info_cont(I2 "%" PRIuS
 					    ": { present: %d, free: %" PRIu64
 					    ", start: %" PRIu64 "}\n",
-					 (size_t)kind, res.present,
-					 (uint64_t)res.free,
+					 kind, res.present, (uint64_t)res.free,
 					 tree_from_row(res.start_row));
 		}
 		llfree_info_cont(I1 "}\n");
