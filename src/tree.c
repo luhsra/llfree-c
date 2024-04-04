@@ -39,12 +39,13 @@ bool tree_inc(tree_t *self, size_t free)
 	return true;
 }
 
-bool tree_inc_or_reserve(tree_t *self, size_t free, bool *reserve, size_t min,
-			 size_t max)
+bool tree_inc_or_reserve(tree_t *self, size_t free, bool *reserve, size_t min)
 {
-	tree_inc(self, free); // update counter
+	_unused bool success = tree_inc(self, free); // update counter
+	assert(success);
 
 	if (reserve && *reserve) // reserve if needed
-		*reserve = tree_reserve(self, min, max, self->kind);
+		*reserve =
+			tree_reserve(self, min, LLFREE_TREE_SIZE, self->kind);
 	return true;
 }

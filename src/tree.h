@@ -27,7 +27,7 @@ typedef struct p_range {
 } p_range_t;
 
 /// Lower bound used by the tree search heuristics
-#define TREE_LOWER_LIM (LLFREE_TREE_SIZE / 32)
+#define TREE_LOWER_LIM (LLFREE_TREE_SIZE / 16)
 
 /// Create a new tree entry
 static inline _unused tree_t tree_new(uint16_t counter, bool reserved, int kind)
@@ -49,5 +49,4 @@ bool tree_writeback(tree_t *self, size_t free, int kind);
 bool tree_steal_counter(tree_t *self, size_t min);
 
 /// Increment the free counter or reserve if specified
-bool tree_inc_or_reserve(tree_t *self, size_t free, bool *reserve, size_t min,
-			 size_t max);
+bool tree_inc_or_reserve(tree_t *self, size_t free, bool *reserve, size_t min);
