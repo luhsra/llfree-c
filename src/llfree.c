@@ -292,7 +292,7 @@ static bool sync_with_global(llfree_t *self, local_t *local, llflags_t flags,
 	uint8_t kind = tree_kind(self, flags);
 
 	if (!old.present || old.free >= (1 << flags.order))
-		return true;
+		return false;
 
 	size_t tree_idx = tree_from_row(old.start_row);
 	uint16_t min_free = (uint16_t)(1 << flags.order) - old.free;
@@ -331,19 +331,22 @@ static llfree_result_t get_inner(llfree_t *self, size_t core, llflags_t flags)
 			&self->lower, pfn_from_row(old.start_row), flags);
 		if (llfree_ok(res)) {
 			if (old.start_row != row_from_pfn((uint64_t)res.val)) {
+				reserved_t old;
 				atom_update(&local->reserved[kind], old,
 					    ll_reserved_set_start,
 					    row_from_pfn((uint64_t)res.val));
 			}
-		} else if (res.val == LLFREE_ERR_MEMORY) {
-			// Undo decrement (inc global tree)
-			tree_t tree;
-			atom_update(&self->trees[tree_from_row(old.start_row)],
-				    tree, tree_inc,
-				    (uint16_t)(1 << flags.order));
+			return res;
+		}
 
+		// Undo decrement (inc global tree)
+		tree_t tree;
+		atom_update(&self->trees[tree_from_row(old.start_row)], tree,
+			    tree_inc, (uint16_t)(1 << flags.order));
+
+		if (res.val == LLFREE_ERR_MEMORY) {
 			// Current tree is fragmented!
-			res = reserve_and_get(self, core, flags, old);
+			return reserve_and_get(self, core, flags, old);
 		}
 		return res;
 	}
@@ -353,8 +356,7 @@ static llfree_result_t get_inner(llfree_t *self, size_t core, llflags_t flags)
 		return llfree_result(LLFREE_ERR_RETRY);
 	}
 
-	llfree_result_t res = reserve_and_get(self, core, flags, old);
-	return res;
+	return reserve_and_get(self, core, flags, old);
 }
 
 llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags)

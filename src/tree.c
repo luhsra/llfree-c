@@ -15,7 +15,7 @@ bool tree_reserve(tree_t *self, uint16_t min, uint16_t max, uint8_t kind)
 bool tree_steal_counter(tree_t *self, uint16_t min, uint8_t kind)
 {
 	if (self->reserved && self->free >= min && (self->kind == kind || self->free == LLFREE_TREE_SIZE)) {
-		*self = tree_new(0, true, self->kind);
+		*self = tree_new(0, true, kind);
 		return true;
 	}
 	return false;

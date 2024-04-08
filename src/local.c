@@ -11,8 +11,6 @@ void ll_local_init(local_t *self)
 
 bool ll_reserved_dec(reserved_t *self, uint16_t free)
 {
-	assert(self != NULL);
-
 	if (self->present && self->free >= free) {
 		self->free -= free;
 		return true;
@@ -22,9 +20,7 @@ bool ll_reserved_dec(reserved_t *self, uint16_t free)
 
 bool ll_reserved_inc(reserved_t *self, uint64_t tree_idx, uint16_t free)
 {
-	assert(self != NULL);
-
-	if (self->present && self->start_row == tree_idx) {
+	if (self->present && tree_from_row(self->start_row) == tree_idx) {
 		assert(self->free + free <= LLFREE_TREE_SIZE);
 		self->free += free;
 		return true;
@@ -75,8 +71,6 @@ static bool frees_inc(local_history_t *self, uint64_t tree_idx)
 
 bool ll_local_free_inc(local_t *self, uint64_t tree_idx)
 {
-	assert(self != NULL);
-
 	local_history_t frees;
 	bool updated = atom_update(&self->last, frees, frees_inc, tree_idx);
 
