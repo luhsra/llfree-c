@@ -115,12 +115,6 @@ static const int ATOM_STORE_ORDER = memory_order_release;
 		atomic_store_explicit(obj, val, ATOM_STORE_ORDER); \
 	})
 
-#define atom_and(obj, mask)                                              \
-	({                                                               \
-		llfree_debug("and");                                     \
-		atomic_fetch_and_explicit(obj, mask, ATOM_UPDATE_ORDER); \
-	})
-
 /// Atomic fetch-modify-update macro.
 ///
 /// This macro loads the value at `atom_ptr`, stores its llfree_result in `old_val`

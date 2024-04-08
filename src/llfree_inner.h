@@ -7,7 +7,7 @@
 #include "lower.h"
 
 /// The llfree metadata
-typedef struct llfree {
+typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) llfree {
 	/// Lower allocator
 	lower_t lower;
 	/// Cpu-local data

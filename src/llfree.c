@@ -262,8 +262,8 @@ static _unused llfree_result_t reserve_and_get(llfree_t *self, size_t core,
 		return res;
 
 	// Not free tree
-	p_range_t notfree = { 0, LLFREE_TREE_SIZE - 4 };
-	res = search(self, local, start, flags, 1, 4 * near, notfree);
+	p_range_t notfree = { 0, LLFREE_TREE_SIZE - 1 };
+	res = search(self, local, start, flags, 1, near, notfree);
 	if (res.val != LLFREE_ERR_MEMORY)
 		return res;
 
@@ -521,22 +521,25 @@ void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
 {
 	assert(self != NULL);
 
+	size_t movable_trees = 0;
 	size_t free_trees = 0;
 	for (size_t i = 0; i < self->trees_len; i++) {
 		tree_t tree = atom_load(&self->trees[i]);
 		if (tree.free == LLFREE_TREE_SIZE)
 			free_trees += 1;
+		else if (tree.kind == TREE_MOVABLE)
+			movable_trees += 1;
 	}
 
 	char msg[256];
 	snprintf(msg, sizeof(msg),
 		 "LLC { cores: %" PRIuS ", frames: %" PRIuS "/%" PRIuS
 		 ", huge: %" PRIuS "/%" PRIuS ", trees: %" PRIuS "/%" PRIuS
-		 " }\n",
+		 " m=%" PRIuS " }\n",
 		 self->cores, llfree_free_frames(self), self->lower.frames,
 		 lower_free_huge(&self->lower),
 		 div_ceil(self->lower.frames, LLFREE_CHILD_SIZE), free_trees,
-		 self->trees_len);
+		 self->trees_len, movable_trees);
 	writer(arg, msg);
 }
 
@@ -584,47 +587,27 @@ void llfree_print(llfree_t *self)
 	llfree_info_end();
 }
 
-// clang-format off
-#define fmt_spec(x) _Generic((x),		\
-		_Bool: "%d", 			\
-		char: "%c",			\
-		unsigned char: "%c",		\
-		short: "%hd",			\
-		unsigned short: "%hu",		\
-		int: "%d",			\
-		unsigned int: "%u",		\
-		long: "%ld",			\
-		unsigned long: "%lu",		\
-		long long: "%lld",		\
-		unsigned long long: "%llu"	\
-	)
-// clang-format on
-
-#define check(x)                            \
-	if (!(x)) {                         \
-		llfree_info_start();        \
-		llfree_info_cont("failed"); \
-		llfree_info_end();          \
-		assert(false);              \
-	}                                   \
+#define check(x)                       \
+	if (!(x)) {                    \
+		llfree_info("failed"); \
+		assert(false);         \
+	}                              \
 	(void)0 // enforce semicolon!
 
-#define check_equal(actual, expected)                             \
-	if ((actual) != (expected)) {                             \
-		llfree_info_start();                              \
-		llfree_info_cont("failed: ");                     \
-		llfree_info_cont(fmt_spec(actual), (actual));     \
-		llfree_info_cont(" == ");                         \
-		llfree_info_cont(fmt_spec(expected), (expected)); \
-		llfree_info_end();                                \
-		assert(false);                                    \
-	}                                                         \
+#define check_equal(fmt, actual, expected)                         \
+	if ((actual) != (expected)) {                              \
+		llfree_info("failed: %" fmt " == %" fmt, (actual), \
+			    (expected));                           \
+		assert(false);                                     \
+	}                                                          \
 	(void)0 // enforce semicolon!
 
 void llfree_validate(llfree_t *self)
 {
-	check_equal(llfree_free_frames(self), lower_free_frames(&self->lower));
-	check_equal(llfree_free_huge(self), lower_free_huge(&self->lower));
+	check_equal(PRIuS, llfree_free_frames(self),
+		    lower_free_frames(&self->lower));
+	check_equal(PRIuS, llfree_free_huge(self),
+		    lower_free_huge(&self->lower));
 
 	for (size_t tree_idx = 0; tree_idx < self->trees_len; tree_idx++) {
 		tree_t tree = atom_load(&self->trees[tree_idx]);
@@ -632,7 +615,7 @@ void llfree_validate(llfree_t *self)
 		if (!tree.reserved) {
 			size_t free = lower_free_at_tree(
 				&self->lower, pfn_from_tree(tree_idx));
-			check_equal(free, tree.free);
+			check_equal(PRIuS, free, (size_t)tree.free);
 		}
 	}
 
@@ -647,7 +630,9 @@ void llfree_validate(llfree_t *self)
 				check(tree.free <= LLFREE_TREE_SIZE);
 				size_t free = lower_free_at_tree(
 					&self->lower, pfn_from_tree(tree_idx));
-				check_equal(tree.free + res.free, free);
+				check_equal(PRIuS,
+					    (size_t)(tree.free + res.free),
+					    free);
 			}
 		}
 	}
