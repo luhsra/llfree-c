@@ -249,16 +249,13 @@ static _unused llfree_result_t reserve_and_get(llfree_t *self, size_t core,
 	near = LL_MIN(LL_MAX(near, cl_trees / 4), cl_trees * 2);
 
 	// Over half filled trees
-	p_range_t half = { LL_MAX(LLFREE_TREE_SIZE / 16,
-				  (uint16_t)(2 << flags.order)),
-			   LLFREE_TREE_SIZE / 2 };
+	p_range_t half = { LLFREE_TREE_SIZE / 16, LLFREE_TREE_SIZE / 2 };
 	res = search(self, local, start, flags, 1, near, half);
 	if (res.val != LLFREE_ERR_MEMORY)
 		return res;
 
 	// Partially filled tree
-	p_range_t partial = { LL_MAX(LLFREE_TREE_SIZE / 64,
-				     (uint16_t)(2 << flags.order)),
+	p_range_t partial = { LLFREE_TREE_SIZE / 64,
 			      LLFREE_TREE_SIZE - LLFREE_TREE_SIZE / 16 };
 	res = search(self, local, start, flags, 1, 2 * near, partial);
 	if (res.val != LLFREE_ERR_MEMORY)
@@ -279,6 +276,7 @@ static _unused llfree_result_t reserve_and_get(llfree_t *self, size_t core,
 	// Steal from other core
 	res = steal_tree(self, core, flags);
 	if (res.val == LLFREE_ERR_MEMORY)
+		// There could be a concurrent reservation -> retry
 		return llfree_result(LLFREE_ERR_RETRY);
 
 	return res;
