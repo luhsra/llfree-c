@@ -99,6 +99,12 @@ static const int ATOM_STORE_ORDER = memory_order_release;
 						      ATOM_LOAD_ORDER);  \
 	})
 
+#define atom_swap(obj, desired)                                            \
+	({                                                                 \
+		llfree_debug("swap");                                      \
+		atomic_exchange_explicit(obj, desired, ATOM_UPDATE_ORDER); \
+	})
+
 #define atom_load(obj)                                      \
 	({                                                  \
 		llfree_debug("load");                       \

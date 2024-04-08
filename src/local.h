@@ -20,29 +20,35 @@ typedef struct reserved {
 	bool present : 1;
 } reserved_t;
 
+/// Counts last frees in same tree
+typedef struct local_history {
+	/// Index of the last tree where a frame was freed
+	uint64_t idx : 48;
+	/// Number of frees in the same tree
+	uint16_t frees : 16;
+} local_history_t;
+
 /// This represents the local CPU data
 typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) local {
-	/// Protect the local data from concurrent access (in case of shared local data or parallel drain)
-	_Atomic(bool) lock;
-	/// Counts concurrent frees in same tree
-	uint8_t last_frees;
-	/// Counter that triggers full scans (fragmentation heuristic)
-	uint8_t skip_near_counter;
+	/// Counts last frees in same tree
+	_Atomic(local_history_t) last;
 	/// Reserved trees
-	reserved_t reserved[TREE_KINDS];
-	/// Index of the last tree where a frame was freed
-	uint64_t last_idx;
+	_Atomic(reserved_t) reserved[TREE_KINDS];
 } local_t;
 
 /// Initialize the per-cpu data
 void ll_local_init(local_t *self);
+/// Decrement the number of free frames
+bool ll_reserved_dec(reserved_t *self, uint16_t free);
+/// Increment the number of free frames
+bool ll_reserved_inc(reserved_t *self, uint64_t tree_idx, uint16_t free);
+/// Try stealing a reserved tree
+bool ll_steal(reserved_t *self, uint16_t min);
 
-/// Locks the reserved tree
-void ll_local_lock(local_t *self);
-bool ll_local_try_lock(local_t *self);
-
-/// Unlocks the reserved tree
-void ll_local_unlock(local_t *self);
+/// Swap the reserved tree
+bool ll_reserved_swap(reserved_t *self, reserved_t new);
+/// Set the starting row index (if the the tree is the same as the current reserved tree)
+bool ll_reserved_set_start(reserved_t *self, uint64_t start_row);
 
 /// Updates the last-frees heuristic, returning true if the corresponding
 /// tree should be reserved

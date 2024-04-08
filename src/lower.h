@@ -43,6 +43,8 @@ size_t lower_free_huge(lower_t *self);
 
 /// Returns the number of free pages in the huge page
 size_t lower_free_at_huge(lower_t *self, uint64_t frame);
+/// Returns the number of free pages in the huge page
+size_t lower_free_at_tree(lower_t *self, uint64_t frame);
 
 /// Print debug info
 void lower_print(lower_t *self);

@@ -47,6 +47,8 @@ declare_test(llfree_init)
 	check(llfree_frames(&upper) == 1 << 20);
 	check(llfree_free_frames(&upper) == 1 << 20);
 
+	llfree_validate(&upper);
+
 	return success;
 }
 
@@ -78,7 +80,7 @@ declare_test(llfree_init_alloc)
 
 	check(llfree_ok(llfree_get(&upper, 0, llf)));
 
-	llfree_print(&upper);
+	llfree_validate(&upper);
 
 	return success;
 }
@@ -90,6 +92,7 @@ declare_test(llfree_alloc_s)
 
 	llfree_info("Init");
 	llfree_t upper = llfree_new(4, FRAMES, LLFREE_INIT_FREE);
+	llfree_validate(&upper);
 
 	llfree_info("Alloc");
 	size_t n = 128;
@@ -120,6 +123,8 @@ declare_test(llfree_alloc_s)
 			check_equal_m(free, tree.free, "tree %lu", i);
 	}
 
+	llfree_validate(&upper);
+
 	llfree_drop(&upper);
 	return success;
 }
@@ -130,6 +135,7 @@ declare_test(llfree_general_function)
 	llfree_result_t ret;
 
 	llfree_t upper = llfree_new(4, 132000, LLFREE_INIT_FREE);
+	llfree_validate(&upper);
 	check_equal(upper.trees_len, div_ceil(132000, LLFREE_TREE_SIZE));
 	check(upper.cores == 4);
 	check(llfree_frames(&upper) == 132000);
@@ -148,6 +154,7 @@ declare_test(llfree_general_function)
 
 	llfree_result_t frame = llfree_get(&upper, 0, llflags(0));
 	check_m(llfree_ok(frame), "reservation must be success");
+	llfree_validate(&upper);
 
 	check(llfree_frames(&upper) == 132000);
 	check_m(llfree_free_frames(&upper) == 131999,
@@ -156,14 +163,14 @@ declare_test(llfree_general_function)
 	llfree_info("After get mit core 0\n");
 
 	ret = llfree_put(&upper, 0, (uint64_t)frame.val, llflags(0));
-
-	return success;
+	llfree_validate(&upper);
 
 	check_m(llfree_ok(ret), "successfully free");
 	check_m(llfree_free_frames(&upper) == 132000,
 		"right number of free frames");
 
-	check_equal(upper.local->last_idx, row_from_pfn(frame.val));
+	local_history_t last = atom_load(&upper.local[0].last);
+	check_equal(last.idx, tree_from_pfn(frame.val));
 
 	// reserve all frames in first tree
 	for (size_t i = 0; i < LLFREE_TREE_SIZE; ++i) {
@@ -171,11 +178,12 @@ declare_test(llfree_general_function)
 		check(llfree_ok(ret));
 	}
 
+	llfree_validate(&upper);
+
 	// reserve first frame in new tree
 	ret = llfree_get(&upper, 0, llflags(0));
 	check(llfree_ok(ret));
-	reserved_t reserved = upper.local[0].reserved[0];
-	check_m(reserved.start_row == row_from_pfn(LLFREE_TREE_SIZE),
+	check_m(tree_from_pfn(frame.val) != tree_from_pfn(ret.val),
 		"second tree must be allocated");
 
 	uint64_t free_frames = llfree_free_frames(&upper);
@@ -188,6 +196,8 @@ declare_test(llfree_general_function)
 				   llflags(LLFREE_HUGE_ORDER))));
 	check_equal(llfree_free_frames(&upper), free_frames);
 
+	llfree_validate(&upper);
+
 	llfree_drop(&upper);
 	return success;
 }
@@ -198,6 +208,7 @@ declare_test(llfree_put)
 	llfree_result_t ret;
 
 	llfree_t upper = llfree_new(4, LLFREE_TREE_SIZE << 4, LLFREE_INIT_FREE);
+	llfree_validate(&upper);
 	uint64_t reserved[LLFREE_TREE_SIZE + 5];
 
 	// reserve more frames than one tree
@@ -235,6 +246,8 @@ declare_test(llfree_put)
 		    (uint64_t)tree_from_pfn(reserved[0]));
 	if (!success)
 		llfree_print(&upper);
+	llfree_validate(&upper);
+	llfree_drop(&upper);
 
 	return success;
 }
@@ -247,6 +260,7 @@ declare_test(llfree_alloc_all)
 	const int CORES = 8;
 	const uint64_t LENGTH = ((8ul << 30) / LLFREE_FRAME_SIZE); // 8GiB
 	llfree_t upper = llfree_new(CORES, LENGTH, LLFREE_INIT_FREE);
+	llfree_validate(&upper);
 
 	int64_t *pfns = malloc(sizeof(int64_t) * LENGTH);
 	assert(pfns != NULL);
@@ -267,6 +281,7 @@ declare_test(llfree_alloc_all)
 	check_equal(llfree_free_frames(&upper), 0ul);
 	check_equal(llfree_free_frames(&upper),
 		    lower_free_frames(&upper.lower));
+	llfree_validate(&upper);
 
 	return success;
 }
@@ -349,11 +364,8 @@ declare_test(llfree_parallel_alloc)
 	bool success = true;
 
 	const uint64_t LENGTH = 16 << 18;
-	char *memory =
-		llfree_ext_alloc(LLFREE_ALIGN, LENGTH << LLFREE_FRAME_BITS);
-	assert(memory != NULL);
-
 	llfree_t upper = llfree_new(CORES, LENGTH, LLFREE_INIT_FREE);
+	llfree_validate(&upper);
 
 	pthread_t threads[CORES];
 	struct arg args[CORES];
@@ -382,6 +394,7 @@ declare_test(llfree_parallel_alloc)
 		    still_reserved);
 	check_equal(llfree_free_frames(&upper),
 		    lower_free_frames(&upper.lower));
+	llfree_validate(&upper);
 
 	// duplicate check
 	for (size_t core = 0; core < CORES; ++core) {
@@ -412,8 +425,8 @@ end:
 		free(rets[i]->pfns);
 		free(rets[i]);
 	}
+	llfree_validate(&upper);
 	llfree_drop(&upper);
-	llfree_ext_free(LLFREE_ALIGN, LENGTH << LLFREE_FRAME_BITS, memory);
 	return success;
 }
 
@@ -500,6 +513,8 @@ declare_test(llfree_parallel_alloc_all)
 			"dup %" PRIx64 " at %zu", all_frames[i], i);
 	}
 
+	llfree_validate(&upper);
+	llfree_drop(&upper);
 	return success;
 }
 
@@ -507,15 +522,18 @@ declare_test(llfree_get_huge)
 {
 	bool success = true;
 	llfree_result_t res;
-	llfree_t llfree = llfree_new(1, LLFREE_TREE_SIZE, LLFREE_INIT_FREE);
+	llfree_t upper = llfree_new(1, LLFREE_TREE_SIZE, LLFREE_INIT_FREE);
 
 	llfree_info("get");
-	res = llfree_get(&llfree, 0, llflags(LLFREE_HUGE_ORDER));
+	res = llfree_get(&upper, 0, llflags(LLFREE_HUGE_ORDER));
 	check(llfree_ok(res));
 
 	llfree_info("get");
-	res = llfree_get(&llfree, 0, llflags(LLFREE_HUGE_ORDER));
+	res = llfree_get(&upper, 0, llflags(LLFREE_HUGE_ORDER));
 	check(llfree_ok(res));
+
+	llfree_validate(&upper);
+	llfree_drop(&upper);
 
 	return success;
 }
@@ -577,13 +595,13 @@ declare_test(llfree_less_mem)
 #undef FRAMES
 #define FRAMES 4096
 
-	llfree_t llfree = llfree_new(CORES, FRAMES, LLFREE_INIT_FREE);
+	llfree_t upper = llfree_new(CORES, FRAMES, LLFREE_INIT_FREE);
 
 	llfree_info("get");
 
 	struct llfree_less_mem shared = { .sync0 = 0,
 					  .sync1 = 0,
-					  .llfree = &llfree,
+					  .llfree = &upper,
 					  .cores = CORES,
 					  .frames_len = FRAMES / CORES };
 	struct llfree_less_mem_p private[CORES];
@@ -599,7 +617,9 @@ declare_test(llfree_less_mem)
 		assert(pthread_join(threads[i], NULL) == 0);
 	}
 
-	check_equal(llfree_free_frames(&llfree), FRAMES);
+	check_equal(llfree_free_frames(&upper), FRAMES);
+	llfree_validate(&upper);
+	llfree_drop(&upper);
 
 	return success;
 }

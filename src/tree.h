@@ -42,10 +42,10 @@ bool tree_inc(tree_t *self, uint16_t free);
 bool tree_reserve(tree_t *self, uint16_t min, uint16_t max, uint8_t kind);
 
 /// Adds the given counter and clears reserved
-bool tree_writeback(tree_t *self, uint16_t free, uint8_t kind);
+bool tree_unreserve(tree_t *self, uint16_t free, uint8_t kind);
 
 // Steals the counter of a reserved tree
-bool tree_steal_counter(tree_t *self, uint16_t min);
+bool tree_steal_counter(tree_t *self, uint16_t min, uint8_t kind);
 
 /// Increment the free counter or reserve if specified
 bool tree_inc_or_reserve(tree_t *self, uint16_t free, bool *reserve,

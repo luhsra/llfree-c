@@ -3,53 +3,82 @@
 void ll_local_init(local_t *self)
 {
 	assert(self != NULL);
-	atom_store(&self->lock, false);
-	self->skip_near_counter = 0;
-	self->last_frees = 0;
-	self->last_idx = 0;
+	self->last = (local_history_t){ 0, 0 };
 	self->reserved[TREE_MOVABLE] = (reserved_t){ 0, 0, false };
 	self->reserved[TREE_FIXED] = (reserved_t){ 0, 0, false };
 	self->reserved[TREE_HUGE] = (reserved_t){ 0, 0, false };
 }
 
-void ll_local_lock(local_t *self)
+bool ll_reserved_dec(reserved_t *self, uint16_t free)
 {
-	bool expected = false;
-	while (!atom_cmp_exchange_weak(&self->lock, &expected, true)) {
-		expected = false;
-		spin_wait();
-	}
-}
+	assert(self != NULL);
 
-bool ll_local_try_lock(local_t *self)
-{
-	bool expected = false;
-	if (atom_cmp_exchange(&self->lock, &expected, true)) {
-		assert(expected == false);
+	if (self->present && self->free >= free) {
+		self->free -= free;
 		return true;
 	}
 	return false;
 }
 
-void ll_local_unlock(local_t *self)
+bool ll_reserved_inc(reserved_t *self, uint64_t tree_idx, uint16_t free)
 {
-	atom_store(&self->lock, false);
+	assert(self != NULL);
+
+	if (self->present && self->start_row == tree_idx) {
+		assert(self->free + free <= LLFREE_TREE_SIZE);
+		self->free += free;
+		return true;
+	}
+	return false;
+}
+
+bool ll_steal(reserved_t *self, uint16_t min)
+{
+	if (self->present && self->free >= min) {
+		*self = (reserved_t){ 0, 0, false };
+		return true;
+	}
+	return false;
+}
+
+bool ll_reserved_swap(reserved_t *self, reserved_t new)
+{
+	*self = new;
+	return true;
+}
+
+bool ll_reserved_set_start(reserved_t *self, uint64_t start_row)
+{
+	if (self->present &&
+	    tree_from_row(self->start_row) == tree_from_row(start_row)) {
+		self->start_row = start_row;
+		return true;
+	}
+	return false;
+}
+
+static bool frees_inc(local_history_t *self, uint64_t tree_idx)
+{
+	if (self->idx != tree_idx) {
+		// restart for different tree
+		self->idx = tree_idx;
+		self->frees = 1;
+		return true;
+	}
+	if (self->frees < LAST_FREES) {
+		// same tree
+		self->frees += 1;
+		return true;
+	}
+	return false;
 }
 
 bool ll_local_free_inc(local_t *self, uint64_t tree_idx)
 {
 	assert(self != NULL);
 
-	if (self->last_idx != tree_idx) {
-		// if last free was in another tree -> reset
-		self->last_idx = tree_idx;
-		self->last_frees = 1;
-		return false;
-	}
-	if (self->last_frees < LAST_FREES) {
-		// if its the same tree -> increment
-		self->last_frees += 1;
-		return false;
-	}
-	return true;
+	local_history_t frees;
+	bool updated = atom_update(&self->last, frees, frees_inc, tree_idx);
+
+	return !updated;
 }

@@ -21,7 +21,7 @@
 /// 64 Bit Addresses - 12 Bit needed for offset inside the Page
 #define MAX_PAGES (1ul << (64 - LLFREE_FRAME_BITS))
 /// Number of retries
-#define RETRIES 4
+#define RETRIES 8
 
 #define LL_MAX(a, b) ((a) > (b) ? (a) : (b))
 #define LL_MIN(a, b) ((a) > (b) ? (b) : (a))

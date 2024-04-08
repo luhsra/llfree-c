@@ -89,7 +89,7 @@ declare_test(tree_unreserve)
 	frees = 987;
 	actual = tree_new(free, true, TREE_FIXED);
 	expect = tree_new(free + frees, false, TREE_FIXED);
-	ret = tree_writeback(&actual, frees, false);
+	ret = tree_unreserve(&actual, frees, false);
 	check(ret);
 	equal_trees(actual, expect);
 
@@ -97,7 +97,7 @@ declare_test(tree_unreserve)
 	frees = 987;
 	actual = tree_new(free, true, TREE_FIXED);
 	expect = tree_new(free + frees, false, TREE_FIXED);
-	ret = tree_writeback(&actual, frees, false);
+	ret = tree_unreserve(&actual, frees, false);
 	check(ret);
 	equal_trees(actual, expect);
 

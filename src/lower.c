@@ -362,3 +362,17 @@ size_t lower_free_at_huge(lower_t *self, uint64_t frame)
 	child_t child = atom_load(get_child(self, frame >> LLFREE_CHILD_ORDER));
 	return child.free;
 }
+
+size_t lower_free_at_tree(lower_t *self, uint64_t frame)
+{
+	assert(frame >> LLFREE_CHILD_ORDER < child_count(self));
+	size_t free = 0;
+	size_t start =
+		align_down(frame >> LLFREE_CHILD_ORDER, LLFREE_TREE_CHILDREN);
+	for (size_t i = 0; i < LLFREE_TREE_CHILDREN; ++i) {
+		child_t child = atom_load(get_child(self, start + i));
+		assert(child.free <= CHILD_N);
+		free += child.free;
+	}
+	return free;
+}

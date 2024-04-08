@@ -134,6 +134,7 @@ size_t llfree_free_frames(llfree_t *self);
 /// Returns number of currently free frames
 size_t llfree_free_huge(llfree_t *self);
 
+
 // == Debugging ==
 
 /// Prints the allocators state for debugging with given Rust printer
@@ -142,3 +143,5 @@ void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
 
 /// Prints detailed stats about the allocator state
 void llfree_print(llfree_t *self);
+/// Validate the internal data structures
+void llfree_validate(llfree_t *self);
