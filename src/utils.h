@@ -1,7 +1,7 @@
 #pragma once
 
 #include "llfree.h"
-#include "platform.h"
+#include "llfree_platform.h"
 
 // conversion functions
 #define tree_from_pfn(_N) ((_N) >> LLFREE_TREE_ORDER)
