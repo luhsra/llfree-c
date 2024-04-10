@@ -376,7 +376,7 @@ llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags)
 			return res;
 	}
 
-	llfree_warn("Exceeding retries");
+	// llfree_warn("Exceeding retries");
 	return llfree_result(LLFREE_ERR_MEMORY);
 }
 
