@@ -358,23 +358,19 @@ size_t lower_free_huge(lower_t *self)
 	return count;
 }
 
-size_t lower_unreported_huge_in_tree(lower_t *self, uint64_t pfn)
+bool lower_tree_contains_unreported(lower_t *self, uint64_t pfn)
 {
 	assert(self != 0);
 
 	size_t idx = child_from_pfn(pfn);
-	// assert(idx < self->childs_len);
-
-	size_t count = 0;
 	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
 		child_t child = atom_load(get_child(self, current_i));
-		if (child.free == CHILD_N &&
-		    child.reported == false) {
-			++count;
+		if (child.free == CHILD_N && child.reported == false) {
+			return true;
 		}
 	}
 
-	return count;
+	return false;
 }
 
 size_t lower_free_at_huge(lower_t *self, uint64_t frame)

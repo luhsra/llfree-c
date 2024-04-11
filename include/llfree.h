@@ -61,9 +61,14 @@ enum {
 /// Allocation flags
 typedef struct llflags {
 	uint8_t order : 8;
+	// Is this alloation movable: LLFree tries to separete movable and immovable allocations.
 	bool movable : 1;
+	// Search for huge pages that are not reported for ballooning
 	bool get_unreported : 1;
+	// Mark this huge page as reported for ballooning
 	bool set_reported : 1;
+	// Skip cpu-local reservations and ignore tree kinds (like movable).
+	bool global : 1;
 	// Reserved for future use
 } llflags_t;
 
@@ -72,7 +77,8 @@ static inline llflags_t llflags(size_t order)
 	return (llflags_t){ .order = (uint8_t)order,
 			    .movable = false,
 			    .get_unreported = false,
-			    .set_reported = false };
+			    .set_reported = false,
+			    .global = false };
 }
 
 /// Allocate and initialize the data structures of the allocator.

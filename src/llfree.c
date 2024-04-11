@@ -148,8 +148,26 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, local_t *local,
 
 	// early return check for unreported page allocation
 	if (flags.get_unreported &&
-	    !lower_unreported_huge_in_tree(&self->lower, pfn_from_tree(idx)))
+	    !lower_tree_contains_unreported(&self->lower, pfn_from_tree(idx)))
 		return llfree_result(LLFREE_ERR_MEMORY);
+
+	// allocate without reserving a tree
+	if (flags.global) {
+		tree_t old;
+		// also ignore tree kinds
+		if (atom_update(&self->trees[idx], old, tree_dec,
+				1 << flags.order)) {
+			llfree_result_t res = lower_get(
+				&self->lower, pfn_from_tree(idx), flags);
+			if (!llfree_ok(res)) {
+				// undo decrement
+				atom_update(&self->trees[idx], old, tree_inc,
+					    1 << flags.order);
+			}
+			return res;
+		}
+		return llfree_result(LLFREE_ERR_MEMORY);
+	}
 
 	uint8_t kind = tree_kind(self, flags);
 
@@ -368,6 +386,19 @@ llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags)
 	assert(flags.order <= LLFREE_MAX_ORDER);
 
 	core = core % self->cores;
+
+	// allocate globally without touching the local trees
+	if (flags.global) {
+		uint8_t kind = tree_kind(self, flags);
+		local_t *local = get_local(self, core);
+		reserved_t old = atom_load(&local->reserved[kind]);
+		uint64_t start = old.present ?
+					 tree_from_row(old.start_row) :
+					 (self->trees_len / self->cores * core);
+		// Search and allocate
+		return search(self, local, start, flags, 1, self->trees_len,
+			      (p_range_t){ 0, LLFREE_TREE_SIZE });
+	}
 
 	for (size_t i = 0; i < RETRIES; i++) {
 		llfree_result_t res = get_inner(self, core, flags);

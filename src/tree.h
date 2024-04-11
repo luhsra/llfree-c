@@ -38,6 +38,9 @@ static inline _unused tree_t tree_new(uint16_t counter, bool reserved,
 /// Increment the free counter
 bool tree_inc(tree_t *self, uint16_t free);
 
+/// Decrement the free counter
+bool tree_dec(tree_t *self, uint16_t free);
+
 /// Try reserving the tree if the free counter is withing the range
 bool tree_reserve(tree_t *self, uint16_t min, uint16_t max, uint8_t kind);
 
