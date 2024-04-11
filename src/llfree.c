@@ -432,24 +432,29 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 	size_t tree_idx = tree_from_pfn(frame);
 
 	// Update free-reserve heuristic
-	bool reserve = ll_local_free_inc(local, tree_idx);
+	bool reserve = !flags.global && ll_local_free_inc(local, tree_idx);
 
 	// Increment local or otherwise global counter
-	if (flags.order >= LLFREE_HUGE_ORDER) {
-		uint8_t kind = tree_kind(self, llflags(LLFREE_HUGE_ORDER));
-		reserved_t old;
-		if (atom_update(&local->reserved[kind], old, ll_reserved_inc,
-				tree_idx, (uint16_t)(1 << flags.order))) {
-			return llfree_result(LLFREE_ERR_OK);
-		}
-	} else {
-		int kinds[2] = { TREE_MOVABLE, TREE_FIXED };
-		for (size_t i = 0; i < sizeof(kinds) / sizeof(kinds[0]); i++) {
+	if (!flags.global) {
+		if (flags.order >= LLFREE_HUGE_ORDER) {
+			uint8_t kind =
+				tree_kind(self, llflags(LLFREE_HUGE_ORDER));
 			reserved_t old;
-			if (atom_update(&local->reserved[kinds[i]], old,
+			if (atom_update(&local->reserved[kind], old,
 					ll_reserved_inc, tree_idx,
 					(uint16_t)(1 << flags.order))) {
 				return llfree_result(LLFREE_ERR_OK);
+			}
+		} else {
+			int kinds[2] = { TREE_MOVABLE, TREE_FIXED };
+			for (size_t i = 0; i < sizeof(kinds) / sizeof(kinds[0]);
+			     i++) {
+				reserved_t old;
+				if (atom_update(&local->reserved[kinds[i]], old,
+						ll_reserved_inc, tree_idx,
+						(uint16_t)(1 << flags.order))) {
+					return llfree_result(LLFREE_ERR_OK);
+				}
 			}
 		}
 	}
