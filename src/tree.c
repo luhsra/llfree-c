@@ -41,8 +41,6 @@ bool tree_inc(tree_t *self, uint16_t free)
 
 bool tree_dec(tree_t *self, uint16_t free)
 {
-	assert(self->free + free <= LLFREE_TREE_SIZE);
-
 	if (!self->reserved && self->free >= free) {
 		self->free -= free;
 		return true;
