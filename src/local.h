@@ -48,7 +48,7 @@ bool ll_steal(reserved_t *self, uint16_t min);
 /// Swap the reserved tree
 bool ll_reserved_swap(reserved_t *self, reserved_t new);
 /// Set the starting row index (if the the tree is the same as the current reserved tree)
-bool ll_reserved_set_start(reserved_t *self, uint64_t start_row);
+bool ll_reserved_set_start(reserved_t *self, uint64_t start_row, bool force);
 
 /// Updates the last-frees heuristic, returning true if the corresponding
 /// tree should be reserved

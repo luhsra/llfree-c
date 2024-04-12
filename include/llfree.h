@@ -56,20 +56,24 @@ enum {
 	/// Try recovering all frames from persistent memory after a crash,
 	/// correcting invalid counters
 	LLFREE_INIT_RECOVER_CRASH = 3,
+	/// Assume the allocator is already initialized
+	LLFREE_INIT_NONE = 4,
+	/// The number of initialization modes
+	LLFREE_INIT_MAX = 5,
 };
 
 /// Allocation flags
 typedef struct llflags {
 	uint8_t order : 8;
-	// Is this alloation movable: LLFree tries to separete movable and immovable allocations.
+	/// Is this alloation movable: LLFree tries to separete movable and immovable allocations.
 	bool movable : 1;
-	// Search for huge pages that are not reported for ballooning
+	/// Search for huge pages that are not reported for ballooning
 	bool get_unreported : 1;
-	// Mark this huge page as reported for ballooning
+	/// Mark this huge page as reported for ballooning
 	bool set_reported : 1;
-	// Skip cpu-local reservations and ignore tree kinds (like movable).
+	/// Skip cpu-local reservations and ignore tree kinds (like movable).
 	bool global : 1;
-	// Reserved for future use
+	// ... Reserved for future use
 } llflags_t;
 
 static inline llflags_t llflags(size_t order)
@@ -81,6 +85,31 @@ static inline llflags_t llflags(size_t order)
 			    .global = false };
 }
 
+/// Size of the required metadata
+typedef struct llfree_meta_size {
+	/// Volatile data.
+	size_t llfree;
+	/// CPU-local data.
+	size_t local;
+	/// Tree array.
+	size_t trees;
+	/// Lower children and bitfields (optionally persistent).
+	size_t lower;
+} llfree_meta_size_t;
+
+/// Returns the size of the metadata buffers required for initialization
+llfree_meta_size_t llfree_metadata_size(size_t cores, size_t frames);
+
+/// Size of the required metadata
+typedef struct llfree_meta {
+	/// CPU-local data.
+	uint8_t *local;
+	/// Tree array.
+	uint8_t *trees;
+	/// Lower children and bitfields (optionally persistent).
+	uint8_t *lower;
+} llfree_meta_t;
+
 /// Allocate and initialize the data structures of the allocator.
 ///
 /// `offset` is the number of the first page to be managed and `len` determins
@@ -91,26 +120,7 @@ static inline llflags_t llflags(size_t order)
 /// The `primary` and `secondary` buffer are used to store the allocator state
 /// and must be at least as large as reported by llfree_metadata_size.
 llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
-			    uint8_t init, uint8_t *primary, uint8_t *secondary);
-
-/// Size of the required metadata
-typedef struct llfree_meta_size {
-	/// Size of the optionally persistent data.
-	size_t primary;
-	/// Size of the volatile data.
-	size_t secondary;
-} llfree_meta_size_t;
-
-/// Returns the size of the metadata buffers required for initialization
-llfree_meta_size_t llfree_metadata_size(size_t cores, size_t frames);
-
-/// Size of the required metadata
-typedef struct llfree_meta {
-	/// Size of the optionally persistent data.
-	uint8_t *primary;
-	/// Size of the volatile data.
-	uint8_t *secondary;
-} llfree_meta_t;
+			    uint8_t init, llfree_meta_t meta);
 
 /// Returns the metadata
 llfree_meta_t llfree_metadata(llfree_t *self);
@@ -143,7 +153,6 @@ size_t llfree_free_at(llfree_t *self, uint64_t frame, size_t order);
 size_t llfree_free_frames(llfree_t *self);
 /// Returns number of currently free frames
 size_t llfree_free_huge(llfree_t *self);
-
 
 // == Debugging ==
 

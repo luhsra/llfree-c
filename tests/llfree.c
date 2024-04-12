@@ -21,11 +21,13 @@ static llfree_t llfree_new(size_t cores, size_t frames, uint8_t init)
 {
 	llfree_t upper;
 	llfree_meta_size_t m = llfree_metadata_size(cores, frames);
-	uint8_t *primary = llfree_ext_alloc(LLFREE_CACHE_SIZE, m.primary);
-	uint8_t *secondary = llfree_ext_alloc(LLFREE_CACHE_SIZE, m.secondary);
-	assert(primary != NULL && secondary != NULL);
+	llfree_meta_t meta = {
+		.local = llfree_ext_alloc(LLFREE_CACHE_SIZE, m.local),
+		.trees = llfree_ext_alloc(LLFREE_CACHE_SIZE, m.trees),
+		.lower = llfree_ext_alloc(LLFREE_CACHE_SIZE, m.lower),
+	};
 	llfree_result_t _unused ret =
-		llfree_init(&upper, cores, frames, init, primary, secondary);
+		llfree_init(&upper, cores, frames, init, meta);
 	assert(llfree_ok(ret));
 	return upper;
 }
@@ -35,8 +37,9 @@ static void llfree_drop(llfree_t *self)
 	llfree_meta_size_t ms =
 		llfree_metadata_size(self->cores, llfree_frames(self));
 	llfree_meta_t m = llfree_metadata(self);
-	llfree_ext_free(LLFREE_CACHE_SIZE, ms.primary, m.primary);
-	llfree_ext_free(LLFREE_CACHE_SIZE, ms.secondary, m.secondary);
+	llfree_ext_free(LLFREE_CACHE_SIZE, ms.local, m.local);
+	llfree_ext_free(LLFREE_CACHE_SIZE, ms.trees, m.trees);
+	llfree_ext_free(LLFREE_CACHE_SIZE, ms.lower, m.lower);
 }
 
 declare_test(llfree_init)
@@ -531,6 +534,35 @@ declare_test(llfree_get_huge)
 	llfree_info("get");
 	res = llfree_get(&upper, 0, llflags(LLFREE_HUGE_ORDER));
 	check(llfree_ok(res));
+
+	llfree_validate(&upper);
+	llfree_drop(&upper);
+
+	return success;
+}
+
+declare_test(llfree_get_global)
+{
+	bool success = true;
+	llfree_result_t res;
+	llfree_t upper = llfree_new(1, 4 * LLFREE_TREE_SIZE, LLFREE_INIT_FREE);
+
+	llfree_info("get");
+	llflags_t flags = llflags(LLFREE_HUGE_ORDER);
+	flags.global = true;
+	for (size_t i = 0; i < llfree_huge(&upper); i++) {
+		res = llfree_get(&upper, 0, flags);
+		check(llfree_ok(res));
+	}
+	res  = llfree_get(&upper, 0, flags);
+	check(res.val == LLFREE_ERR_MEMORY);
+
+	llfree_validate(&upper);
+
+	for (size_t i = 0; i < llfree_huge(&upper); i++) {
+		res = llfree_put(&upper, 0, i << LLFREE_HUGE_ORDER, flags);
+		check(llfree_ok(res));
+	}
 
 	llfree_validate(&upper);
 	llfree_drop(&upper);

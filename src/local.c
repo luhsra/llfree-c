@@ -43,10 +43,10 @@ bool ll_reserved_swap(reserved_t *self, reserved_t new)
 	return true;
 }
 
-bool ll_reserved_set_start(reserved_t *self, uint64_t start_row)
+bool ll_reserved_set_start(reserved_t *self, uint64_t start_row, bool force)
 {
-	if (self->present &&
-	    tree_from_row(self->start_row) == tree_from_row(start_row)) {
+	if (force || (self->present && tree_from_row(self->start_row) ==
+					       tree_from_row(start_row))) {
 		self->start_row = start_row;
 		return true;
 	}
