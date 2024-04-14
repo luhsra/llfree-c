@@ -207,28 +207,6 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, local_t *local,
 
 /// Searches the tree array for a tree with a free counter in the provided range,
 /// reserves it, and allocates from it.
-static llfree_result_t linear_search(llfree_t *self, local_t *local,
-				     uint64_t start, llflags_t flags,
-				     uint64_t offset, uint64_t len,
-				     p_range_t free)
-{
-	free.min = LL_MAX(free.min, (uint16_t)(1 << flags.order));
-	if (free.min >= free.max)
-		return llfree_result(LLFREE_ERR_MEMORY);
-
-	uint64_t base = (start + self->trees_len);
-	for (uint64_t i = offset; i < len; ++i) {
-		uint64_t idx = (base + i) % self->trees_len;
-		llfree_result_t res =
-			reserve_tree_and_get(self, local, idx, flags, free);
-		if (res.val != LLFREE_ERR_MEMORY)
-			return res;
-	}
-	return llfree_result(LLFREE_ERR_MEMORY);
-}
-
-/// Searches the tree array for a tree with a free counter in the provided range,
-/// reserves it, and allocates from it.
 static llfree_result_t search(llfree_t *self, local_t *local, uint64_t start,
 			      llflags_t flags, uint64_t offset, uint64_t len,
 			      p_range_t free)
@@ -426,9 +404,9 @@ llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags)
 		reserved_t old = atom_load(&local->reserved[kind]);
 		uint64_t start = tree_from_row(old.start_row);
 		// Search and allocate
-		llfree_result_t ret = linear_search(
-			self, local, start, flags, 0, self->trees_len,
-			(p_range_t){ 0, LLFREE_TREE_SIZE });
+		llfree_result_t ret =
+			search(self, local, start, flags, 0, self->trees_len,
+			       (p_range_t){ 0, LLFREE_TREE_SIZE });
 		if (llfree_ok(ret) && tree_from_row(old.start_row) !=
 					      tree_from_pfn((uint64_t)ret.val))
 			atom_update(&local->reserved[kind], old,
