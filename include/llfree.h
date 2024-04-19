@@ -11,39 +11,45 @@
 #define _warn_unused
 #endif
 
+/// Success
+#define LLFREE_ERR_OK ((uint8_t)0)
+/// Not enough memory
+#define LLFREE_ERR_MEMORY ((uint8_t)1)
+/// Failed atomic operation, retry procedure
+#define LLFREE_ERR_RETRY ((uint8_t)2)
+/// Invalid address
+#define LLFREE_ERR_ADDRESS ((uint8_t)3)
+/// Allocator not initialized or initialization failed
+#define LLFREE_ERR_INIT ((uint8_t)4)
+
 /// Result type, to distinguish between normal integers
 ///
 /// Errors are negative and the actual values are zero or positive.
 typedef struct _warn_unused llfree_result {
-	int64_t val;
+	uint64_t frame : 55;
+	bool deflate : 1;
+	uint8_t error : 8;
 } llfree_result_t;
 
 typedef struct llfree llfree_t;
 
 /// Create a new result
-static inline llfree_result_t _unused llfree_result(int64_t v)
+static inline llfree_result_t _unused llfree_ok(uint64_t frame, bool deflate)
 {
-	return (llfree_result_t){ v };
+	return (llfree_result_t){ .frame = frame,
+				  .deflate = deflate,
+				  .error = LLFREE_ERR_OK };
 }
-/// Check if the result is ok (no error)
-static inline bool _unused llfree_ok(llfree_result_t r)
+static inline llfree_result_t _unused llfree_err(uint8_t err)
 {
-	return r.val >= 0;
+	return (llfree_result_t){ .frame = 0, .deflate = false, .error = err };
 }
 
-/// Error codes
-enum {
-	/// Success
-	LLFREE_ERR_OK = 0,
-	/// Not enough memory
-	LLFREE_ERR_MEMORY = -1,
-	/// Failed atomic operation, retry procedure
-	LLFREE_ERR_RETRY = -2,
-	/// Invalid address
-	LLFREE_ERR_ADDRESS = -3,
-	/// Allocator not initialized or initialization failed
-	LLFREE_ERR_INIT = -4,
-};
+/// Check if the result is ok (no error)
+static inline bool _unused llfree_is_ok(llfree_result_t r)
+{
+	return r.error == LLFREE_ERR_OK;
+}
 
 /// Init modes
 enum {
@@ -64,13 +70,10 @@ enum {
 
 /// Allocation flags
 typedef struct llflags {
+	/// Allocation size: n-th power of two.
 	uint8_t order : 8;
 	/// Is this alloation movable: LLFree tries to separete movable and immovable allocations.
 	bool movable : 1;
-	/// Search for huge pages that are not reported for ballooning
-	bool get_unreported : 1;
-	/// Mark this huge page as reported for ballooning
-	bool set_reported : 1;
 	/// Skip cpu-local reservations and ignore tree kinds (like movable).
 	bool global : 1;
 	// ... Reserved for future use
@@ -80,8 +83,6 @@ static inline llflags_t llflags(size_t order)
 {
 	return (llflags_t){ .order = (uint8_t)order,
 			    .movable = false,
-			    .get_unreported = false,
-			    .set_reported = false,
 			    .global = false };
 }
 
@@ -153,6 +154,13 @@ size_t llfree_free_at(llfree_t *self, uint64_t frame, size_t order);
 size_t llfree_free_frames(llfree_t *self);
 /// Returns number of currently free frames
 size_t llfree_free_huge(llfree_t *self);
+
+// == Ballooning ==
+
+/// Search for a free, not yet inflated, huge page and mark it
+llfree_result_t llfree_inflate(llfree_t *self, size_t core);
+/// Mark the given huge page as entirely deflated
+llfree_result_t llfree_deflate(llfree_t *self, uint64_t frame);
 
 // == Debugging ==
 

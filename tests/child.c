@@ -77,27 +77,3 @@ declare_test(child_counter_dec)
 
 	return success;
 }
-
-declare_test(child_reserve_huge)
-{
-	bool success = true;
-	bool ret = false;
-	llflags_t flags;
-	flags.get_unreported = true;
-
-	child_t actual = child_new(LLFREE_CHILD_SIZE, true, false);
-	ret = child_reserve_huge(&actual, flags);
-	check_m(ret, "flags.get_unreported failed to get unreported");
-
-	actual = child_new(LLFREE_CHILD_SIZE, true, true);
-	ret = child_reserve_huge(&actual, flags);
-	check_m(!ret, "flags.get_unreported got reported huge page");
-
-	flags.get_unreported = false;
-	actual = child_new(LLFREE_CHILD_SIZE, true, true);
-	ret = child_reserve_huge(&actual, flags);
-	check_m(!actual.reported,
-		"child_reserve_huge does not reset reported flag");
-
-	return success;
-}

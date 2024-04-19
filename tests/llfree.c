@@ -28,7 +28,7 @@ static llfree_t llfree_new(size_t cores, size_t frames, uint8_t init)
 	};
 	llfree_result_t _unused ret =
 		llfree_init(&upper, cores, frames, init, meta);
-	assert(llfree_ok(ret));
+	assert(llfree_is_ok(ret));
 	return upper;
 }
 
@@ -66,22 +66,22 @@ declare_test(llfree_init_alloc)
 	check(llfree_free_frames(&upper) == 0);
 
 	for (size_t hp = 0; hp < (FRAMES >> LLFREE_HUGE_ORDER) - 1; hp++) {
-		check(llfree_ok(llfree_put(&upper, 0, hp << LLFREE_HUGE_ORDER,
+		check(llfree_is_ok(llfree_put(&upper, 0, hp << LLFREE_HUGE_ORDER,
 					   llflags(LLFREE_HUGE_ORDER))));
 	}
 	for (size_t page = FRAMES - (1 << LLFREE_HUGE_ORDER); page < FRAMES;
 	     page++) {
-		check(llfree_ok(llfree_put(&upper, 0, page, llflags(0))));
+		check(llfree_is_ok(llfree_put(&upper, 0, page, llflags(0))));
 	}
 	check(llfree_free_frames(&upper) == FRAMES);
 
 	llflags_t llf = llflags(0);
 	llf.movable = true;
-	check(llfree_ok(llfree_get(&upper, 0, llf)));
+	check(llfree_is_ok(llfree_get(&upper, 0, llf)));
 
-	check(llfree_ok(llfree_get(&upper, 0, llflags(0))));
+	check(llfree_is_ok(llfree_get(&upper, 0, llflags(0))));
 
-	check(llfree_ok(llfree_get(&upper, 0, llf)));
+	check(llfree_is_ok(llfree_get(&upper, 0, llf)));
 
 	llfree_validate(&upper);
 
@@ -100,8 +100,8 @@ declare_test(llfree_alloc_s)
 	llfree_info("Alloc");
 	size_t n = 128;
 	for (size_t i = 0; i < n; i++) {
-		check(llfree_ok(llfree_get(&upper, 0, llflags(0))));
-		check(llfree_ok(
+		check(llfree_is_ok(llfree_get(&upper, 0, llflags(0))));
+		check(llfree_is_ok(
 			llfree_get(&upper, 0, llflags(LLFREE_HUGE_ORDER))));
 	}
 
@@ -156,7 +156,7 @@ declare_test(llfree_general_function)
 	llfree_info("Before get");
 
 	llfree_result_t frame = llfree_get(&upper, 0, llflags(0));
-	check_m(llfree_ok(frame), "reservation must be success");
+	check_m(llfree_is_ok(frame), "reservation must be success");
 	llfree_validate(&upper);
 
 	check(llfree_frames(&upper) == 132000);
@@ -165,37 +165,37 @@ declare_test(llfree_general_function)
 
 	llfree_info("After get mit core 0\n");
 
-	ret = llfree_put(&upper, 0, (uint64_t)frame.val, llflags(0));
+	ret = llfree_put(&upper, 0, frame.frame, llflags(0));
 	llfree_validate(&upper);
 
-	check_m(llfree_ok(ret), "successfully free");
+	check_m(llfree_is_ok(ret), "successfully free");
 	check_m(llfree_free_frames(&upper) == 132000,
 		"right number of free frames");
 
 	local_history_t last = atom_load(&upper.local[0].last);
-	check_equal(last.idx, tree_from_pfn(frame.val));
+	check_equal(last.idx, tree_from_pfn(frame.frame));
 
 	// reserve all frames in first tree
 	for (size_t i = 0; i < LLFREE_TREE_SIZE; ++i) {
 		ret = llfree_get(&upper, 0, llflags(0));
-		check(llfree_ok(ret));
+		check(llfree_is_ok(ret));
 	}
 
 	llfree_validate(&upper);
 
 	// reserve first frame in new tree
 	ret = llfree_get(&upper, 0, llflags(0));
-	check(llfree_ok(ret));
-	check_m(tree_from_pfn(frame.val) != tree_from_pfn(ret.val),
+	check(llfree_is_ok(ret));
+	check_m(tree_from_pfn(frame.frame) != tree_from_pfn(ret.frame),
 		"second tree must be allocated");
 
 	uint64_t free_frames = llfree_free_frames(&upper);
 	// reserve and free a HugeFrame
 	frame = llfree_get(&upper, 0, llflags(LLFREE_HUGE_ORDER));
-	check(llfree_ok(frame));
+	check(llfree_is_ok(frame));
 	check_equal(llfree_free_frames(&upper),
 		    free_frames - LLFREE_CHILD_SIZE);
-	check(llfree_ok(llfree_put(&upper, 0, (uint64_t)frame.val,
+	check(llfree_is_ok(llfree_put(&upper, 0, frame.frame,
 				   llflags(LLFREE_HUGE_ORDER))));
 	check_equal(llfree_free_frames(&upper), free_frames);
 
@@ -217,8 +217,8 @@ declare_test(llfree_put)
 	// reserve more frames than one tree
 	for (size_t i = 0; i < LLFREE_TREE_SIZE + 5; ++i) {
 		ret = llfree_get(&upper, 1, llflags(0));
-		check(llfree_ok(ret));
-		reserved[i] = (uint64_t)ret.val;
+		check(llfree_is_ok(ret));
+		reserved[i] = ret.frame;
 	}
 
 	check_equal(tree_from_pfn(reserved[0]),
@@ -227,8 +227,8 @@ declare_test(llfree_put)
 	      tree_from_pfn(reserved[LLFREE_TREE_SIZE]));
 
 	llfree_result_t ret2 = llfree_get(&upper, 2, llflags(0));
-	check(llfree_ok(ret2));
-	check_m(tree_from_pfn(ret2.val) !=
+	check(llfree_is_ok(ret2));
+	check_m(tree_from_pfn(ret2.frame) !=
 			tree_from_pfn(reserved[LLFREE_TREE_SIZE]),
 		"second get must be in different tree");
 
@@ -240,7 +240,7 @@ declare_test(llfree_put)
 	// free half the frames from old tree with core 2
 	for (size_t i = 0; i < LLFREE_TREE_SIZE / 2; ++i) {
 		ret = llfree_put(&upper, 2, reserved[i], llflags(0));
-		check(llfree_ok(ret));
+		check(llfree_is_ok(ret));
 	}
 
 	// core 2 must have now this first tree reserved
@@ -270,16 +270,16 @@ declare_test(llfree_alloc_all)
 
 	for (size_t i = 0; i < LENGTH; ++i) {
 		llfree_result_t ret = llfree_get(&upper, i % CORES, llflags(0));
-		check_m(llfree_ok(ret),
+		check_m(llfree_is_ok(ret),
 			"must be able to alloc the whole memory");
-		if (!llfree_ok(ret)) {
+		if (!llfree_is_ok(ret)) {
 			llfree_print(&upper);
 			break;
 		}
-		pfns[i] = ret.val;
+		pfns[i] = ret.frame;
 	}
 	ret = llfree_get(&upper, 0, llflags(0));
-	check(ret.val == LLFREE_ERR_MEMORY);
+	check(ret.error == LLFREE_ERR_MEMORY);
 
 	check_equal(llfree_free_frames(&upper), 0ul);
 	check_equal(llfree_free_frames(&upper),
@@ -343,15 +343,15 @@ static void *alloc_frames(void *arg)
 							 args->core,
 							 ret->pfns[random_idx],
 							 llflags(args->order));
-			assert(llfree_ok(res));
+			assert(llfree_is_ok(res));
 			--ret->sp;
 			ret->pfns[random_idx] = ret->pfns[ret->sp];
 			--i;
 		} else {
 			llfree_result_t res = llfree_get(
 				args->upper, args->core, llflags(args->order));
-			assert(llfree_ok(res));
-			ret->pfns[ret->sp] = (uint64_t)res.val;
+			assert(llfree_is_ok(res));
+			ret->pfns[ret->sp] = res.frame;
 			++ret->sp;
 		}
 	}
@@ -456,13 +456,13 @@ static void *parallel_alloc_all(void *input)
 
 		llfree_result_t ret =
 			llfree_get(args->upper, args->core, llflags(0));
-		if (!llfree_ok(ret)) {
-			assert(ret.val == LLFREE_ERR_MEMORY);
+		if (!llfree_is_ok(ret)) {
+			assert(ret.error == LLFREE_ERR_MEMORY);
 			break;
 		}
-		assert((uint64_t)ret.val < total);
+		assert(ret.frame < total);
 
-		(*(args->frames))[i] = (uint64_t)ret.val;
+		(*(args->frames))[i] = ret.frame;
 	}
 	llfree_info("finish %zu (%zu)", args->core, i);
 	return (void *)i;
@@ -529,11 +529,11 @@ declare_test(llfree_get_huge)
 
 	llfree_info("get");
 	res = llfree_get(&upper, 0, llflags(LLFREE_HUGE_ORDER));
-	check(llfree_ok(res));
+	check(llfree_is_ok(res));
 
 	llfree_info("get");
 	res = llfree_get(&upper, 0, llflags(LLFREE_HUGE_ORDER));
-	check(llfree_ok(res));
+	check(llfree_is_ok(res));
 
 	llfree_validate(&upper);
 	llfree_drop(&upper);
@@ -552,16 +552,16 @@ declare_test(llfree_get_global)
 	flags.global = true;
 	for (size_t i = 0; i < llfree_huge(&upper); i++) {
 		res = llfree_get(&upper, 0, flags);
-		check(llfree_ok(res));
+		check(llfree_is_ok(res));
 	}
 	res  = llfree_get(&upper, 0, flags);
-	check(res.val == LLFREE_ERR_MEMORY);
+	check(res.error == LLFREE_ERR_MEMORY);
 
 	llfree_validate(&upper);
 
 	for (size_t i = 0; i < llfree_huge(&upper); i++) {
 		res = llfree_put(&upper, 0, i << LLFREE_HUGE_ORDER, flags);
-		check(llfree_ok(res));
+		check(llfree_is_ok(res));
 	}
 
 	llfree_validate(&upper);
@@ -600,8 +600,8 @@ static void *llfree_less_mem_par(void *input)
 	for (size_t i = 0; i < shared->frames_len; i++) {
 		llfree_result_t res =
 			llfree_get(shared->llfree, data->core, llflags(0));
-		assert(llfree_ok(res));
-		frames[i] = (uint64_t)res.val;
+		assert(llfree_is_ok(res));
+		frames[i] = res.frame;
 	}
 
 	llfree_info("sync1 on %zu", data->core);
@@ -613,7 +613,7 @@ static void *llfree_less_mem_par(void *input)
 	for (size_t i = 0; i < shared->frames_len; i++) {
 		llfree_result_t res = llfree_put(shared->llfree, data->core,
 						 frames[i], llflags(0));
-		assert(llfree_ok(res));
+		assert(llfree_is_ok(res));
 	}
 
 	return NULL;

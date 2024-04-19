@@ -9,16 +9,16 @@ static inline bitfield_t bf(uint64_t b0, uint64_t b1, uint64_t b2, uint64_t b3,
 
 bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos);
 
-#define check_fza(v, order, expected_v, expected_pos)                  \
-	{                                                              \
-		uint64_t val = (v);                                    \
-		size_t pos;                                            \
-		bool found = first_zeros_aligned(&val, (order), &pos); \
-		check_equal_m(val, (expected_v), "value");             \
-		check_equal_m(found, (expected_pos) >= 0, "found");    \
-		if (found)                                             \
-			check_equal_m(pos, (size_t)(expected_pos),     \
-				      "position");                     \
+#define check_fza(v, order, expected_v, expected_pos)                     \
+	{                                                                 \
+		uint64_t val = (v);                                       \
+		size_t pos;                                               \
+		bool found = first_zeros_aligned(&val, (order), &pos);    \
+		check_equal_m(val, (expected_v), "value");                \
+		check_equal_m(found, (expected_pos) < SIZE_MAX, "found"); \
+		if (found)                                                \
+			check_equal_m(pos, (size_t)(expected_pos),        \
+				      "position");                        \
 	}
 
 declare_test(bitfield_first_zeros)
@@ -41,7 +41,7 @@ declare_test(bitfield_first_zeros)
 	check_fza(0b1llu, 3lu, 0xff01llu, 8ll);
 	check_fza(0b1llu, 4lu, 0xffff0001llu, 16ll);
 	check_fza(0b1llu, 5lu, 0xffffffff00000001llu, 32ll);
-	check_fza(0b1llu, 6lu, 0b1llu, LLFREE_ERR_MEMORY);
+	check_fza(0b1llu, 6lu, 0b1llu, SIZE_MAX);
 
 	check_fza(0b101llu, 0lu, 0b111llu, 1ll);
 	check_fza(0b10011llu, 1lu, 0b11111llu, 2ll);
@@ -54,41 +54,30 @@ declare_test(bitfield_first_zeros)
 
 	// Upper bound
 	check_fza(0x7fffffffffffffffllu, 0lu, 0xffffffffffffffffllu, 63ll);
-	check_fza(0xffffffffffffffffllu, 0lu, 0xffffffffffffffffllu,
-		  LLFREE_ERR_MEMORY);
+	check_fza(0xffffffffffffffffllu, 0lu, 0xffffffffffffffffllu, SIZE_MAX);
 
 	check_fza(0x3fffffffffffffffllu, 1lu, 0xffffffffffffffffllu, 62ll);
-	check_fza(0x7fffffffffffffffllu, 1lu, 0x7fffffffffffffffllu,
-		  LLFREE_ERR_MEMORY);
+	check_fza(0x7fffffffffffffffllu, 1lu, 0x7fffffffffffffffllu, SIZE_MAX);
 
 	check_fza(0x0fffffffffffffffllu, 2lu, 0xffffffffffffffffllu, 60ll);
-	check_fza(0x1fffffffffffffffllu, 2lu, 0x1fffffffffffffffllu,
-		  LLFREE_ERR_MEMORY);
-	check_fza(0x3fffffffffffffffllu, 2lu, 0x3fffffffffffffffllu,
-		  LLFREE_ERR_MEMORY);
+	check_fza(0x1fffffffffffffffllu, 2lu, 0x1fffffffffffffffllu, SIZE_MAX);
+	check_fza(0x3fffffffffffffffllu, 2lu, 0x3fffffffffffffffllu, SIZE_MAX);
 
 	check_fza(0x00ffffffffffffffllu, 3lu, 0xffffffffffffffffllu, 56ll);
-	check_fza(0x0fffffffffffffffllu, 3lu, 0x0fffffffffffffffllu,
-		  LLFREE_ERR_MEMORY);
-	check_fza(0x1fffffffffffffffllu, 3lu, 0x1fffffffffffffffllu,
-		  LLFREE_ERR_MEMORY);
+	check_fza(0x0fffffffffffffffllu, 3lu, 0x0fffffffffffffffllu, SIZE_MAX);
+	check_fza(0x1fffffffffffffffllu, 3lu, 0x1fffffffffffffffllu, SIZE_MAX);
 
 	check_fza(0x0000ffffffffffffllu, 4lu, 0xffffffffffffffffllu, 48ll);
-	check_fza(0x0001ffffffffffffllu, 4lu, 0x0001ffffffffffffllu,
-		  LLFREE_ERR_MEMORY);
-	check_fza(0x00ffffffffffffffllu, 4lu, 0x00ffffffffffffffllu,
-		  LLFREE_ERR_MEMORY);
+	check_fza(0x0001ffffffffffffllu, 4lu, 0x0001ffffffffffffllu, SIZE_MAX);
+	check_fza(0x00ffffffffffffffllu, 4lu, 0x00ffffffffffffffllu, SIZE_MAX);
 
 	check_fza(0x00000000ffffffffllu, 5lu, 0xffffffffffffffffllu, 32ll);
-	check_fza(0x00000001ffffffffllu, 5lu, 0x00000001ffffffffllu,
-		  LLFREE_ERR_MEMORY);
-	check_fza(0x0000ffffffffffffllu, 5lu, 0x0000ffffffffffffllu,
-		  LLFREE_ERR_MEMORY);
+	check_fza(0x00000001ffffffffllu, 5lu, 0x00000001ffffffffllu, SIZE_MAX);
+	check_fza(0x0000ffffffffffffllu, 5lu, 0x0000ffffffffffffllu, SIZE_MAX);
 
 	check_fza(0llu, 6lu, 0xffffffffffffffffllu, 0ll);
-	check_fza(1llu, 6lu, 1llu, LLFREE_ERR_MEMORY);
-	check_fza(0xa000000000000000llu, 6lu, 0xa000000000000000llu,
-		  LLFREE_ERR_MEMORY);
+	check_fza(1llu, 6lu, 1llu, SIZE_MAX);
+	check_fza(0xa000000000000000llu, 6lu, 0xa000000000000000llu, SIZE_MAX);
 
 	return success;
 }
@@ -101,21 +90,21 @@ declare_test(bitfield_set_bit)
 	bitfield_t expected = bf(0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 
 	llfree_result_t ret = field_set_next(&actual, 0, 0);
-	check_equal(ret.val, 0);
+	check_equal(ret.frame, 0);
 	check_equal_bitfield(actual, expected);
 
 	actual = bf(0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 	expected = bf(0x3, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 
 	ret = field_set_next(&actual, 0, 0);
-	check_equal(ret.val, 1);
+	check_equal(ret.frame, 1);
 	check_equal_bitfield(actual, expected);
 
 	actual = bf(UINT64_MAX, 0xf, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 	expected = bf(UINT64_MAX, 0x1f, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 
 	ret = field_set_next(&actual, 0, 0);
-	check_equal_m(ret.val, 68l, "call should be a success");
+	check_equal_m(ret.frame, 68l, "call should be a success");
 	check_equal_bitfield(actual, expected);
 
 	actual = bf(UINT64_MAX, UINT64_MAX, UINT64_MAX, 0xfabdeadbeeffffff, 0x0,
@@ -124,7 +113,7 @@ declare_test(bitfield_set_bit)
 		      0x0, 0xdeadbeefdeadbeef, 0x0, 0x8000000000000000);
 
 	ret = field_set_next(&actual, 0, 0);
-	check_equal_m(ret.val, 216, "call should be a success");
+	check_equal_m(ret.frame, 216, "call should be a success");
 	check_equal_bitfield_m(actual, expected, "row 3 bit 24 -> e to f");
 
 	actual = bf(UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
@@ -133,7 +122,7 @@ declare_test(bitfield_set_bit)
 		      UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX);
 
 	ret = field_set_next(&actual, 0, 0);
-	check_equal_m(ret.val, LLFREE_ERR_MEMORY, "call should fail");
+	check_equal_m(ret.error, LLFREE_ERR_MEMORY, "call should fail");
 	check_equal_bitfield_m(actual, expected, "no change");
 
 	return success;
@@ -150,14 +139,14 @@ declare_test(bitfield_reset_bit)
 	llfree_result_t ret = field_toggle(&actual, pos, 0, true);
 	check_equal_bitfield_m(actual, expect,
 			       "no change if original Bit was already 0");
-	check(!llfree_ok(ret));
+	check(!llfree_is_ok(ret));
 
 	actual = bf(0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 	expect = bf(0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 	pos = 0;
 
 	ret = field_toggle(&actual, pos, 0, true);
-	check_equal(ret.val, 0);
+	check_equal(ret.frame, 0);
 	check_equal_bitfield_m(actual, expect, "first one should be set to 0");
 
 	actual = bf(0x1, 0xfacb8ffabf000000, 0xbadc007cd, 0x0, 0x0, 0x0, 0x0,
@@ -167,7 +156,7 @@ declare_test(bitfield_reset_bit)
 	pos = 7ul * 64 + 63;
 
 	ret = field_toggle(&actual, pos, 0, true);
-	check_equal(ret.val, 0);
+	check_equal(ret.frame, 0);
 	check_equal_bitfield_m(actual, expect, "last bit should be set to 0");
 
 	actual = bf(0x1, 0xfacb8ffabf000000, 0xbadc007cd, 0x0, 0x0, 0x0, 0x0,
@@ -177,7 +166,7 @@ declare_test(bitfield_reset_bit)
 	pos = 2ul * 64 + 32;
 
 	ret = field_toggle(&actual, pos, 0, true);
-	check_equal(ret.val, 0);
+	check_equal(ret.frame, 0);
 	check_equal_bitfield_m(actual, expect, "row 2 bit 31 -> b to a");
 
 	actual = bf(0x1, 0xfacb8ffabf000000, 0xb2dc007cd, 0x0, 0x0, 0x0, 0x0,
@@ -187,7 +176,7 @@ declare_test(bitfield_reset_bit)
 	pos = 4ul * 64 + 62;
 
 	ret = field_toggle(&actual, pos, 0, true);
-	check(!llfree_ok(ret));
+	check(!llfree_is_ok(ret));
 	check_equal_bitfield_m(actual, expect, "no change");
 
 	return success;

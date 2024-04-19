@@ -35,9 +35,11 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags);
 /// Checks if the frame is free
 bool lower_is_free(lower_t *self, uint64_t frame, size_t order);
 
+
+/// Returns the number of huge frames
+size_t lower_huge(lower_t *self);
 /// Returns the number of free base frames
 size_t lower_free_frames(lower_t *self);
-
 /// Returns the number of free huge frames
 size_t lower_free_huge(lower_t *self);
 
@@ -46,11 +48,10 @@ size_t lower_free_at_huge(lower_t *self, uint64_t frame);
 /// Returns the number of free pages in the huge page
 size_t lower_free_at_tree(lower_t *self, uint64_t frame);
 
-// Returns the number of huge frames
-size_t lower_huge(lower_t *self);
-
-/// Returns the number of unreported, free huge frames in a tree
-bool lower_tree_contains_unreported(lower_t *self, uint64_t pfn);
+/// Search for a free and mapped huge page and change its status to inflated
+llfree_result_t lower_inflate(lower_t *self, uint64_t start_frame);
+/// Search for a inflated or deflating huge page and change its status to mapped
+llfree_result_t lower_deflate(lower_t *self, uint64_t frame);
 
 /// Print debug info
 void lower_print(lower_t *self);
