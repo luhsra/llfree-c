@@ -63,7 +63,7 @@ static void lower_clear(lower_t *self, bool free_all)
 				   0;
 
 		*get_child(self, i) =
-			child_new((uint16_t)free, free == 0, LL_CS_MAP);
+			child_new((uint16_t)free, free == 0, false);
 
 		if (free == 0)
 			zero_field(&self->fields[i]);
@@ -73,7 +73,7 @@ static void lower_clear(lower_t *self, bool free_all)
 	// Leftover children are initialized to 0
 	for (size_t i = child_c; i < align_up(child_c, LLFREE_TREE_CHILDREN);
 	     i++) {
-		*get_child(self, i) = child_new(0, true, LL_CS_MAP);
+		*get_child(self, i) = child_new(0, true, false);
 	}
 }
 
@@ -84,7 +84,7 @@ static void lower_recover(lower_t *self)
 		if (child.huge) {
 			// if this was reserved as Huge Page set counter and all frames to 0
 			atom_store(get_child(self, i),
-				   child_new(0, true, LL_CS_MAP));
+				   child_new(0, true, false));
 			field_init(&self->fields[i]);
 		} else {
 			// not a Huge Page -> count free Frames and set as counter
@@ -147,21 +147,8 @@ static llfree_result_t get_max(lower_t *self, uint64_t pfn)
 		_Atomic(child_pair_t) *pair =
 			(_Atomic(child_pair_t) *)get_child(self, current_i * 2);
 		if (atom_update(pair, old, child_reserve_max)) {
-			if (old.first.state == LL_CS_DEF ||
-			    old.second.state == LL_CS_DEF) {
-				// wait for deflation
-				while (({
-					child_pair_t p = atom_load(pair);
-					p.first.state == LL_CS_DEF ||
-						p.second.state == LL_CS_DEF;
-				})) {
-					spin_wait();
-				}
-			}
-
 			return llfree_ok(pfn_from_child(current_i * 2),
-					 old.first.state == LL_CS_INF ||
-						 old.second.state == LL_CS_INF);
+					 old.first.inflated);
 		}
 	}
 
@@ -178,17 +165,8 @@ static llfree_result_t get_huge(lower_t *self, uint64_t pfn)
 		child_t old;
 		_Atomic(child_t) *child = get_child(self, current_i);
 		if (atom_update(child, old, child_reserve_huge)) {
-			if (old.state == LL_CS_DEF) {
-				// wait for deflation
-				while (({
-					child_t c = atom_load(child);
-					c.state == LL_CS_DEF;
-				})) {
-					spin_wait();
-				}
-			}
 			return llfree_ok(pfn_from_child(current_i),
-					 old.state == LL_CS_INF);
+					 old.inflated);
 		}
 	}
 
@@ -218,19 +196,9 @@ llfree_result_t lower_get(lower_t *self, const uint64_t start_frame,
 				field_set_next(&self->fields[current_i],
 					       start_frame, flags.order);
 			if (llfree_is_ok(pos)) {
-				if (old.state == LL_CS_DEF) {
-					// wait for deflation
-					while (({
-						child_t c = atom_load(child);
-						c.state == LL_CS_DEF;
-					})) {
-						spin_wait();
-					}
-				}
-
 				return llfree_ok(pfn_from_child(current_i) +
 							 pos.frame,
-						 old.state == LL_CS_INF);
+						 old.inflated);
 			}
 
 			if (!atom_update(child, old, child_inc, flags.order)) {
@@ -256,9 +224,9 @@ static llfree_result_t split_huge(_Atomic(child_t) *child, bitfield_t *field)
 			atom_store(&field->rows[i], UINT64_MAX);
 		}
 
-		child_t expected = child_new(0, true, LL_CS_MAP);
+		child_t expected = child_new(0, true, false);
 		success = atom_cmp_exchange(child, &expected,
-					    child_new(0, false, LL_CS_MAP));
+					    child_new(0, false, false));
 		assert(success);
 	} else {
 		llfree_debug("split huge: wait");
@@ -288,10 +256,10 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags)
 	_Atomic(child_t) *child = get_child(self, child_idx);
 
 	if (flags.order == LLFREE_MAX_ORDER) {
-		child_pair_t old = { child_new(0, true, LL_CS_MAP),
-				     child_new(0, true, LL_CS_MAP) };
-		child_pair_t new = { child_new(CHILD_N, false, LL_CS_MAP),
-				     child_new(CHILD_N, false, LL_CS_MAP) };
+		child_pair_t old = { child_new(0, true, false),
+				     child_new(0, true, false) };
+		child_pair_t new = { child_new(CHILD_N, false, false),
+				     child_new(CHILD_N, false, false) };
 
 		if (atom_cmp_exchange((_Atomic(child_pair_t) *)child, &old,
 				      new))
@@ -300,8 +268,8 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags)
 		return llfree_err(LLFREE_ERR_MEMORY);
 	}
 	if (flags.order == LLFREE_HUGE_ORDER) {
-		child_t old = child_new(0, true, LL_CS_MAP);
-		child_t new = child_new(CHILD_N, false, LL_CS_MAP);
+		child_t old = child_new(0, true, false);
+		child_t new = child_new(CHILD_N, false, false);
 
 		if (atom_cmp_exchange(child, &old, new))
 			return llfree_err(LLFREE_ERR_OK);

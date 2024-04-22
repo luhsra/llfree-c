@@ -17,8 +17,6 @@ bool child_dec(child_t *self, size_t order)
 		return false;
 
 	self->free -= num_pages;
-	if (self->state == LL_CS_INF)
-		self->state = LL_CS_DEF;
 	return true;
 }
 
@@ -43,15 +41,15 @@ bool child_reserve_max(child_pair_t *self)
 }
 
 bool child_inflate(child_t *self) {
-	if (self->free == LLFREE_CHILD_SIZE && self->state == LL_CS_MAP) {
-		*self = child_new(self->free, false, LL_CS_INF);
+	if (self->free == LLFREE_CHILD_SIZE && !self->inflated) {
+		*self = child_new(self->free, false, true);
 		return true;
 	}
 	return false;
 }
 
 bool child_deflate(child_t *self) {
-	assert(self->state == LL_CS_INF || self->state == LL_CS_DEF);
-	self->state = LL_CS_MAP;
+	assert(self->inflated);
+	self->inflated = false;
 	return true;
 }

@@ -2,27 +2,20 @@
 
 #include "utils.h"
 
-/// Is this child mapped
-#define LL_CS_MAP ((uint8_t)0)
-/// If this child is not mapped (inflated)
-#define LL_CS_INF ((uint8_t)1)
-/// If this child is in the process of being mapped (deflating)
-#define LL_CS_DEF ((uint8_t)2)
-
 /// Index entry for every bitfield
 typedef struct child {
-	uint16_t free : 13;
+	uint16_t free : 14;
 	bool huge : 1;
-	uint8_t state : 2;
+	bool inflated : 1;
 } child_t;
 
 _Static_assert(13 > LLFREE_CHILD_ORDER, "child counter size");
 
 /// Initializes the child entry with the given parameters
-static inline child_t _unused child_new(uint16_t free, bool huge, uint8_t state)
+static inline child_t _unused child_new(uint16_t free, bool huge, bool inflated)
 {
 	assert(free <= LLFREE_CHILD_SIZE);
-	return (child_t){ .free = free, .huge = huge, .state = state };
+	return (child_t){ .free = free, .huge = huge, .inflated = inflated };
 }
 
 /// Increment the free counter if possible
