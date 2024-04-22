@@ -49,7 +49,9 @@ bool child_inflate(child_t *self) {
 }
 
 bool child_deflate(child_t *self) {
-	assert(self->inflated);
-	self->inflated = false;
-	return true;
+	if (self->inflated) {
+		self->inflated = false;
+		return true;
+	}
+	return false;
 }

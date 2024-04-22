@@ -392,8 +392,16 @@ llfree_result_t lower_deflate(lower_t *self, uint64_t frame)
 {
 	_Atomic(child_t) *child = get_child(self, child_from_pfn(frame));
 	child_t old;
-	atom_update(child, old, child_deflate);
+	if (atom_update(child, old, child_deflate))
+		return llfree_ok(0, false);
 	return llfree_err(LLFREE_ERR_ADDRESS);
+}
+
+bool lower_is_inflated(lower_t *self, uint64_t frame)
+{
+	_Atomic(child_t) *child = get_child(self, child_from_pfn(frame));
+	child_t c = atom_load(child);
+	return c.inflated;
 }
 
 void lower_print(lower_t *self)

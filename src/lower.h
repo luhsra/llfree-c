@@ -52,6 +52,8 @@ size_t lower_free_at_tree(lower_t *self, uint64_t frame);
 llfree_result_t lower_inflate(lower_t *self, uint64_t start_frame);
 /// Search for a inflated or deflating huge page and change its status to mapped
 llfree_result_t lower_deflate(lower_t *self, uint64_t frame);
+/// Return wether a frame is inflated
+bool lower_is_inflated(lower_t *self, uint64_t frame);
 
 /// Print debug info
 void lower_print(lower_t *self);

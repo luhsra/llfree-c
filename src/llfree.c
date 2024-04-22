@@ -629,6 +629,11 @@ llfree_result_t llfree_deflate(llfree_t *self, uint64_t frame)
 	return lower_deflate(&self->lower, frame);
 }
 
+bool llfree_is_inflated(llfree_t *self, uint64_t frame)
+{
+	return lower_is_inflated(&self->lower, frame);
+}
+
 void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
 			void *arg)
 {

@@ -79,7 +79,7 @@ typedef struct llflags {
 	// ... Reserved for future use
 } llflags_t;
 
-static inline llflags_t llflags(size_t order)
+static inline llflags_t _unused llflags(size_t order)
 {
 	return (llflags_t){ .order = (uint8_t)order,
 			    .movable = false,
@@ -161,6 +161,8 @@ size_t llfree_free_huge(llfree_t *self);
 llfree_result_t llfree_inflate(llfree_t *self, size_t core);
 /// Mark the given huge page as entirely deflated
 llfree_result_t llfree_deflate(llfree_t *self, uint64_t frame);
+/// Return wether a frame is inflated
+bool llfree_is_inflated(llfree_t *self, uint64_t frame);
 
 // == Debugging ==
 
