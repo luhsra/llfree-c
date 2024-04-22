@@ -600,7 +600,7 @@ static llfree_result_t try_inflate(llfree_t *self, size_t idx, void *args)
 	assert(idx < self->trees_len);
 
 	tree_t tree = atom_load(&self->trees[idx]);
-	if (tree.free < (1 << LLFREE_HUGE_ORDER))
+	if (tree.reserved || tree.free < (1 << LLFREE_HUGE_ORDER))
 		return llfree_err(LLFREE_ERR_MEMORY);
 
 	return lower_inflate(&self->lower, idx << LLFREE_TREE_ORDER);
