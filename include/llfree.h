@@ -27,7 +27,7 @@
 /// Errors are negative and the actual values are zero or positive.
 typedef struct _warn_unused llfree_result {
 	uint64_t frame : 55;
-	bool deflate : 1;
+	bool inflated : 1;
 	uint8_t error : 8;
 } llfree_result_t;
 
@@ -37,12 +37,12 @@ typedef struct llfree llfree_t;
 static inline llfree_result_t _unused llfree_ok(uint64_t frame, bool deflate)
 {
 	return (llfree_result_t){ .frame = frame,
-				  .deflate = deflate,
+				  .inflated = deflate,
 				  .error = LLFREE_ERR_OK };
 }
 static inline llfree_result_t _unused llfree_err(uint8_t err)
 {
-	return (llfree_result_t){ .frame = 0, .deflate = false, .error = err };
+	return (llfree_result_t){ .frame = 0, .inflated = false, .error = err };
 }
 
 /// Check if the result is ok (no error)
