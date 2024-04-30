@@ -146,7 +146,7 @@ static llfree_result_t get_max(lower_t *self, uint64_t pfn)
 		child_pair_t old;
 		_Atomic(child_pair_t) *pair =
 			(_Atomic(child_pair_t) *)get_child(self, current_i * 2);
-		if (atom_update(pair, old, child_reserve_max)) {
+		if (atom_update(pair, old, child_set_max)) {
 			return llfree_ok(pfn_from_child(current_i * 2),
 					 old.first.inflated);
 		}
@@ -164,7 +164,7 @@ static llfree_result_t get_huge(lower_t *self, uint64_t pfn)
 	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
 		child_t old;
 		_Atomic(child_t) *child = get_child(self, current_i);
-		if (atom_update(child, old, child_reserve_huge)) {
+		if (atom_update(child, old, child_set_huge)) {
 			return llfree_ok(pfn_from_child(current_i),
 					 old.inflated);
 		}
@@ -256,22 +256,16 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags)
 	_Atomic(child_t) *child = get_child(self, child_idx);
 
 	if (flags.order == LLFREE_MAX_ORDER) {
-		child_pair_t old = { child_new(0, true, false),
-				     child_new(0, true, false) };
-		child_pair_t new = { child_new(CHILD_N, false, false),
-				     child_new(CHILD_N, false, false) };
-
-		if (atom_cmp_exchange((_Atomic(child_pair_t) *)child, &old,
-				      new))
+		child_pair_t old;
+		if (atom_update((_Atomic(child_pair_t) *)child, old,
+				child_clear_max))
 			return llfree_err(LLFREE_ERR_OK);
 
 		return llfree_err(LLFREE_ERR_MEMORY);
 	}
 	if (flags.order == LLFREE_HUGE_ORDER) {
-		child_t old = child_new(0, true, false);
-		child_t new = child_new(CHILD_N, false, false);
-
-		if (atom_cmp_exchange(child, &old, new))
+		child_t old;
+		if (atom_update(child, old, child_clear_huge))
 			return llfree_err(LLFREE_ERR_OK);
 
 		return llfree_err(LLFREE_ERR_ADDRESS);

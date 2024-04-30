@@ -24,15 +24,19 @@ bool child_inc(child_t *self, size_t order);
 /// Decrement the free counter if possible
 bool child_dec(child_t *self, size_t order);
 
-/// Free the entry as huge page if possible
-bool child_reserve_huge(child_t *self);
+/// Alloc the child
+bool child_set_huge(child_t *self);
+/// Free the child
+bool child_clear_huge(child_t *self);
 
 typedef struct child_pair {
 	child_t first, second;
 } child_pair_t;
 
-/// Reserve a pair of child entries
-bool child_reserve_max(child_pair_t *self);
+/// Alloc a pair of child entries
+bool child_set_max(child_pair_t *self);
+/// Free a pair of child entries
+bool child_clear_max(child_pair_t *self);
 
 /// Set the child to inflated if it is free and mapped
 bool child_inflate(child_t *self);
