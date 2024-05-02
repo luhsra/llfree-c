@@ -419,7 +419,8 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 	size_t tree_idx = tree_from_pfn(frame);
 
 	// Update free-reserve heuristic
-	bool reserve = ll_local_free_inc(local, tree_idx);
+	bool reserve = LLFREE_ENABLE_FREE_RESERVE &&
+		       ll_local_free_inc(local, tree_idx);
 
 	tree_t old_t;
 	atom_update(&self->trees[tree_idx], old_t, tree_inc_or_reserve,

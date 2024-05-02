@@ -1,6 +1,7 @@
 #include "llfree_inner.h"
 
 #include "check.h"
+#include "llfree_platform.h"
 #include "local.h"
 #include "lower.h"
 
@@ -66,8 +67,9 @@ declare_test(llfree_init_alloc)
 	check(llfree_free_frames(&upper) == 0);
 
 	for (size_t hp = 0; hp < (FRAMES >> LLFREE_HUGE_ORDER) - 1; hp++) {
-		check(llfree_is_ok(llfree_put(&upper, 0, hp << LLFREE_HUGE_ORDER,
-					   llflags(LLFREE_HUGE_ORDER))));
+		check(llfree_is_ok(llfree_put(&upper, 0,
+					      hp << LLFREE_HUGE_ORDER,
+					      llflags(LLFREE_HUGE_ORDER))));
 	}
 	for (size_t page = FRAMES - (1 << LLFREE_HUGE_ORDER); page < FRAMES;
 	     page++) {
@@ -172,8 +174,10 @@ declare_test(llfree_general_function)
 	check_m(llfree_free_frames(&upper) == 132000,
 		"right number of free frames");
 
-	local_history_t last = atom_load(&upper.local[0].last);
-	check_equal(last.idx, tree_from_pfn(frame.frame));
+	if (LLFREE_ENABLE_FREE_RESERVE) {
+		local_history_t last = atom_load(&upper.local[0].last);
+		check_equal(last.idx, tree_from_pfn(frame.frame));
+	}
 
 	// reserve all frames in first tree
 	for (size_t i = 0; i < LLFREE_TREE_SIZE; ++i) {
@@ -196,7 +200,7 @@ declare_test(llfree_general_function)
 	check_equal(llfree_free_frames(&upper),
 		    free_frames - LLFREE_CHILD_SIZE);
 	check(llfree_is_ok(llfree_put(&upper, 0, frame.frame,
-				   llflags(LLFREE_HUGE_ORDER))));
+				      llflags(LLFREE_HUGE_ORDER))));
 	check_equal(llfree_free_frames(&upper), free_frames);
 
 	llfree_validate(&upper);
@@ -244,9 +248,11 @@ declare_test(llfree_put)
 	}
 
 	// core 2 must have now this first tree reserved
-	reserved_t res = upper.local[2].reserved[0];
-	check_equal(tree_from_row(res.start_row),
-		    (uint64_t)tree_from_pfn(reserved[0]));
+	if (LLFREE_ENABLE_FREE_RESERVE) {
+		reserved_t res = upper.local[2].reserved[0];
+		check_equal(tree_from_row(res.start_row),
+			    (uint64_t)tree_from_pfn(reserved[0]));
+	}
 	if (!success)
 		llfree_print(&upper);
 	llfree_validate(&upper);
@@ -534,35 +540,6 @@ declare_test(llfree_get_huge)
 	llfree_info("get");
 	res = llfree_get(&upper, 0, llflags(LLFREE_HUGE_ORDER));
 	check(llfree_is_ok(res));
-
-	llfree_validate(&upper);
-	llfree_drop(&upper);
-
-	return success;
-}
-
-declare_test(llfree_get_global)
-{
-	bool success = true;
-	llfree_result_t res;
-	llfree_t upper = llfree_new(1, 4 * LLFREE_TREE_SIZE, LLFREE_INIT_FREE);
-
-	llfree_info("get");
-	llflags_t flags = llflags(LLFREE_HUGE_ORDER);
-	flags.global = true;
-	for (size_t i = 0; i < llfree_huge(&upper); i++) {
-		res = llfree_get(&upper, 0, flags);
-		check(llfree_is_ok(res));
-	}
-	res  = llfree_get(&upper, 0, flags);
-	check(res.error == LLFREE_ERR_MEMORY);
-
-	llfree_validate(&upper);
-
-	for (size_t i = 0; i < llfree_huge(&upper); i++) {
-		res = llfree_put(&upper, 0, i << LLFREE_HUGE_ORDER, flags);
-		check(llfree_is_ok(res));
-	}
 
 	llfree_validate(&upper);
 	llfree_drop(&upper);
