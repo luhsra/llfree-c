@@ -65,10 +65,21 @@ bool child_clear_max(child_pair_t *self)
 	return false;
 }
 
-bool child_inflate(child_t *self)
+bool child_inflate(child_t *self, bool alloc)
 {
-	if (self->free == LLFREE_CHILD_SIZE && !self->inflated) {
-		*self = child_new(self->free, false, true);
+	if (self->free == LLFREE_CHILD_SIZE && !self->huge &&
+	    (alloc ? true : !self->inflated)) {
+		*self = child_new(alloc ? 0 : LLFREE_CHILD_SIZE, alloc, true);
+		return true;
+	}
+	return false;
+}
+
+bool child_inflate_put(child_t *self)
+{
+	if (self->inflated && self->huge) {
+		assert(self->free == 0);
+		*self = child_new(LLFREE_CHILD_SIZE, false, true);
 		return true;
 	}
 	return false;

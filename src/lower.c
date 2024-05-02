@@ -365,7 +365,7 @@ size_t lower_free_at_tree(lower_t *self, uint64_t frame)
 	return free;
 }
 
-llfree_result_t lower_inflate(lower_t *self, uint64_t start_frame)
+llfree_result_t lower_inflate(lower_t *self, uint64_t start_frame, bool alloc)
 {
 	assert(self != 0);
 
@@ -374,12 +374,21 @@ llfree_result_t lower_inflate(lower_t *self, uint64_t start_frame)
 	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
 		child_t old;
 		_Atomic(child_t) *child = get_child(self, current_i);
-		if (atom_update(child, old, child_inflate)) {
-			return llfree_ok(pfn_from_child(current_i), false);
+		if (atom_update(child, old, child_inflate, alloc)) {
+			return llfree_ok(pfn_from_child(current_i), old.inflated);
 		}
 	}
 
 	return llfree_err(LLFREE_ERR_MEMORY);
+}
+
+llfree_result_t lower_inflate_put(lower_t *self, uint64_t frame)
+{
+	_Atomic(child_t) *child = get_child(self, child_from_pfn(frame));
+	child_t old;
+	if (atom_update(child, old, child_inflate_put))
+		return llfree_ok(0, false);
+	return llfree_err(LLFREE_ERR_ADDRESS);
 }
 
 llfree_result_t lower_deflate(lower_t *self, uint64_t frame)

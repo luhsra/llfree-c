@@ -74,16 +74,13 @@ typedef struct llflags {
 	uint8_t order : 8;
 	/// Is this alloation movable: LLFree tries to separete movable and immovable allocations.
 	bool movable : 1;
-	/// Skip cpu-local reservations and ignore tree kinds (like movable).
-	bool global : 1;
 	// ... Reserved for future use
 } llflags_t;
 
 static inline llflags_t _unused llflags(size_t order)
 {
 	return (llflags_t){ .order = (uint8_t)order,
-			    .movable = false,
-			    .global = false };
+			    .movable = false };
 }
 
 /// Size of the required metadata
@@ -158,7 +155,9 @@ size_t llfree_free_huge(llfree_t *self);
 // == Ballooning ==
 
 /// Search for a free, not yet inflated, huge page and mark it
-llfree_result_t llfree_inflate(llfree_t *self, size_t core);
+llfree_result_t llfree_inflate(llfree_t *self, size_t core, bool alloc);
+/// Mark the inflated huge page as free, but keep it inflated
+llfree_result_t llfree_inflate_put(llfree_t *self, uint64_t frame);
 /// Mark the given huge page as entirely deflated
 llfree_result_t llfree_deflate(llfree_t *self, uint64_t frame);
 /// Return wether a frame is inflated

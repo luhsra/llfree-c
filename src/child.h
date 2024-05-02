@@ -39,7 +39,8 @@ bool child_set_max(child_pair_t *self);
 bool child_clear_max(child_pair_t *self);
 
 /// Set the child to inflated if it is free and mapped
-bool child_inflate(child_t *self);
-
+bool child_inflate(child_t *self, bool alloc);
+/// Free the child but keep it inflated
+bool child_inflate_put(child_t *self);
 /// Set the child to mapped if it is inflated or deflating
 bool child_deflate(child_t *self);

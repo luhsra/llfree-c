@@ -49,8 +49,10 @@ size_t lower_free_at_huge(lower_t *self, uint64_t frame);
 size_t lower_free_at_tree(lower_t *self, uint64_t frame);
 
 /// Search for a free and mapped huge page and change its status to inflated
-llfree_result_t lower_inflate(lower_t *self, uint64_t start_frame);
-/// Search for a inflated or deflating huge page and change its status to mapped
+llfree_result_t lower_inflate(lower_t *self, uint64_t start_frame, bool alloc);
+/// Mark the inflated huge page as free, but keep it inflated
+llfree_result_t lower_inflate_put(lower_t *self, uint64_t frame);
+/// Mark the given huge page as entirely deflated
 llfree_result_t lower_deflate(lower_t *self, uint64_t frame);
 /// Return wether a frame is inflated
 bool lower_is_inflated(lower_t *self, uint64_t frame);
