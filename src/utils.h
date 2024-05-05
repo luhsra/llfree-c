@@ -3,19 +3,6 @@
 #include "llfree.h"
 #include "llfree_platform.h"
 
-// conversion functions
-#define tree_from_pfn(_N) ((_N) >> LLFREE_TREE_ORDER)
-#define pfn_from_tree(_N) ((_N) << LLFREE_TREE_ORDER)
-
-#define child_from_pfn(_N) ((_N) >> LLFREE_CHILD_ORDER)
-#define pfn_from_child(_N) ((_N) << LLFREE_CHILD_ORDER)
-
-#define row_from_pfn(_N) ((_N) >> LLFREE_ATOMIC_ORDER)
-#define pfn_from_row(_N) ((_N) << LLFREE_ATOMIC_ORDER)
-
-#define tree_from_row(_N) tree_from_pfn(pfn_from_row(_N))
-#define row_from_tree(_N) row_from_pfn(pfn_from_tree(_N))
-
 /// Minimal size the LLFree can manage
 #define MIN_PAGES (1ul << LLFREE_MAX_ORDER)
 /// 64 Bit Addresses - 12 Bit needed for offset inside the Page
@@ -25,6 +12,43 @@
 
 #define LL_MAX(a, b) ((a) > (b) ? (a) : (b))
 #define LL_MIN(a, b) ((a) > (b) ? (b) : (a))
+
+// conversion functions
+static inline _unused size_t tree_from_frame(uint64_t frame)
+{
+	return frame >> LLFREE_TREE_ORDER;
+}
+static inline _unused uint64_t frame_from_tree(size_t tree)
+{
+	return (uint64_t)tree << LLFREE_TREE_ORDER;
+}
+
+static inline _unused size_t child_from_frame(uint64_t frame)
+{
+	return frame >> LLFREE_CHILD_ORDER;
+}
+static inline _unused uint64_t frame_from_child(size_t child)
+{
+	return (uint64_t)child << LLFREE_CHILD_ORDER;
+}
+
+static inline _unused uint64_t row_from_frame(uint64_t frame)
+{
+	return frame >> LLFREE_ATOMIC_ORDER;
+}
+static inline _unused uint64_t frame_from_row(uint64_t row)
+{
+	return row << LLFREE_ATOMIC_ORDER;
+}
+
+static inline _unused size_t tree_from_row(uint64_t row)
+{
+	return tree_from_frame(frame_from_row(row));
+}
+static inline _unused uint64_t row_from_tree(size_t tree)
+{
+	return row_from_frame(frame_from_tree(tree));
+}
 
 /// Devides a by b, rounding up the llfree_result
 static inline _unused size_t div_ceil(uint64_t a, size_t b)

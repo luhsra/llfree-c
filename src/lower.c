@@ -136,18 +136,18 @@ uint8_t *lower_metadata(lower_t *self)
 	return (uint8_t *)self->fields;
 }
 
-static llfree_result_t get_max(lower_t *self, uint64_t pfn)
+static llfree_result_t get_max(lower_t *self, uint64_t frame)
 {
 	assert(self != 0);
 
-	size_t idx = child_from_pfn(pfn) / 2;
+	size_t idx = child_from_frame(frame) / 2;
 	assert(idx < child_count(self) / 2);
 	for_offsetted(idx, LLFREE_TREE_CHILDREN / 2) {
 		child_pair_t old;
 		_Atomic(child_pair_t) *pair =
 			(_Atomic(child_pair_t) *)get_child(self, current_i * 2);
 		if (atom_update(pair, old, child_set_max)) {
-			return llfree_ok(pfn_from_child(current_i * 2),
+			return llfree_ok(frame_from_child(current_i * 2),
 					 old.first.inflated);
 		}
 	}
@@ -155,17 +155,17 @@ static llfree_result_t get_max(lower_t *self, uint64_t pfn)
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
-static llfree_result_t get_huge(lower_t *self, uint64_t pfn)
+static llfree_result_t get_huge(lower_t *self, uint64_t frame)
 {
 	assert(self != 0);
 
-	size_t idx = child_from_pfn(pfn);
+	size_t idx = child_from_frame(frame);
 	assert(idx < child_count(self));
 	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
 		child_t old;
 		_Atomic(child_t) *child = get_child(self, current_i);
 		if (atom_update(child, old, child_set_huge)) {
-			return llfree_ok(pfn_from_child(current_i),
+			return llfree_ok(frame_from_child(current_i),
 					 old.inflated);
 		}
 	}
@@ -174,34 +174,33 @@ static llfree_result_t get_huge(lower_t *self, uint64_t pfn)
 }
 
 llfree_result_t lower_get(lower_t *self, const uint64_t start_frame,
-			  llflags_t flags)
+			  size_t order)
 {
-	assert(flags.order <= LLFREE_MAX_ORDER);
+	assert(order <= LLFREE_MAX_ORDER);
 	assert(start_frame < self->frames);
 
 	// TODO: Prioritize LL_CS_MAP children!
 
-	if (flags.order == LLFREE_MAX_ORDER)
+	if (order == LLFREE_MAX_ORDER)
 		return get_max(self, start_frame);
-	if (flags.order == LLFREE_HUGE_ORDER)
+	if (order == LLFREE_HUGE_ORDER)
 		return get_huge(self, start_frame);
 
-	const size_t idx = child_from_pfn(start_frame);
+	const size_t idx = child_from_frame(start_frame);
 	assert(idx < child_count(self));
 	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
 		child_t old;
 		_Atomic(child_t) *child = get_child(self, current_i);
-		if (atom_update(child, old, child_dec, flags.order)) {
-			llfree_result_t pos =
-				field_set_next(&self->fields[current_i],
-					       start_frame, flags.order);
+		if (atom_update(child, old, child_dec, order)) {
+			llfree_result_t pos = field_set_next(
+				&self->fields[current_i], start_frame, order);
 			if (llfree_is_ok(pos)) {
-				return llfree_ok(pfn_from_child(current_i) +
+				return llfree_ok(frame_from_child(current_i) +
 							 pos.frame,
 						 old.inflated);
 			}
 
-			if (!atom_update(child, old, child_inc, flags.order)) {
+			if (!atom_update(child, old, child_inc, order)) {
 				llfree_warn("Undo failed!");
 				assert(false);
 			}
@@ -243,19 +242,18 @@ static llfree_result_t split_huge(_Atomic(child_t) *child, bitfield_t *field)
 	return llfree_err(LLFREE_ERR_OK);
 }
 
-llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags)
+llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 {
-	assert(flags.order <= LLFREE_MAX_ORDER);
-	if (frame + (1 << flags.order) > self->frames ||
-	    frame % (1 << flags.order) != 0) {
-		llfree_warn("invalid pfn %" PRIu64 "\n", frame);
+	assert(order <= LLFREE_MAX_ORDER);
+	if (frame + (1 << order) > self->frames || frame % (1 << order) != 0) {
+		llfree_warn("invalid frame %" PRIu64 "\n", frame);
 		return llfree_err(LLFREE_ERR_ADDRESS);
 	}
 
-	const size_t child_idx = child_from_pfn(frame);
+	const size_t child_idx = child_from_frame(frame);
 	_Atomic(child_t) *child = get_child(self, child_idx);
 
-	if (flags.order == LLFREE_MAX_ORDER) {
+	if (order == LLFREE_MAX_ORDER) {
 		child_pair_t old;
 		if (atom_update((_Atomic(child_pair_t) *)child, old,
 				child_clear_max))
@@ -263,7 +261,7 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags)
 
 		return llfree_err(LLFREE_ERR_MEMORY);
 	}
-	if (flags.order == LLFREE_HUGE_ORDER) {
+	if (order == LLFREE_HUGE_ORDER) {
 		child_t old;
 		if (atom_update(child, old, child_clear_huge))
 			return llfree_err(LLFREE_ERR_OK);
@@ -281,12 +279,11 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags)
 	}
 
 	size_t field_index = frame % CHILD_N;
-	llfree_result_t ret =
-		field_toggle(field, field_index, flags.order, true);
+	llfree_result_t ret = field_toggle(field, field_index, order, true);
 	if (!llfree_is_ok(ret))
 		return ret;
 
-	if (!atom_update(child, old, child_inc, flags.order)) {
+	if (!atom_update(child, old, child_inc, order)) {
 		llfree_warn("Undo failed!");
 		assert(false);
 	}
@@ -301,7 +298,7 @@ bool lower_is_free(lower_t *self, uint64_t frame, size_t order)
 	if (frame >= self->frames)
 		return false;
 
-	size_t child_index = child_from_pfn(frame);
+	size_t child_index = child_from_frame(frame);
 
 	child_t child = atom_load(get_child(self, child_index));
 
@@ -369,13 +366,14 @@ llfree_result_t lower_inflate(lower_t *self, uint64_t start_frame, bool alloc)
 {
 	assert(self != 0);
 
-	size_t idx = child_from_pfn(start_frame);
+	size_t idx = child_from_frame(start_frame);
 	assert(idx < child_count(self));
 	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
 		child_t old;
 		_Atomic(child_t) *child = get_child(self, current_i);
 		if (atom_update(child, old, child_inflate, alloc)) {
-			return llfree_ok(pfn_from_child(current_i), old.inflated);
+			return llfree_ok(frame_from_child(current_i),
+					 old.inflated);
 		}
 	}
 
@@ -384,7 +382,7 @@ llfree_result_t lower_inflate(lower_t *self, uint64_t start_frame, bool alloc)
 
 llfree_result_t lower_inflate_put(lower_t *self, uint64_t frame)
 {
-	_Atomic(child_t) *child = get_child(self, child_from_pfn(frame));
+	_Atomic(child_t) *child = get_child(self, child_from_frame(frame));
 	child_t old;
 	if (atom_update(child, old, child_inflate_put))
 		return llfree_ok(0, false);
@@ -393,7 +391,7 @@ llfree_result_t lower_inflate_put(lower_t *self, uint64_t frame)
 
 llfree_result_t lower_deflate(lower_t *self, uint64_t frame)
 {
-	_Atomic(child_t) *child = get_child(self, child_from_pfn(frame));
+	_Atomic(child_t) *child = get_child(self, child_from_frame(frame));
 	child_t old;
 	if (atom_update(child, old, child_deflate))
 		return llfree_ok(0, false);
@@ -402,7 +400,7 @@ llfree_result_t lower_deflate(lower_t *self, uint64_t frame)
 
 bool lower_is_inflated(lower_t *self, uint64_t frame)
 {
-	_Atomic(child_t) *child = get_child(self, child_from_pfn(frame));
+	_Atomic(child_t) *child = get_child(self, child_from_frame(frame));
 	child_t c = atom_load(child);
 	return c.inflated;
 }

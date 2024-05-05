@@ -27,10 +27,10 @@ size_t lower_metadata_size(size_t frames);
 uint8_t *lower_metadata(lower_t *self);
 
 /// Allocates the given frame, returning its number or an error
-llfree_result_t lower_get(lower_t *self, uint64_t start_frame, llflags_t flags);
+llfree_result_t lower_get(lower_t *self, uint64_t start_frame, size_t order);
 
 /// Deallocates the given frame
-llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags);
+llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order);
 
 /// Checks if the frame is free
 bool lower_is_free(lower_t *self, uint64_t frame, size_t order);

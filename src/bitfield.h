@@ -16,7 +16,8 @@ typedef struct bitfield {
 void field_init(bitfield_t *self);
 
 /// Atomic search for the first unset bit and set it to 1.
-llfree_result_t field_set_next(bitfield_t *field, uint64_t pfn, size_t order);
+llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
+			       size_t order);
 
 /// Atomically resets the bit at index position
 llfree_result_t field_toggle(bitfield_t *field, size_t index, size_t order,

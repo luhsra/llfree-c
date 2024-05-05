@@ -176,7 +176,7 @@ declare_test(llfree_general_function)
 
 	if (LLFREE_ENABLE_FREE_RESERVE) {
 		local_history_t last = atom_load(&upper.local[0].last);
-		check_equal(last.idx, tree_from_pfn(frame.frame));
+		check_equal(last.idx, tree_from_frame(frame.frame));
 	}
 
 	// reserve all frames in first tree
@@ -190,7 +190,7 @@ declare_test(llfree_general_function)
 	// reserve first frame in new tree
 	ret = llfree_get(&upper, 0, llflags(0));
 	check(llfree_is_ok(ret));
-	check_m(tree_from_pfn(frame.frame) != tree_from_pfn(ret.frame),
+	check_m(tree_from_frame(frame.frame) != tree_from_frame(ret.frame),
 		"second tree must be allocated");
 
 	uint64_t free_frames = llfree_free_frames(&upper);
@@ -225,15 +225,15 @@ declare_test(llfree_put)
 		reserved[i] = ret.frame;
 	}
 
-	check_equal(tree_from_pfn(reserved[0]),
-		    tree_from_pfn(reserved[LLFREE_TREE_SIZE - 1]));
-	check(tree_from_pfn(reserved[0]) !=
-	      tree_from_pfn(reserved[LLFREE_TREE_SIZE]));
+	check_equal(tree_from_frame(reserved[0]),
+		    tree_from_frame(reserved[LLFREE_TREE_SIZE - 1]));
+	check(tree_from_frame(reserved[0]) !=
+	      tree_from_frame(reserved[LLFREE_TREE_SIZE]));
 
 	llfree_result_t ret2 = llfree_get(&upper, 2, llflags(0));
 	check(llfree_is_ok(ret2));
-	check_m(tree_from_pfn(ret2.frame) !=
-			tree_from_pfn(reserved[LLFREE_TREE_SIZE]),
+	check_m(tree_from_frame(ret2.frame) !=
+			tree_from_frame(reserved[LLFREE_TREE_SIZE]),
 		"second get must be in different tree");
 
 	if (!success)
@@ -251,7 +251,7 @@ declare_test(llfree_put)
 	if (LLFREE_ENABLE_FREE_RESERVE) {
 		reserved_t res = upper.local[2].reserved[0];
 		check_equal(tree_from_row(res.start_row),
-			    (uint64_t)tree_from_pfn(reserved[0]));
+			    (uint64_t)tree_from_frame(reserved[0]));
 	}
 	if (!success)
 		llfree_print(&upper);
@@ -271,8 +271,8 @@ declare_test(llfree_alloc_all)
 	llfree_t upper = llfree_new(CORES, LENGTH, LLFREE_INIT_FREE);
 	llfree_validate(&upper);
 
-	int64_t *pfns = malloc(sizeof(int64_t) * LENGTH);
-	assert(pfns != NULL);
+	int64_t *frames = malloc(sizeof(int64_t) * LENGTH);
+	assert(frames != NULL);
 
 	for (size_t i = 0; i < LENGTH; ++i) {
 		llfree_result_t ret = llfree_get(&upper, i % CORES, llflags(0));
@@ -282,7 +282,7 @@ declare_test(llfree_alloc_all)
 			llfree_print(&upper);
 			break;
 		}
-		pfns[i] = ret.frame;
+		frames[i] = ret.frame;
 	}
 	ret = llfree_get(&upper, 0, llflags(0));
 	check(ret.error == LLFREE_ERR_MEMORY);
@@ -303,7 +303,7 @@ struct arg {
 	llfree_t *upper;
 };
 struct ret {
-	uint64_t *pfns;
+	uint64_t *frames;
 	size_t sp;
 };
 
@@ -336,8 +336,8 @@ static void *alloc_frames(void *arg)
 	struct ret *ret = malloc(sizeof(struct ret));
 	assert(ret != NULL);
 
-	ret->pfns = malloc(args->amount * sizeof(int64_t));
-	assert(ret->pfns != NULL);
+	ret->frames = malloc(args->amount * sizeof(int64_t));
+	assert(ret->frames != NULL);
 
 	srand((unsigned int)args->core);
 	for (size_t i = 0; i < args->allocations; ++i) {
@@ -347,21 +347,21 @@ static void *alloc_frames(void *arg)
 			size_t random_idx = (size_t)rand() % ret->sp;
 			llfree_result_t res = llfree_put(args->upper,
 							 args->core,
-							 ret->pfns[random_idx],
+							 ret->frames[random_idx],
 							 llflags(args->order));
 			assert(llfree_is_ok(res));
 			--ret->sp;
-			ret->pfns[random_idx] = ret->pfns[ret->sp];
+			ret->frames[random_idx] = ret->frames[ret->sp];
 			--i;
 		} else {
 			llfree_result_t res = llfree_get(
 				args->upper, args->core, llflags(args->order));
 			assert(llfree_is_ok(res));
-			ret->pfns[ret->sp] = res.frame;
+			ret->frames[ret->sp] = res.frame;
 			++ret->sp;
 		}
 	}
-	qsort(ret->pfns, ret->sp, sizeof(int64_t), comp);
+	qsort(ret->frames, ret->sp, sizeof(int64_t), comp);
 	return ret;
 }
 
@@ -409,8 +409,8 @@ declare_test(llfree_parallel_alloc)
 	for (size_t core = 0; core < CORES; ++core) {
 		for (size_t i = core + 1; i < CORES; ++i) {
 			for (size_t idx = 0; idx < rets[core]->sp; ++idx) {
-				uint64_t frame = rets[core]->pfns[idx];
-				int64_t same = contains(rets[i]->pfns,
+				uint64_t frame = rets[core]->frames[idx];
+				int64_t same = contains(rets[i]->frames,
 							rets[i]->sp, frame);
 				if (same <= 0)
 					continue;
@@ -419,7 +419,7 @@ declare_test(llfree_parallel_alloc)
 				printf("\tFound duplicate reserved Frame\n both core %zu and %zu "
 				       "reserved frame %" PRId64
 				       " in tree %" PRId64 "\n",
-				       core, i, frame, tree_from_pfn(frame));
+				       core, i, frame, tree_from_frame(frame));
 				// leave all loops
 				goto end;
 			}
@@ -431,7 +431,7 @@ end:
 		llfree_print(&upper);
 	}
 	for (size_t i = 0; i < CORES; ++i) {
-		free(rets[i]->pfns);
+		free(rets[i]->frames);
 		free(rets[i]);
 	}
 	llfree_validate(&upper);

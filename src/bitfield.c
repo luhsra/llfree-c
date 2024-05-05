@@ -90,13 +90,13 @@ bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos)
 	// NOLINTEND(readability-magic-numbers)
 }
 
-llfree_result_t field_set_next(bitfield_t *field, uint64_t start_pfn,
+llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
 			       size_t order)
 {
 	size_t num_frames = 1 << order;
 	assert(num_frames < LLFREE_CHILD_SIZE);
 
-	uint64_t row = row_from_pfn(start_pfn) % FIELD_N;
+	uint64_t row = row_from_frame(start_frame) % FIELD_N;
 
 	if (num_frames <= LLFREE_ATOMIC_SIZE) {
 		for_offsetted(row, FIELD_N) {
