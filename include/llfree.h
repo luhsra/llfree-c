@@ -27,22 +27,22 @@
 /// Errors are negative and the actual values are zero or positive.
 typedef struct _warn_unused llfree_result {
 	uint64_t frame : 55;
-	bool inflated : 1;
+	bool unmapped : 1;
 	uint8_t error : 8;
 } llfree_result_t;
 
 typedef struct llfree llfree_t;
 
 /// Create a new result
-static inline llfree_result_t _unused llfree_ok(uint64_t frame, bool deflate)
+static inline llfree_result_t _unused llfree_ok(uint64_t frame, bool unmapped)
 {
 	return (llfree_result_t){ .frame = frame,
-				  .inflated = deflate,
+				  .unmapped = unmapped,
 				  .error = LLFREE_ERR_OK };
 }
 static inline llfree_result_t _unused llfree_err(uint8_t err)
 {
-	return (llfree_result_t){ .frame = 0, .inflated = false, .error = err };
+	return (llfree_result_t){ .frame = 0, .unmapped = false, .error = err };
 }
 
 /// Check if the result is ok (no error)
@@ -79,8 +79,7 @@ typedef struct llflags {
 
 static inline llflags_t _unused llflags(size_t order)
 {
-	return (llflags_t){ .order = (uint8_t)order,
-			    .movable = false };
+	return (llflags_t){ .order = (uint8_t)order, .movable = false };
 }
 
 /// Size of the required metadata
@@ -154,14 +153,14 @@ size_t llfree_free_huge(llfree_t *self);
 
 // == Ballooning ==
 
-/// Search for a free, not yet inflated, huge page and mark it
-llfree_result_t llfree_inflate(llfree_t *self, size_t core, bool alloc);
-/// Mark the inflated huge page as free, but keep it inflated
-llfree_result_t llfree_inflate_put(llfree_t *self, uint64_t frame);
-/// Mark the given huge page as entirely deflated
-llfree_result_t llfree_deflate(llfree_t *self, uint64_t frame);
-/// Return wether a frame is inflated
-bool llfree_is_inflated(llfree_t *self, uint64_t frame);
+/// Search for a free and mapped, huge page and mark it unmapped (and optionally allocated)
+llfree_result_t llfree_unmap(llfree_t *self, size_t core, bool alloc);
+/// Mark the unmapped huge page as free, but keep it unmapped
+llfree_result_t llfree_unmap_put(llfree_t *self, uint64_t frame);
+/// Mark the given huge page as mapped
+llfree_result_t llfree_map(llfree_t *self, uint64_t frame);
+/// Return wether a frame is unmapped
+bool llfree_is_unmapped(llfree_t *self, uint64_t frame);
 
 // == Debugging ==
 

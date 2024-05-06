@@ -24,7 +24,7 @@ bool child_set_huge(child_t *self)
 {
 	if (self->free == LLFREE_CHILD_SIZE) {
 		assert(!self->huge);
-		*self = child_new(0, true, self->inflated);
+		*self = child_new(0, true, self->unmapped);
 		return true;
 	}
 	return false;
@@ -34,7 +34,7 @@ bool child_clear_huge(child_t *self)
 {
 	if (self->huge) {
 		assert(self->free == 0);
-		*self = child_new(LLFREE_CHILD_SIZE, false, self->inflated);
+		*self = child_new(LLFREE_CHILD_SIZE, false, self->unmapped);
 		return true;
 	}
 	return false;
@@ -45,8 +45,8 @@ bool child_set_max(child_pair_t *self)
 	if (self->first.free == LLFREE_CHILD_SIZE &&
 	    self->second.free == LLFREE_CHILD_SIZE) {
 		assert(!self->first.huge && !self->second.huge);
-		self->first = child_new(0, true, self->first.inflated);
-		self->second = child_new(0, true, self->second.inflated);
+		self->first = child_new(0, true, self->first.unmapped);
+		self->second = child_new(0, true, self->second.unmapped);
 		return true;
 	}
 	return false;
@@ -57,27 +57,27 @@ bool child_clear_max(child_pair_t *self)
 	if (self->first.huge && self->second.huge) {
 		assert(self->first.free == 0 && self->second.free == 0);
 		self->first = child_new(LLFREE_CHILD_SIZE, false,
-					self->first.inflated);
+					self->first.unmapped);
 		self->second = child_new(LLFREE_CHILD_SIZE, false,
-					 self->second.inflated);
+					 self->second.unmapped);
 		return true;
 	}
 	return false;
 }
 
-bool child_inflate(child_t *self, bool alloc)
+bool child_unmap(child_t *self, bool alloc)
 {
 	if (self->free == LLFREE_CHILD_SIZE && !self->huge &&
-	    (alloc ? true : !self->inflated)) {
+	    (alloc ? true : !self->unmapped)) {
 		*self = child_new(alloc ? 0 : LLFREE_CHILD_SIZE, alloc, true);
 		return true;
 	}
 	return false;
 }
 
-bool child_inflate_put(child_t *self)
+bool child_unmap_put(child_t *self)
 {
-	if (self->inflated && self->huge) {
+	if (self->unmapped && self->huge) {
 		assert(self->free == 0);
 		*self = child_new(LLFREE_CHILD_SIZE, false, true);
 		return true;
@@ -85,10 +85,10 @@ bool child_inflate_put(child_t *self)
 	return false;
 }
 
-bool child_deflate(child_t *self)
+bool child_map(child_t *self)
 {
-	if (self->inflated) {
-		self->inflated = false;
+	if (self->unmapped) {
+		self->unmapped = false;
 		return true;
 	}
 	return false;
