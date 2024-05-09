@@ -136,7 +136,8 @@ uint8_t *lower_metadata(lower_t *self)
 	return (uint8_t *)self->fields;
 }
 
-static llfree_result_t get_max(lower_t *self, uint64_t frame)
+static llfree_result_t get_max(lower_t *self, uint64_t frame,
+			       bool allow_reclaimed)
 {
 	assert(self != 0);
 
@@ -146,16 +147,17 @@ static llfree_result_t get_max(lower_t *self, uint64_t frame)
 		child_pair_t old;
 		_Atomic(child_pair_t) *pair =
 			(_Atomic(child_pair_t) *)get_child(self, current_i * 2);
-		if (atom_update(pair, old, child_set_max)) {
+		if (atom_update(pair, old, child_set_max, allow_reclaimed)) {
 			return llfree_ok(frame_from_child(current_i * 2),
-					 old.first.unmapped);
+					 old.first.reclaimed);
 		}
 	}
 
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
-static llfree_result_t get_huge(lower_t *self, uint64_t frame)
+static llfree_result_t get_huge(lower_t *self, uint64_t frame,
+				bool allow_reclaimed)
 {
 	assert(self != 0);
 
@@ -164,12 +166,44 @@ static llfree_result_t get_huge(lower_t *self, uint64_t frame)
 	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
 		child_t old;
 		_Atomic(child_t) *child = get_child(self, current_i);
-		if (atom_update(child, old, child_set_huge)) {
+		if (atom_update(child, old, child_set_huge, allow_reclaimed)) {
 			return llfree_ok(frame_from_child(current_i),
-					 old.unmapped);
+					 old.reclaimed);
 		}
 	}
 
+	return llfree_err(LLFREE_ERR_MEMORY);
+}
+
+static llfree_result_t lower_get_inner(lower_t *self, uint64_t frame,
+				       size_t order, bool allow_reclaimed)
+{
+	if (order == LLFREE_MAX_ORDER)
+		return get_max(self, frame, allow_reclaimed);
+	if (order == LLFREE_HUGE_ORDER)
+		return get_huge(self, frame, allow_reclaimed);
+
+	const size_t idx = child_from_frame(frame);
+	assert(idx < child_count(self));
+	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
+		child_t old;
+		_Atomic(child_t) *child = get_child(self, current_i);
+		if (atom_update(child, old, child_dec, order,
+				allow_reclaimed)) {
+			llfree_result_t pos = field_set_next(
+				&self->fields[current_i], frame, order);
+			if (llfree_is_ok(pos)) {
+				return llfree_ok(frame_from_child(current_i) +
+							 pos.frame,
+						 old.reclaimed);
+			}
+
+			if (!atom_update(child, old, child_inc, order)) {
+				llfree_warn("Undo failed!");
+				assert(false);
+			}
+		}
+	}
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
@@ -179,35 +213,11 @@ llfree_result_t lower_get(lower_t *self, const uint64_t start_frame,
 	assert(order <= LLFREE_MAX_ORDER);
 	assert(start_frame < self->frames);
 
-	// TODO: Prioritize LL_CS_MAP children!
+	llfree_result_t res = lower_get_inner(self, start_frame, order, false);
+	if (res.error != LLFREE_ERR_MEMORY)
+		return res;
 
-	if (order == LLFREE_MAX_ORDER)
-		return get_max(self, start_frame);
-	if (order == LLFREE_HUGE_ORDER)
-		return get_huge(self, start_frame);
-
-	const size_t idx = child_from_frame(start_frame);
-	assert(idx < child_count(self));
-	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
-		child_t old;
-		_Atomic(child_t) *child = get_child(self, current_i);
-		if (atom_update(child, old, child_dec, order)) {
-			llfree_result_t pos = field_set_next(
-				&self->fields[current_i], start_frame, order);
-			if (llfree_is_ok(pos)) {
-				return llfree_ok(frame_from_child(current_i) +
-							 pos.frame,
-						 old.unmapped);
-			}
-
-			if (!atom_update(child, old, child_inc, order)) {
-				llfree_warn("Undo failed!");
-				assert(false);
-			}
-		}
-	}
-
-	return llfree_err(LLFREE_ERR_MEMORY);
+	return lower_get_inner(self, start_frame, order, true);
 }
 
 static llfree_result_t split_huge(_Atomic(child_t) *child, bitfield_t *field)
@@ -362,7 +372,7 @@ size_t lower_free_at_tree(lower_t *self, uint64_t frame)
 	return free;
 }
 
-llfree_result_t lower_unmap(lower_t *self, uint64_t start_frame, bool alloc)
+llfree_result_t lower_reclaim(lower_t *self, uint64_t start_frame, bool hard)
 {
 	assert(self != 0);
 
@@ -371,38 +381,38 @@ llfree_result_t lower_unmap(lower_t *self, uint64_t start_frame, bool alloc)
 	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
 		child_t old;
 		_Atomic(child_t) *child = get_child(self, current_i);
-		if (atom_update(child, old, child_unmap, alloc)) {
+		if (atom_update(child, old, child_reclaim, hard)) {
 			return llfree_ok(frame_from_child(current_i),
-					 old.unmapped);
+					 old.reclaimed);
 		}
 	}
 
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
-llfree_result_t lower_unmap_put(lower_t *self, uint64_t frame)
+llfree_result_t lower_return(lower_t *self, uint64_t frame)
 {
 	_Atomic(child_t) *child = get_child(self, child_from_frame(frame));
 	child_t old;
-	if (atom_update(child, old, child_unmap_put))
+	if (atom_update(child, old, child_return))
 		return llfree_ok(0, false);
 	return llfree_err(LLFREE_ERR_ADDRESS);
 }
 
-llfree_result_t lower_map(lower_t *self, uint64_t frame)
+llfree_result_t lower_install(lower_t *self, uint64_t frame)
 {
 	_Atomic(child_t) *child = get_child(self, child_from_frame(frame));
 	child_t old;
-	if (atom_update(child, old, child_map))
+	if (atom_update(child, old, child_install))
 		return llfree_ok(0, false);
 	return llfree_err(LLFREE_ERR_ADDRESS);
 }
 
-bool lower_is_unmapped(lower_t *self, uint64_t frame)
+bool lower_is_reclaimed(lower_t *self, uint64_t frame)
 {
 	_Atomic(child_t) *child = get_child(self, child_from_frame(frame));
 	child_t c = atom_load(child);
-	return c.unmapped;
+	return c.reclaimed;
 }
 
 void lower_print(lower_t *self)

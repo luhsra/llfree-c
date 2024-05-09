@@ -54,25 +54,25 @@ declare_test(child_counter_dec)
 	bool ret = false;
 
 	child_t actual = child_new(0, false, false);
-	ret = child_dec(&actual, 0);
+	ret = child_dec(&actual, 0, false);
 	check_m(!ret, "out of range");
 
 	actual = child_new(9, false, false);
 	child_t expect = child_new(8, false, false);
-	ret = child_dec(&actual, 0);
+	ret = child_dec(&actual, 0, false);
 	check(ret);
 	check_equal(actual.free, expect.free);
 	check_equal(actual.huge, expect.huge);
 
 	actual = child_new(LLFREE_CHILD_SIZE, false, false);
 	expect = child_new(LLFREE_CHILD_SIZE - 1, false, false);
-	ret = child_dec(&actual, 0);
+	ret = child_dec(&actual, 0, false);
 	check(ret);
 	check_equal(actual.free, expect.free);
 	check_equal(actual.huge, expect.huge);
 
 	actual = child_new(320, true, false);
-	ret = child_dec(&actual, 0);
+	ret = child_dec(&actual, 0, false);
 	check_m(!ret, "invalid state");
 
 	return success;

@@ -542,7 +542,7 @@ size_t llfree_free_at(llfree_t *self, uint64_t frame, size_t order)
 	return 0;
 }
 
-static llfree_result_t try_unmap(llfree_t *self, size_t idx, void *args)
+static llfree_result_t try_reclaim(llfree_t *self, size_t idx, void *args)
 {
 	assert(idx < self->trees_len);
 	bool alloc = args != NULL;
@@ -559,7 +559,7 @@ static llfree_result_t try_unmap(llfree_t *self, size_t idx, void *args)
 	}
 
 	llfree_result_t res =
-		lower_unmap(&self->lower, idx << LLFREE_TREE_ORDER, alloc);
+		lower_reclaim(&self->lower, idx << LLFREE_TREE_ORDER, alloc);
 
 	if (alloc && !llfree_is_ok(res)) {
 		tree_t old;
@@ -569,7 +569,7 @@ static llfree_result_t try_unmap(llfree_t *self, size_t idx, void *args)
 	return res;
 }
 
-llfree_result_t llfree_unmap(llfree_t *self, size_t core, bool alloc)
+llfree_result_t llfree_reclaim(llfree_t *self, size_t core, bool hard)
 {
 	uint8_t kind = TREE_HUGE;
 	local_t *local = get_local(self, core);
@@ -578,8 +578,8 @@ llfree_result_t llfree_unmap(llfree_t *self, size_t core, bool alloc)
 	uint64_t start = tree_from_row(old.start_row);
 
 	// Search and allocate
-	llfree_result_t ret = search(self, start, 0, self->trees_len, try_unmap,
-				     alloc ? (void *)1 : NULL);
+	llfree_result_t ret = search(self, start, 0, self->trees_len,
+				     try_reclaim, hard ? (void *)1 : NULL);
 	if (llfree_is_ok(ret) &&
 	    tree_from_row(old.start_row) != tree_from_frame(ret.frame))
 		atom_update(&local->reserved[kind], old, ll_reserved_set_start,
@@ -587,9 +587,9 @@ llfree_result_t llfree_unmap(llfree_t *self, size_t core, bool alloc)
 	return ret;
 }
 
-llfree_result_t llfree_unmap_put(llfree_t *self, uint64_t frame)
+llfree_result_t llfree_return(llfree_t *self, uint64_t frame)
 {
-	llfree_result_t res = lower_unmap_put(&self->lower, frame);
+	llfree_result_t res = lower_return(&self->lower, frame);
 	if (llfree_is_ok(res)) {
 		tree_t old;
 		size_t idx = tree_from_frame(frame);
@@ -599,14 +599,14 @@ llfree_result_t llfree_unmap_put(llfree_t *self, uint64_t frame)
 	return res;
 }
 
-llfree_result_t llfree_map(llfree_t *self, uint64_t frame)
+llfree_result_t llfree_install(llfree_t *self, uint64_t frame)
 {
-	return lower_map(&self->lower, frame);
+	return lower_install(&self->lower, frame);
 }
 
-bool llfree_is_unmapped(llfree_t *self, uint64_t frame)
+bool llfree_is_reclaimed(llfree_t *self, uint64_t frame)
 {
-	return lower_is_unmapped(&self->lower, frame);
+	return lower_is_reclaimed(&self->lower, frame);
 }
 
 void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),

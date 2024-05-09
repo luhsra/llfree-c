@@ -48,14 +48,14 @@ size_t lower_free_at_huge(lower_t *self, uint64_t frame);
 /// Returns the number of free pages in the huge page
 size_t lower_free_at_tree(lower_t *self, uint64_t frame);
 
-/// Search for a free and mapped huge page and change its status to inflated
-llfree_result_t lower_unmap(lower_t *self, uint64_t start_frame, bool alloc);
-/// Mark the inflated huge page as free, but keep it inflated
-llfree_result_t lower_unmap_put(lower_t *self, uint64_t frame);
-/// Mark the given huge page as entirely deflated
-llfree_result_t lower_map(lower_t *self, uint64_t frame);
-/// Return wether a frame is inflated
-bool lower_is_unmapped(lower_t *self, uint64_t frame);
+/// Search for a free and not reclaimed huge page and mark it reclaimed (and optionally allocated)
+llfree_result_t lower_reclaim(lower_t *self, uint64_t start_frame, bool hard);
+/// Mark the reclaimed huge page as free, but keep it reclaimed
+llfree_result_t lower_return(lower_t *self, uint64_t frame);
+/// Clear the reclaimed state of the given huge page
+llfree_result_t lower_install(lower_t *self, uint64_t frame);
+/// Return wether a frame is reclaimed
+bool lower_is_reclaimed(lower_t *self, uint64_t frame);
 
 /// Print debug info
 void lower_print(lower_t *self);

@@ -27,22 +27,22 @@
 /// Errors are negative and the actual values are zero or positive.
 typedef struct _warn_unused llfree_result {
 	uint64_t frame : 55;
-	bool unmapped : 1;
+	bool reclaimed : 1;
 	uint8_t error : 8;
 } llfree_result_t;
 
 typedef struct llfree llfree_t;
 
 /// Create a new result
-static inline llfree_result_t _unused llfree_ok(uint64_t frame, bool unmapped)
+static inline llfree_result_t _unused llfree_ok(uint64_t frame, bool reclaimed)
 {
 	return (llfree_result_t){ .frame = frame,
-				  .unmapped = unmapped,
+				  .reclaimed = reclaimed,
 				  .error = LLFREE_ERR_OK };
 }
 static inline llfree_result_t _unused llfree_err(uint8_t err)
 {
-	return (llfree_result_t){ .frame = 0, .unmapped = false, .error = err };
+	return (llfree_result_t){ .frame = 0, .reclaimed = false, .error = err };
 }
 
 /// Check if the result is ok (no error)
@@ -153,14 +153,14 @@ size_t llfree_free_huge(llfree_t *self);
 
 // == Ballooning ==
 
-/// Search for a free and mapped, huge page and mark it unmapped (and optionally allocated)
-llfree_result_t llfree_unmap(llfree_t *self, size_t core, bool alloc);
-/// Mark the unmapped huge page as free, but keep it unmapped
-llfree_result_t llfree_unmap_put(llfree_t *self, uint64_t frame);
-/// Mark the given huge page as mapped
-llfree_result_t llfree_map(llfree_t *self, uint64_t frame);
-/// Return wether a frame is unmapped
-bool llfree_is_unmapped(llfree_t *self, uint64_t frame);
+/// Search for a free and not reclaimed huge page and mark it reclaimed (and optionally allocated)
+llfree_result_t llfree_reclaim(llfree_t *self, size_t core, bool hard);
+/// Mark the reclaimed huge page as free, but keep it reclaimed
+llfree_result_t llfree_return(llfree_t *self, uint64_t frame);
+/// Clear the reclaimed state of the given huge page
+llfree_result_t llfree_install(llfree_t *self, uint64_t frame);
+/// Return wether a frame is reclaimed
+bool llfree_is_reclaimed(llfree_t *self, uint64_t frame);
 
 // == Debugging ==
 
