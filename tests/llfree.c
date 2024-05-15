@@ -295,6 +295,42 @@ declare_test(llfree_alloc_all)
 	return success;
 }
 
+declare_test(llfree_alloc_all_kinds)
+{
+	bool success = true;
+	llfree_result_t ret;
+
+	const int CORES = 1;
+	const uint64_t LENGTH = ((8ul << 30) / LLFREE_FRAME_SIZE); // 8GiB
+	llfree_t upper = llfree_new(CORES, LENGTH, LLFREE_INIT_FREE);
+	llfree_validate(&upper);
+
+	int64_t *frames = malloc(sizeof(int64_t) * LENGTH);
+	assert(frames != NULL);
+
+	for (size_t i = 0; i < LENGTH; ++i) {
+		llflags_t flags = llflags(0);
+		flags.movable = i % 3 == 0;
+		llfree_result_t ret = llfree_get(&upper, i % CORES, flags);
+		if (!llfree_is_ok(ret)) {
+			llfree_print(&upper);
+			llfree_warn("err %u", ret.error);
+			check_m(false, "must be able to alloc the whole memory");
+			break;
+		}
+		frames[i] = ret.frame;
+	}
+	ret = llfree_get(&upper, 0, llflags(0));
+	check(ret.error == LLFREE_ERR_MEMORY);
+
+	check_equal(llfree_free_frames(&upper), 0ul);
+	check_equal(llfree_free_frames(&upper),
+		    lower_free_frames(&upper.lower));
+	llfree_validate(&upper);
+
+	return success;
+}
+
 struct arg {
 	size_t core;
 	size_t order;
@@ -345,10 +381,9 @@ static void *alloc_frames(void *arg)
 		if (ret->sp == args->amount ||
 		    (ret->sp > 0 && rand() % 8 > 4)) {
 			size_t random_idx = (size_t)rand() % ret->sp;
-			llfree_result_t res = llfree_put(args->upper,
-							 args->core,
-							 ret->frames[random_idx],
-							 llflags(args->order));
+			llfree_result_t res = llfree_put(
+				args->upper, args->core,
+				ret->frames[random_idx], llflags(args->order));
 			assert(llfree_is_ok(res));
 			--ret->sp;
 			ret->frames[random_idx] = ret->frames[ret->sp];

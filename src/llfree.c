@@ -235,27 +235,12 @@ static llfree_result_t steal_tree(llfree_t *self, size_t target_core,
 			};
 			return res;
 		}
-		assert(res.error == LLFREE_ERR_MEMORY);
-	}
-	return llfree_err(LLFREE_ERR_MEMORY);
-}
 
-/// Search and steal from any other core
-static llfree_result_t find_and_steal_tree(llfree_t *self, size_t core,
-					   llflags_t flags)
-{
-	uint8_t kind = tree_kind(self, flags);
-	local_t *my_local = get_local(self, core);
-
-	for (size_t c = 1; c < self->cores; c++) {
-		size_t target_core = (core + c) % self->cores;
-		reserved_t stolen;
-		llfree_result_t res = steal_tree(self, target_core, kind,
-						 flags.order, &stolen);
-		if (llfree_is_ok(res)) {
-			swap_reserved(self, my_local, stolen, kind);
-			return res;
-		}
+		assert(old.present);
+		size_t idx = tree_from_row(old.start_row);
+		tree_t tree;
+		atom_update(&self->trees[idx], tree, tree_unreserve, old.free,
+			    kind);
 	}
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
@@ -306,17 +291,6 @@ static llfree_result_t reserve_and_get(llfree_t *self, size_t core,
 	args.free = (p_range_t){ 0, LLFREE_TREE_SIZE };
 	res = search(self, start, 0, self->trees_len, reserve_tree_and_get,
 		     &args);
-	if (res.error != LLFREE_ERR_MEMORY)
-		return res;
-
-	// Steal from other core
-	res = find_and_steal_tree(self, core, flags);
-	if (res.error != LLFREE_ERR_MEMORY)
-		return res;
-
-	// There could be a concurrent reservation -> retry
-	if (res.error == LLFREE_ERR_MEMORY)
-		return llfree_err(LLFREE_ERR_RETRY);
 
 	return res;
 }
@@ -335,7 +309,7 @@ static bool sync_with_global(llfree_t *self, local_t *local, uint8_t kind,
 
 	tree_t old_tree;
 	if (!atom_update(&self->trees[tree_idx], old_tree, tree_steal_counter,
-			 min_free, kind))
+			 min_free))
 		return false;
 
 	reserved_t new = { .free = old.free + old_tree.free,
@@ -388,6 +362,85 @@ static llfree_result_t get_from_local(llfree_t *self, size_t core, uint8_t kind,
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
+/// Search and steal from any reserved tree
+static llfree_result_t steal_from_reserved(llfree_t *self, size_t core,
+					   llflags_t flags)
+{
+	uint8_t kind = tree_kind(self, flags);
+
+	for (size_t core_off = 0; core_off < self->cores; core_off++) {
+		size_t target_core = (core + core_off) % self->cores;
+		for (uint8_t o_kind = 0; o_kind < TREE_KINDS; o_kind++) {
+			uint8_t t_kind = (kind + o_kind) % TREE_KINDS;
+			llfree_result_t res;
+
+			if (kind < t_kind) {
+				// More strict kind, steal and convert tree
+				reserved_t stolen;
+				res = steal_tree(self, target_core, t_kind,
+						 flags.order, &stolen);
+				if (llfree_is_ok(res)) {
+					local_t *local = get_local(self, core);
+					swap_reserved(self, local, stolen,
+						      kind);
+				}
+			} else {
+				// Less strict kind, just allocate
+				reserved_t old;
+				res = get_from_local(self, target_core, t_kind,
+						     flags.order, &old);
+			}
+			if (res.error != LLFREE_ERR_MEMORY)
+				return res;
+		}
+	}
+	return llfree_err(LLFREE_ERR_MEMORY);
+}
+
+typedef struct alloc_global_args {
+	llflags_t flags;
+} alloc_global_args_t;
+
+static llfree_result_t alloc_global_tree(llfree_t *self, size_t idx, void *args)
+{
+	assert(idx < self->trees_len);
+
+	alloc_global_args_t *rargs = args;
+	llflags_t flags = rargs->flags;
+
+	uint8_t kind = tree_kind(self, flags);
+
+	tree_t old;
+	if (!atom_update(&self->trees[idx], old, tree_dec_force,
+			 (uint16_t)(1 << flags.order), kind))
+		return llfree_err(LLFREE_ERR_MEMORY);
+	assert(!old.reserved && old.free >= (1 << flags.order));
+
+	llfree_result_t res =
+		lower_get(&self->lower, frame_from_tree(idx), flags.order);
+
+	if (!llfree_is_ok(res)) {
+		// undo reservation
+		tree_t expected = old;
+		tree_dec_force(&expected, (uint16_t)(1 << flags.order), kind);
+		// first try to also reset the tree kind if nothing has changed
+		if (!atom_cmp_exchange(&self->trees[idx], &expected, old)) {
+			// keep tree kind as other cpu might have already used it
+			atom_update(&self->trees[idx], expected, tree_inc,
+				    (uint16_t)(1 << flags.order));
+		}
+	}
+	return res;
+}
+
+static llfree_result_t alloc_any_global(llfree_t *self, size_t start,
+					llflags_t flags)
+{
+	alloc_global_args_t args = { .flags = flags };
+	return search(self, start, 0, self->trees_len, alloc_global_tree,
+		      &args);
+}
+
 llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags)
 {
 	assert(self != NULL);
@@ -396,22 +449,40 @@ llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags)
 	core = core % self->cores;
 	uint8_t kind = tree_kind(self, flags);
 
-	for (size_t i = 0; i < RETRIES; i++) {
-		reserved_t old;
-		llfree_result_t res =
-			get_from_local(self, core, kind, flags.order, &old);
+	reserved_t old;
+	llfree_result_t res;
+	if (self->trees_len > (TREE_KINDS * self->cores)) {
+		for (size_t i = 0; i < RETRIES; i++) {
+			res = get_from_local(self, core, kind, flags.order,
+					     &old);
+			if (res.error != LLFREE_ERR_RETRY)
+				break;
+		}
+		if (res.error != LLFREE_ERR_MEMORY &&
+		    res.error != LLFREE_ERR_RETRY)
+			return res;
 
 		// reserve new tree
-		if (res.error == LLFREE_ERR_MEMORY)
-			res = reserve_and_get(self, core, flags, old);
+		res = reserve_and_get(self, core, flags, old);
+		if (res.error != LLFREE_ERR_MEMORY)
+			return res;
 
-		if (res.error == LLFREE_ERR_RETRY)
-			continue;
-
-		return res;
+		// take a huge frame from the other reserved trees
+		for (size_t i = 0; i < RETRIES; i++) {
+			res = steal_from_reserved(self, core, flags);
+			if (res.error != LLFREE_ERR_RETRY)
+				break;
+		}
+		if (res.error != LLFREE_ERR_MEMORY &&
+		    res.error != LLFREE_ERR_RETRY)
+			return res;
 	}
 
-	return llfree_err(LLFREE_ERR_MEMORY);
+	// just take from any tree
+	size_t idx = old.present ? tree_from_row(old.start_row) : 0;
+	res = alloc_any_global(self, idx, flags);
+
+	return res;
 }
 
 llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,

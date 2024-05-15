@@ -41,6 +41,8 @@ bool tree_inc(tree_t *self, uint16_t free);
 /// Decrement the free counter
 bool tree_dec(tree_t *self, uint16_t free);
 
+bool tree_dec_force(tree_t *self, uint16_t free, uint8_t kind);
+
 /// Try reserving the tree if the free counter is withing the range
 bool tree_reserve(tree_t *self, uint16_t min, uint16_t max, uint8_t kind);
 
@@ -48,7 +50,7 @@ bool tree_reserve(tree_t *self, uint16_t min, uint16_t max, uint8_t kind);
 bool tree_unreserve(tree_t *self, uint16_t free, uint8_t kind);
 
 // Steals the counter of a reserved tree
-bool tree_steal_counter(tree_t *self, uint16_t min, uint8_t kind);
+bool tree_steal_counter(tree_t *self, uint16_t min);
 
 /// Increment the free counter or reserve if specified
 bool tree_inc_or_reserve(tree_t *self, uint16_t free, bool *reserve,

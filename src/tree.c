@@ -12,10 +12,10 @@ bool tree_reserve(tree_t *self, uint16_t min, uint16_t max, uint8_t kind)
 	return false;
 }
 
-bool tree_steal_counter(tree_t *self, uint16_t min, uint8_t kind)
+bool tree_steal_counter(tree_t *self, uint16_t min)
 {
-	if (self->reserved && self->free >= min && (self->kind == kind || self->free == LLFREE_TREE_SIZE)) {
-		*self = tree_new(0, true, kind);
+	if (self->reserved && self->free >= min) {
+		*self = tree_new(0, true, self->kind);
 		return true;
 	}
 	return false;
@@ -42,6 +42,19 @@ bool tree_inc(tree_t *self, uint16_t free)
 bool tree_dec(tree_t *self, uint16_t free)
 {
 	if (!self->reserved && self->free >= free) {
+		self->free -= free;
+		return true;
+	}
+	return false;
+}
+
+bool tree_dec_force(tree_t *self, uint16_t free, uint8_t kind)
+{
+	// Overwrite tree kind if priority higher (number lower)
+	// FIXED > MOVABLE > HUGE
+	if (!self->reserved && self->free >= free) {
+		if (kind < self->kind)
+			self->kind = kind;
 		self->free -= free;
 		return true;
 	}
