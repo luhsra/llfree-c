@@ -28,7 +28,7 @@ typedef struct p_range {
 #define TREE_LOWER_LIM (LLFREE_TREE_SIZE / 16)
 
 /// Create a new tree entry
-static inline _unused tree_t tree_new(uint16_t counter, bool reserved,
+static inline ll_unused tree_t tree_new(uint16_t counter, bool reserved,
 				      uint8_t kind)
 {
 	assert(counter <= LLFREE_TREE_SIZE); // max limit for 15 bit

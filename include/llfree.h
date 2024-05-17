@@ -3,12 +3,12 @@
 #include "llfree_types.h"
 
 /// Unused functions and variables
-#define _unused __attribute__((unused))
+#define ll_unused __attribute__((unused))
 
 #ifdef __clang__
-#define _warn_unused __attribute__((warn_unused_result))
+#define ll_warn_unused __attribute__((warn_unused_result))
 #else
-#define _warn_unused
+#define ll_warn_unused
 #endif
 
 /// Success
@@ -25,7 +25,7 @@
 /// Result type, to distinguish between normal integers
 ///
 /// Errors are negative and the actual values are zero or positive.
-typedef struct _warn_unused llfree_result {
+typedef struct ll_warn_unused llfree_result {
 	uint64_t frame : 55;
 	bool reclaimed : 1;
 	uint8_t error : 8;
@@ -34,19 +34,22 @@ typedef struct _warn_unused llfree_result {
 typedef struct llfree llfree_t;
 
 /// Create a new result
-static inline llfree_result_t _unused llfree_ok(uint64_t frame, bool reclaimed)
+static inline llfree_result_t ll_unused llfree_ok(uint64_t frame,
+						  bool reclaimed)
 {
 	return (llfree_result_t){ .frame = frame,
 				  .reclaimed = reclaimed,
 				  .error = LLFREE_ERR_OK };
 }
-static inline llfree_result_t _unused llfree_err(uint8_t err)
+static inline llfree_result_t ll_unused llfree_err(uint8_t err)
 {
-	return (llfree_result_t){ .frame = 0, .reclaimed = false, .error = err };
+	return (llfree_result_t){ .frame = 0,
+				  .reclaimed = false,
+				  .error = err };
 }
 
 /// Check if the result is ok (no error)
-static inline bool _unused llfree_is_ok(llfree_result_t r)
+static inline bool ll_unused llfree_is_ok(llfree_result_t r)
 {
 	return r.error == LLFREE_ERR_OK;
 }
@@ -77,7 +80,7 @@ typedef struct llflags {
 	// ... Reserved for future use
 } llflags_t;
 
-static inline llflags_t _unused llflags(size_t order)
+static inline llflags_t ll_unused llflags(size_t order)
 {
 	return (llflags_t){ .order = (uint8_t)order, .movable = false };
 }

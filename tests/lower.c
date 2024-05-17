@@ -5,9 +5,9 @@
 #include <assert.h>
 #include <stdlib.h>
 
-#define bitfield_is_free(actual)                                             \
-	check_equal_bitfield(actual, ((bitfield_t){ 0x0, 0x0, 0x0, 0x0, 0x0, \
-						    0x0, 0x0, 0x0 }))
+#define bitfield_is_free(actual)                                               \
+	check_equal_bitfield(actual, ((bitfield_t){ { 0x0, 0x0, 0x0, 0x0, 0x0, \
+						      0x0, 0x0, 0x0 } }))
 
 #define bitfield_is_free_n(actual, n)        \
 	for (size_t i = 0; i < n; i++) {     \
@@ -43,46 +43,47 @@ declare_test(lower_init)
 	size_t frames = 1024;
 	lower_t actual = lower_new(frames, LLFREE_INIT_FREE);
 
-	check_equal(child_count(&actual), 2);
+	check_equal("zu", child_count(&actual), 2lu);
 	bitfield_is_free(actual.fields[0]);
-	check_equal(lower_free_frames(&actual), actual.frames);
+	check_equal("zu", lower_free_frames(&actual), actual.frames);
 	lower_drop(&actual);
 
 	frames = 1023;
 	actual = lower_new(frames, LLFREE_INIT_FREE);
 
-	check_equal(child_count(&actual), 2);
+	check_equal("zu", child_count(&actual), 2lu);
 	check_equal_bitfield(
 		actual.fields[1],
-		((bitfield_t){ 0, 0, 0, 0, 0, 0, 0, 0x8000000000000000 }));
-	check_equal(lower_free_frames(&actual), actual.frames);
+		((bitfield_t){ { 0, 0, 0, 0, 0, 0, 0, 0x8000000000000000 } }));
+	check_equal("zu", lower_free_frames(&actual), actual.frames);
 	lower_drop(&actual);
 
 	frames = 632;
 	actual = lower_new(frames, LLFREE_INIT_ALLOC);
 
-	check_equal(child_count(&actual), 2);
-	check_equal(actual.frames, 632ul);
-	check_equal(lower_free_frames(&actual), 0);
+	check_equal("zu", child_count(&actual), 2lu);
+	check_equal("zu", actual.frames, 632ul);
+	check_equal("zu", lower_free_frames(&actual), 0lu);
 	lower_drop(&actual);
 
 	frames = 685161;
 	actual = lower_new(frames, LLFREE_INIT_FREE);
 
-	check_equal(child_count(&actual), 1339);
+	check_equal("zu", child_count(&actual), 1339lu);
 	bitfield_is_free_n(actual.fields, 1338);
-	check_equal_bitfield(actual.fields[1338],
-			     ((bitfield_t){ 0x0, 0xfffffe0000000000, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX }));
-	check_equal(actual.frames, frames);
-	check_equal(lower_free_frames(&actual), actual.frames);
+	check_equal_bitfield(
+		actual.fields[1338],
+		((bitfield_t){ { 0x0, 0xfffffe0000000000, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX } }));
+	check_equal("zu", actual.frames, frames);
+	check_equal("zu", lower_free_frames(&actual), actual.frames);
 
 	// check alignment
 
-	check_equal_m((uint64_t)actual.children % LLFREE_CACHE_SIZE, 0ul,
+	check_equal_m("lu", (uint64_t)actual.children % LLFREE_CACHE_SIZE, 0ul,
 		      "array must be aligned to cachesize");
-	check_equal_m((uint64_t)actual.fields % LLFREE_CACHE_SIZE, 0ul,
+	check_equal_m("lu", (uint64_t)actual.fields % LLFREE_CACHE_SIZE, 0ul,
 		      "array must be aligned to cachesize");
 	lower_drop(&actual);
 
@@ -100,36 +101,38 @@ declare_test(lower_get)
 	size_t order = 0;
 
 	ret = lower_get(&actual, 0, order);
-	check_equal((int)ret.frame, 0);
+	check_equal("lu", ret.frame, 0lu);
 	check_equal_bitfield(
 		actual.fields[0],
-		((bitfield_t){ 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 }));
+		((bitfield_t){ { 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 } }));
 	return success;
 
 	ret = lower_get(&actual, 0, order);
-	check_equal((int)ret.frame, 1);
+	check_equal("lu", ret.frame, 1lu);
 	check_equal_bitfield(
 		actual.fields[0],
-		((bitfield_t){ 0x3, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 }));
+		((bitfield_t){ { 0x3, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 } }));
 
 	ret = lower_get(&actual, 320, order);
-	check_equal((int)ret.frame, 320);
+	check_equal("lu", ret.frame, 320lu);
 	check_equal_bitfield(
 		actual.fields[0],
-		((bitfield_t){ 0x3, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0 }));
+		((bitfield_t){ { 0x3, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0 } }));
 
-	for (int i = 0; i < 954; i++) {
+	for (size_t i = 0; i < 954; i++) {
 		ret = lower_get(&actual, 0, order);
-		check_equal((int)ret.frame, (i + (i < 318 ? 2 : 3)));
+		check_equal("lu", ret.frame, (i + (i < 318 ? 2 : 3)));
 	}
-	check_equal_bitfield(actual.fields[0],
-			     ((bitfield_t){ UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX }));
-	check_equal_bitfield(actual.fields[1],
-			     ((bitfield_t){ UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    0x1fffffffffffffff, 0x0 }));
+	check_equal_bitfield(
+		actual.fields[0],
+		((bitfield_t){ { UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX } }));
+	check_equal_bitfield(
+		actual.fields[1],
+		((bitfield_t){ { UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, 0x1fffffffffffffff,
+				 0x0 } }));
 
 	lower_drop(&actual);
 
@@ -137,26 +140,28 @@ declare_test(lower_get)
 	actual = lower_new(frames, LLFREE_INIT_FREE);
 
 	ret = lower_get(&actual, 0, order);
-	check_equal((int)ret.frame, 0);
-	check_equal_bitfield(actual.fields[0],
-			     ((bitfield_t){ 0xfffffffffffffffd, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX }));
+	check_equal("lu", ret.frame, 0lu);
+	check_equal_bitfield(
+		actual.fields[0],
+		((bitfield_t){ { 0xffffffffffffffflu, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX } }));
 
 	ret = lower_get(&actual, 0, order);
-	check_equal((int)ret.frame, 1);
-	check_equal_bitfield(actual.fields[0],
-			     ((bitfield_t){ UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX }));
+	check_equal("lu", ret.frame, 1lu);
+	check_equal_bitfield(
+		actual.fields[0],
+		((bitfield_t){ { UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX } }));
 
 	ret = lower_get(&actual, 0, order);
-	check_equal((int)ret.frame, LLFREE_ERR_MEMORY);
-	check_equal_bitfield(actual.fields[0],
-			     ((bitfield_t){ UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX }));
+	check_equal("d", ret.error, LLFREE_ERR_MEMORY);
+	check_equal_bitfield(
+		actual.fields[0],
+		((bitfield_t){ { UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX } }));
 	lower_drop(&actual);
 
 	frames = 166120;
@@ -167,12 +172,12 @@ declare_test(lower_get)
 	ret = lower_get(&actual, 0, LLFREE_HUGE_ORDER);
 
 	child_t child = atom_load(&actual.children[0].entries[1]);
-	check_equal(child.huge, true);
-	check_equal(child.free, 0);
+	check_equal("d", child.huge, true);
+	check_equal("u", child.free, 0u);
 	check_equal_bitfield(actual.fields[1],
-			     ((bitfield_t){ 0, 0, 0, 0, 0, 0, 0, 0 }));
+			     ((bitfield_t){ { 0, 0, 0, 0, 0, 0, 0, 0 } }));
 
-	check_equal((int)ret.frame, 1 << 9);
+	check_equal("lu", ret.frame, 1lu << 9);
 	lower_drop(&actual);
 
 	return success;
@@ -192,83 +197,88 @@ declare_test(lower_put)
 		ret = lower_get(&actual, 0, order);
 		assert(llfree_is_ok(ret));
 	}
-	check_equal_bitfield(actual.fields[0],
-			     ((bitfield_t){ UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX }));
-	check_equal_bitfield(actual.fields[1],
-			     ((bitfield_t){ UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    0x1fffffffffffffff, 0x0 }));
+	check_equal_bitfield(
+		actual.fields[0],
+		((bitfield_t){ { UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX } }));
+	check_equal_bitfield(
+		actual.fields[1],
+		((bitfield_t){ { UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, 0x1fffffffffffffff,
+				 0x0 } }));
 
 	frame = 0;
 	ret = lower_put(&actual, frame, order);
 	check(llfree_is_ok(ret));
-	check_equal_bitfield(actual.fields[0],
-			     ((bitfield_t){ 0xfffffffffffffffe, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX }));
-	check_equal_bitfield(actual.fields[1],
-			     ((bitfield_t){ UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    0x1fffffffffffffff, 0x0 }));
+	check_equal_bitfield(
+		actual.fields[0],
+		((bitfield_t){ { 0xfffffffffffffffe, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX } }));
+	check_equal_bitfield(
+		actual.fields[1],
+		((bitfield_t){ { UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, 0x1fffffffffffffff,
+				 0x0 } }));
 
 	// repeat the same address
 	frame = 0;
 	ret = lower_put(&actual, frame, order);
-	check_equal(ret.error, LLFREE_ERR_ADDRESS);
-	check_equal_bitfield(actual.fields[0],
-			     ((bitfield_t){ 0xfffffffffffffffe, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX }));
-	check_equal_bitfield(actual.fields[1],
-			     ((bitfield_t){ UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    0x1fffffffffffffff, 0x0 }));
+	check_equal("u", ret.error, LLFREE_ERR_ADDRESS);
+	check_equal_bitfield(
+		actual.fields[0],
+		((bitfield_t){ { 0xfffffffffffffffe, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX } }));
+	check_equal_bitfield(
+		actual.fields[1],
+		((bitfield_t){ { UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, 0x1fffffffffffffff,
+				 0x0 } }));
 
 	frame = 957;
 	ret = lower_put(&actual, frame, order);
-	check_equal(ret.error, LLFREE_ERR_ADDRESS);
-	check_equal_bitfield(actual.fields[0],
-			     ((bitfield_t){ 0xfffffffffffffffe, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX }));
-	check_equal_bitfield(actual.fields[1],
-			     ((bitfield_t){ UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    0x1fffffffffffffff, 0x0 }));
+	check_equal("u", ret.error, LLFREE_ERR_ADDRESS);
+	check_equal_bitfield(
+		actual.fields[0],
+		((bitfield_t){ { 0xfffffffffffffffe, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX } }));
+	check_equal_bitfield(
+		actual.fields[1],
+		((bitfield_t){ { UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, 0x1fffffffffffffff,
+				 0x0 } }));
 
 	frame = 561;
 	ret = lower_put(&actual, frame, order);
 	check(llfree_is_ok(ret));
-	check_equal_bitfield(actual.fields[0],
-			     ((bitfield_t){ 0xfffffffffffffffe, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX }));
-	check_equal_bitfield(actual.fields[1],
-			     ((bitfield_t){ 0xfffdffffffffffff, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, 0x1fffffffffffffff,
-					    0x0 }));
+	check_equal_bitfield(
+		actual.fields[0],
+		((bitfield_t){ { 0xfffffffffffffffe, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX } }));
+	check_equal_bitfield(
+		actual.fields[1],
+		((bitfield_t){ { 0xfffdffffffffffff, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 0x1fffffffffffffff, 0x0 } }));
 
 	// outside the range
 	frame = 1361;
 	ret = lower_put(&actual, frame, order);
-	check_equal(ret.error, LLFREE_ERR_ADDRESS);
-	check_equal_bitfield(actual.fields[0],
-			     ((bitfield_t){ 0xfffffffffffffffe, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX }));
-	check_equal_bitfield(actual.fields[1],
-			     ((bitfield_t){ 0xfffdffffffffffff, UINT64_MAX,
-					    UINT64_MAX, UINT64_MAX, UINT64_MAX,
-					    UINT64_MAX, 0x1fffffffffffffff,
-					    0x0 }));
+	check_equal("u", ret.error, LLFREE_ERR_ADDRESS);
+	check_equal_bitfield(
+		actual.fields[0],
+		((bitfield_t){ { 0xfffffffffffffffe, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX } }));
+	check_equal_bitfield(
+		actual.fields[1],
+		((bitfield_t){ { 0xfffdffffffffffff, UINT64_MAX, UINT64_MAX,
+				 UINT64_MAX, UINT64_MAX, UINT64_MAX,
+				 0x1fffffffffffffff, 0x0 } }));
 
 	lower_drop(&actual);
 	return success;
@@ -347,13 +357,13 @@ declare_test(lower_huge)
 	llfree_result_t frame1 = lower_get(&actual, 0, LLFREE_HUGE_ORDER);
 	check(llfree_is_ok(frame1));
 	uint64_t offset = frame1.frame % LLFREE_CHILD_SIZE;
-	check_equal(offset, 0ul);
+	check_equal("lu", offset, 0ul);
 	llfree_result_t frame2 = lower_get(&actual, 0, LLFREE_HUGE_ORDER);
 	check(llfree_is_ok(frame2));
 	offset = frame2.frame % LLFREE_CHILD_SIZE;
-	check_equal(offset, 0ul);
+	check_equal("lu", offset, 0ul);
 	check(frame1.frame != frame2.frame);
-	check_equal(actual.frames - lower_free_frames(&actual),
+	check_equal("lu", actual.frames - lower_free_frames(&actual),
 		    2ul * LLFREE_CHILD_SIZE);
 
 	// request a regular frame
@@ -368,8 +378,8 @@ declare_test(lower_huge)
 		lower_get(&actual, frame_from_row(10), LLFREE_HUGE_ORDER);
 	check(llfree_is_ok(frame3));
 	offset = frame3.frame % LLFREE_CHILD_SIZE;
-	check_equal(offset, 0ul);
-	check_equal(frame3.frame, 3lu * LLFREE_CHILD_SIZE);
+	check_equal("lu", offset, 0ul);
+	check_equal("lu", frame3.frame, 3lu * LLFREE_CHILD_SIZE);
 
 	// free regular page und try get this child as complete HP
 	assert(llfree_is_ok(lower_put(&actual, regular.frame, 0)));
@@ -377,7 +387,8 @@ declare_test(lower_huge)
 	check(llfree_is_ok(frame4));
 	check(frame4.frame == regular.frame);
 
-	llfree_result_t ret = lower_put(&actual, frame2.frame, LLFREE_HUGE_ORDER);
+	llfree_result_t ret =
+		lower_put(&actual, frame2.frame, LLFREE_HUGE_ORDER);
 	check(llfree_is_ok(ret));
 
 	// allocate the complete memory with HPs
@@ -389,7 +400,7 @@ declare_test(lower_huge)
 		check(llfree_is_ok(frame));
 	}
 
-	check_equal_m(lower_free_frames(&actual), 0,
+	check_equal_m("zu", lower_free_frames(&actual), 0lu,
 		      "fully allocated with huge frames");
 
 	// reservation at full memory must fail
@@ -402,10 +413,11 @@ declare_test(lower_huge)
 	check(lower_put(&actual, frame2.frame, LLFREE_HUGE_ORDER).error ==
 	      LLFREE_ERR_ADDRESS);
 
-	check(llfree_is_ok(lower_put(&actual, frame1.frame, LLFREE_HUGE_ORDER)));
+	check(llfree_is_ok(
+		lower_put(&actual, frame1.frame, LLFREE_HUGE_ORDER)));
 
 	// check if right amout of free regular frames are present
-	check_equal(lower_free_frames(&actual), LLFREE_CHILD_SIZE + 1ul);
+	check_equal("zu", lower_free_frames(&actual), LLFREE_CHILD_SIZE + 1ul);
 
 	// new acquired frame should be in same positon as the old no 1
 	check(lower_get(&actual, 0, LLFREE_HUGE_ORDER).frame == frame1.frame);
@@ -426,7 +438,7 @@ declare_test(lower_max)
 		check_m(llfree_is_ok(frame), "%zu", i);
 	}
 
-	check_equal(lower_free_frames(&lower), 0);
+	check_equal("zu", lower_free_frames(&lower), 0lu);
 
 	for (size_t i = 0; i < FRAMES / (1 << LLFREE_MAX_ORDER); ++i) {
 		llfree_result_t ret = lower_put(
@@ -442,8 +454,8 @@ declare_test(lower_free_all)
 	bool success = true;
 	const uint64_t len = (1 << 13) + 35; // 16 HP + 35 regular frames
 	lower_t lower = lower_new(len, LLFREE_INIT_ALLOC);
-	check_equal(lower.frames, len);
-	check_equal_m(lower_free_frames(&lower), 0ul,
+	check_equal("zu", lower.frames, len);
+	check_equal_m("zu", lower_free_frames(&lower), 0lu,
 		      "all_frames_are_allocated");
 
 	// free all HPs
@@ -452,7 +464,8 @@ declare_test(lower_free_all)
 		ret = lower_put(&lower, i * 512, LLFREE_HUGE_ORDER);
 		check(llfree_is_ok(ret));
 	}
-	check_equal_m(lower_free_frames(&lower), lower.frames - (512ul + 35),
+	check_equal_m("zu", lower_free_frames(&lower),
+		      lower.frames - (512ul + 35),
 		      "one allocated HF and the 35 regular frames");
 
 	// free last HP as regular frame and regular frames
@@ -462,7 +475,7 @@ declare_test(lower_free_all)
 		check(llfree_is_ok(ret));
 	}
 
-	check_equal_m(lower_free_frames(&lower), lower.frames,
+	check_equal_m("zu", lower_free_frames(&lower), lower.frames,
 		      "lower should be completely free");
 
 	return success;

@@ -68,7 +68,7 @@ void *llfree_ext_alloc(size_t align, size_t size)
 	return ret;
 }
 
-void llfree_ext_free(_unused size_t align, _unused size_t size, void *addr)
+void llfree_ext_free(ll_unused size_t align, ll_unused size_t size, void *addr)
 {
 	return free(addr);
 }

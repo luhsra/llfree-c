@@ -32,7 +32,7 @@ Running unit-tests
 ```sh
 make test
 # or tests that contain "bitfield" in their name
-make test A=bitfield
+make test T=bitfield
 ```
 
 ## Architecture

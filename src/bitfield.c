@@ -26,6 +26,7 @@ void field_init(bitfield_t *self)
 /// Set the first aligned 2^`order` zero bits, returning the bit offset
 ///
 /// - See <https://graphics.stanford.edu/~seander/bithacks.html#ZeroInWord>
+bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos); // used in tests
 bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos)
 {
 	// NOLINTBEGIN(readability-magic-numbers)
@@ -166,7 +167,7 @@ static bool row_toggle(uint64_t *row, uint64_t mask, bool expected)
 llfree_result_t field_toggle(bitfield_t *field, size_t index, size_t order,
 			     bool expected)
 {
-	assert(0 <= index && index < LLFREE_CHILD_SIZE);
+	assert(index < LLFREE_CHILD_SIZE);
 
 	pos_t pos = get_pos(index);
 	size_t num_frames = 1 << order;
@@ -202,13 +203,13 @@ size_t field_count_ones(bitfield_t *field)
 		uint64_t row = atom_load(&field->rows[i]);
 		counter += count_ones(row);
 	}
-	assert(0 <= counter && counter <= LLFREE_CHILD_SIZE);
+	assert(counter <= LLFREE_CHILD_SIZE);
 	return counter;
 }
 
 bool field_is_free(bitfield_t *self, size_t index)
 {
-	assert(0 <= index && index < LLFREE_CHILD_SIZE);
+	assert(index < LLFREE_CHILD_SIZE);
 	pos_t pos = get_pos(index);
 
 	uint64_t row = atom_load(&self->rows[pos.row]);
@@ -222,7 +223,7 @@ void field_print(bitfield_t *field)
 {
 	llfree_info("Field in HEX: MSB to LSB\n");
 	for (size_t i = 0; i < FIELD_N; i++) {
-		uint16_t _unused *s = (uint16_t *)&(field->rows[i]);
+		uint16_t ll_unused *s = (uint16_t *)&(field->rows[i]);
 		llfree_info("%04X %04X %04X %04X\n", s[3], s[2], s[1], s[0]);
 	}
 }

@@ -5,6 +5,8 @@
 #include <assert.h>
 #include <stdatomic.h>
 
+#define ll_align(align) __attribute__((aligned(align)))
+
 #define PRIuS "zu"
 #define PRIxS "zx"
 

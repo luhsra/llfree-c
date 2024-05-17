@@ -64,7 +64,7 @@ bool tree_dec_force(tree_t *self, uint16_t free, uint8_t kind)
 bool tree_inc_or_reserve(tree_t *self, uint16_t free, bool *reserve,
 			 uint16_t min)
 {
-	_unused bool success = tree_inc(self, free); // update counter
+	ll_unused bool success = tree_inc(self, free); // update counter
 	assert(success);
 
 	if (reserve && *reserve) // reserve if needed

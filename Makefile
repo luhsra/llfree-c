@@ -1,19 +1,29 @@
-BUILDDIR ?= build
-A ?= ""
+BUILDDIR := build
+T := ""
 
 SRCDIR = src
 TESTDIR = tests
 
 # Compiler and flags
-CC = clang
-AR = ar
-CFLAGS = -std=c11 -Werror -Wunused-variable -Wundef -Werror=strict-prototypes -Werror=implicit-function-declaration -Werror=implicit-int -Werror=return-type -Wvla -Wcast-function-type -Wimplicit-fallthrough -Werror=date-time -Werror=incompatible-pointer-types -Wconversion -Wenum-conversion -Wint-conversion -Wimplicit-int-conversion -Wimplicit-float-conversion -Wundefined-bool-conversion -Wbitfield-enum-conversion -Wanon-enum-enum-conversion -Wmissing-field-initializers -Wall -Wextra -fPIE -pthread
+CC := clang
+AR := ar
 
+CFLAGS += -std=c11 -fPIE -pthread
 CFLAGS += -I $(SRCDIR) -I $(TESTDIR) -I include -I std
 CFLAGS += -DSTD
 
+# Warnings and errors
+CFLAGS += -Wall -Wextra -Wunused-variable -Werror=undef -Werror=strict-prototypes -Werror=implicit-function-declaration -Werror=implicit-int -Werror=return-type -Werror=vla -Werror=cast-function-type -Werror=implicit-fallthrough -Werror=date-time -Werror=incompatible-pointer-types -Werror=missing-prototypes -Wenum-conversion -Wint-conversion -Wmissing-field-initializers
+ifeq ($(CC), "clang")
+	CFLAGS += -Wconversion -Wimplicit-int-conversion -Wimplicit-float-conversion -Wundefined-bool-conversion -Wbitfield-enum-conversion -Wanon-enum-enum-conversion
+else
+	CFLAGS += -Wno-int-conversion -Wno-float-conversion -Wno-enum-conversion
+endif
+
+LDFLAGS :=
+
 # The rust wrapper calls this with DEBUG=1 on debug and DEBUG=0 on release builds
-DEBUG ?= 1
+DEBUG := 1
 ifeq ($(DEBUG), 1)
 	CFLAGS += -g -DVERBOSE
 else

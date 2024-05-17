@@ -63,7 +63,7 @@ llfree_meta_size_t llfree_metadata_size(size_t cores, size_t frames)
 	return meta;
 }
 
-static _unused bool check_meta(llfree_meta_t meta, llfree_meta_size_t sizes)
+static ll_unused bool check_meta(llfree_meta_t meta, llfree_meta_size_t sizes)
 {
 	if (meta.local == NULL || meta.trees == NULL || meta.lower == NULL)
 		return false;
@@ -718,8 +718,8 @@ void llfree_print(llfree_t *self)
 	llfree_info_cont(I1 "frames: %" PRIuS "\n", self->lower.frames);
 	llfree_info_cont(I1 "trees: %" PRIuS " (%u) {\n", self->trees_len,
 			 LLFREE_TREE_SIZE);
-	size_t _unused free_huge = llfree_free_huge(self);
-	size_t _unused free_trees = 0;
+	size_t ll_unused free_huge = llfree_free_huge(self);
+	size_t ll_unused free_trees = 0;
 	for (size_t i = 0; i < self->trees_len; i++) {
 		tree_t tree = atom_load(&self->trees[i]);
 		llfree_info_cont(I2 "%3" PRIuS ": free: %" PRIuS
@@ -737,7 +737,7 @@ void llfree_print(llfree_t *self)
 	for (size_t i = 0; i < self->cores; i++) {
 		llfree_info_cont(I1 "%" PRIuS ": local: {\n", i);
 		for (size_t kind = TREE_FIXED; kind < TREE_KINDS; kind++) {
-			reserved_t _unused res =
+			reserved_t ll_unused res =
 				atom_load(&self->local[i].reserved[kind]);
 			llfree_info_cont(I2 "%" PRIuS
 					    ": { present: %d, free: %" PRIu64

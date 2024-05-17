@@ -2,8 +2,8 @@
 #include "tree.h"
 
 #define equal_trees(actual, expect)            \
-	check_equal(actual.free, expect.free); \
-	check_equal(actual.reserved, expect.reserved)
+	check_equal("u", actual.free, expect.free); \
+	check_equal("u", actual.reserved, expect.reserved)
 
 declare_test(tree_atomic)
 {
@@ -21,20 +21,20 @@ declare_test(tree_init)
 	bool reserved = false;
 
 	tree_t actual = tree_new(free, reserved, TREE_FIXED);
-	check_equal(actual.free, free);
-	check_equal(actual.reserved, reserved);
+	check_equal("u", actual.free, free);
+	check_equal("u", actual.reserved, reserved);
 
 	free = LLFREE_TREE_SIZE; // maximum value
 	reserved = false;
 	actual = tree_new(free, reserved, TREE_FIXED);
-	check_equal(actual.free, free);
-	check_equal(actual.reserved, reserved);
+	check_equal("u", actual.free, free);
+	check_equal("u", actual.reserved, reserved);
 
 	free = 0; // minimum value
 	reserved = true; // check if reserved is set
 	actual = tree_new(free, reserved, TREE_FIXED);
-	check_equal(actual.free, free);
-	check_equal(actual.reserved, reserved);
+	check_equal("u", actual.free, free);
+	check_equal("u", actual.reserved, reserved);
 
 	return success;
 }

@@ -107,8 +107,8 @@ llfree_result_t lower_init(lower_t *self, size_t frames, uint8_t init,
 
 	self->fields = (bitfield_t *)primary;
 	self->children = (children_t *)(primary + bitfield_size);
-	size_t _unused tree_count = div_ceil(child_c, LLFREE_TREE_CHILDREN);
-	size_t _unused meta = lower_metadata_size(frames);
+	size_t ll_unused tree_count = div_ceil(child_c, LLFREE_TREE_CHILDREN);
+	size_t ll_unused meta = lower_metadata_size(frames);
 	assert((size_t)(self->children + tree_count) <=
 	       (size_t)(primary + meta));
 
@@ -424,7 +424,7 @@ void lower_print(lower_t *self)
 		if (i % LLFREE_TREE_CHILDREN == 0)
 			llfree_info_cont("\n");
 
-		child_t _unused child = atom_load(get_child(self, i));
+		child_t ll_unused child = atom_load(get_child(self, i));
 		llfree_info_cont("    %" PRIuS ": free=%" PRIuS ", huge=%d\n",
 				 i, (size_t)child.free, child.huge);
 	}

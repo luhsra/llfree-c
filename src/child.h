@@ -15,7 +15,8 @@ typedef struct child {
 _Static_assert(13 > LLFREE_CHILD_ORDER, "child counter size");
 
 /// Initializes the child entry with the given parameters
-static inline child_t _unused child_new(uint16_t free, bool huge, bool reclaimed)
+static inline child_t ll_unused child_new(uint16_t free, bool huge,
+					bool reclaimed)
 {
 	assert(free <= LLFREE_CHILD_SIZE);
 	return (child_t){ .free = free, .huge = huge, .reclaimed = reclaimed };

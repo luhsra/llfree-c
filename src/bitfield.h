@@ -1,5 +1,6 @@
 #pragma once
 
+#include "llfree_platform.h"
 #include "utils.h"
 
 #define FIELD_N (LLFREE_CHILD_SIZE / LLFREE_ATOMIC_SIZE)
@@ -7,7 +8,7 @@
 /// Atomic bitfield
 typedef struct bitfield {
 	_Atomic(uint64_t) rows[FIELD_N]
-		__attribute__((aligned(LLFREE_CACHE_SIZE)));
+		ll_align(LLFREE_CACHE_SIZE);
 } bitfield_t;
 
 /// Initializes the Bitfield of 512 Bit size with all 0
