@@ -12,7 +12,7 @@
 
 #define LL_MAX(a, b) ((a) > (b) ? (a) : (b))
 #define LL_MIN(a, b) ((a) > (b) ? (b) : (a))
-#define LL_MASK(bits) ((1u << bits) - 1)
+#define LL_MASK(bits) ((1u << (bits)) - 1)
 
 // conversion functions
 static inline ll_unused size_t tree_from_frame(uint64_t frame)
@@ -57,17 +57,17 @@ static inline ll_unused size_t div_ceil(uint64_t a, size_t b)
 	return (a + b - 1) / b;
 }
 /// Count the number of zero bits beginning at the lowest significant bit
-static inline ll_unused int trailing_zeros(uint64_t val)
+static inline ll_unused size_t trailing_zeros(uint64_t val)
 {
 	if (val == 0)
-		return -1;
+		return 8 * sizeof(uint64_t);
 	return __builtin_ctzll(val);
 }
 /// Count the number of zero bits beginning at the most significant bit
-static inline ll_unused int leading_zeros(uint64_t val)
+static inline ll_unused size_t leading_zeros(uint64_t val)
 {
 	if (val == 0)
-		return -1;
+		return 8 * sizeof(uint64_t);
 	return __builtin_clzll(val);
 }
 /// Count the total number of ones
@@ -78,7 +78,10 @@ static inline ll_unused size_t count_ones(uint64_t val)
 /// Returns the largest multiple of align, less or equal to val
 static inline ll_unused size_t align_down(size_t val, size_t align)
 {
-	assert(1u << trailing_zeros(align) == align);
+	assert(({
+		size_t zeros = trailing_zeros(align);
+		zeros < (8 * sizeof(size_t)) && (1lu << zeros) == align;
+	}));
 	return val & ~(align - 1);
 }
 /// Returns the smallest multiple of align, greater or equal to val

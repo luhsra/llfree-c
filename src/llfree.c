@@ -449,7 +449,7 @@ llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags)
 	core = core % self->cores;
 	uint8_t kind = tree_kind(self, flags);
 
-	reserved_t old;
+	reserved_t old = { .free = 0, .start_row = 0, .present = false };
 	llfree_result_t res;
 	if (self->trees_len > (TREE_KINDS * self->cores)) {
 		for (size_t i = 0; i < RETRIES; i++) {
@@ -751,20 +751,22 @@ void llfree_print(llfree_t *self)
 	llfree_info_end();
 }
 
-#define check(x)                       \
-	if (!(x)) {                    \
-		llfree_info("failed"); \
-		assert(false);         \
-	}                              \
-	(void)0 // enforce semicolon!
+#define check(x)                               \
+	({                                     \
+		if (!(x)) {                    \
+			llfree_info("failed"); \
+			assert(false);         \
+		}                              \
+	})
 
-#define check_equal(fmt, actual, expected)                         \
-	if ((actual) != (expected)) {                              \
-		llfree_info("failed: %" fmt " == %" fmt, (actual), \
-			    (expected));                           \
-		assert(false);                                     \
-	}                                                          \
-	(void)0 // enforce semicolon!
+#define check_equal(fmt, actual, expected)                                 \
+	({                                                                 \
+		if ((actual) != (expected)) {                              \
+			llfree_info("failed: %" fmt " == %" fmt, (actual), \
+				    (expected));                           \
+			assert(false);                                     \
+		}                                                          \
+	})
 
 void llfree_validate(llfree_t *self)
 {

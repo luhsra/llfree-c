@@ -9,7 +9,6 @@
 #include <pthread.h>
 #include <stdlib.h>
 
-
 static llfree_t llfree_new(size_t cores, size_t frames, uint8_t init)
 {
 	llfree_t upper;
@@ -118,8 +117,8 @@ declare_test(llfree_alloc_s)
 
 		tree_t tree = atom_load(&upper.trees[i]);
 		if (!tree.reserved)
-			check_equal_m("zu", free, (size_t)tree.free,
-				      "tree %lu", i);
+			check_equal_m("zu", free, (size_t)tree.free, "tree %lu",
+				      i);
 	}
 
 	llfree_validate(&upper);
@@ -308,7 +307,8 @@ declare_test(llfree_alloc_all_kinds)
 		if (!llfree_is_ok(ret)) {
 			llfree_print(&upper);
 			llfree_warn("err %u", ret.error);
-			check_m(false, "must be able to alloc the whole memory");
+			check_m(false,
+				"must be able to alloc the whole memory");
 			break;
 		}
 		frames[i] = ret.frame;
@@ -316,8 +316,8 @@ declare_test(llfree_alloc_all_kinds)
 	ret = llfree_get(&upper, 0, llflags(0));
 	check(ret.error == LLFREE_ERR_MEMORY);
 
-	check_equal(llfree_free_frames(&upper), 0ul);
-	check_equal(llfree_free_frames(&upper),
+	check_equal("lu", llfree_free_frames(&upper), 0ul);
+	check_equal("lu", llfree_free_frames(&upper),
 		    lower_free_frames(&upper.lower));
 	llfree_validate(&upper);
 

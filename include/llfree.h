@@ -23,9 +23,8 @@
 #define LLFREE_ERR_INIT ((uint8_t)4)
 
 /// Result type, to distinguish between normal integers
-///
-/// Errors are negative and the actual values are zero or positive.
 typedef struct ll_warn_unused llfree_result {
+	/// Usually only valid if error == LLFREE_ERR_OK
 	uint64_t frame : 55;
 	bool reclaimed : 1;
 	uint8_t error : 8;
@@ -117,7 +116,7 @@ typedef struct llfree_meta {
 ///
 /// The `init` parameter is expected to be one of the `LLFREE_INIT_<..>` modes.
 ///
-/// The `primary` and `secondary` buffer are used to store the allocator state
+/// The `meta` buffers are used to store the allocator state
 /// and must be at least as large as reported by llfree_metadata_size.
 llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
 			    uint8_t init, llfree_meta_t meta);

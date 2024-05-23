@@ -31,35 +31,35 @@ bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos)
 {
 	// NOLINTBEGIN(readability-magic-numbers)
 	uint64_t mask;
-	int p = -1;
+	size_t p = 64;
 	switch (order) {
 	case 0:
 		p = trailing_zeros(~(*v));
-		if (p >= 0)
+		if (p < 64)
 			*v |= 1llu << p;
 		break;
 	case 1:
 		mask = 0xaaaaaaaaaaaaaaaallu;
 		p = trailing_zeros(~((*v | (*v >> 1)) | mask));
-		if (p >= 0)
+		if (p < 64)
 			*v |= 0b11llu << p;
 		break;
 	case 2:
 		mask = 0x1111111111111111llu;
 		p = trailing_zeros((((*v - mask) & ~*v) >> 3) & mask);
-		if (p >= 0)
+		if (p < 64)
 			*v |= 0b1111llu << p;
 		break;
 	case 3:
 		mask = 0x0101010101010101llu;
 		p = trailing_zeros((((*v - mask) & ~*v) >> 7) & mask);
-		if (p >= 0)
+		if (p < 64)
 			*v |= 0xffllu << p;
 		break;
 	case 4:
 		mask = 0x0001000100010001llu;
 		p = trailing_zeros((((*v - mask) & ~*v) >> 15) & mask);
-		if (p >= 0)
+		if (p < 64)
 			*v |= 0xffffllu << p;
 		break;
 	case 5:
@@ -83,8 +83,8 @@ bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos)
 		assert(false);
 		break;
 	}
-	if (p >= 0) {
-		*pos = (size_t)p;
+	if (p < 64) {
+		*pos = p;
 		return true;
 	}
 	return false;
