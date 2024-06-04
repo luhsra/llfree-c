@@ -9,7 +9,7 @@ void ll_local_init(local_t *self)
 	self->reserved[TREE_HUGE] = (reserved_t){ 0, 0, false };
 }
 
-bool ll_reserved_dec(reserved_t *self, uint16_t free)
+bool ll_reserved_dec(reserved_t *self, treeF_t free)
 {
 	if (self->present && self->free >= free) {
 		self->free -= free;
@@ -18,7 +18,7 @@ bool ll_reserved_dec(reserved_t *self, uint16_t free)
 	return false;
 }
 
-bool ll_reserved_inc(reserved_t *self, uint64_t tree_idx, uint16_t free)
+bool ll_reserved_inc(reserved_t *self, uint64_t tree_idx, treeF_t free)
 {
 	if (self->present && tree_from_row(self->start_row) == tree_idx) {
 		assert(self->free + free <= LLFREE_TREE_SIZE);
@@ -28,7 +28,7 @@ bool ll_reserved_inc(reserved_t *self, uint64_t tree_idx, uint16_t free)
 	return false;
 }
 
-bool ll_steal(reserved_t *self, uint16_t min)
+bool ll_steal(reserved_t *self, treeF_t min)
 {
 	if (self->present && self->free >= min) {
 		*self = (reserved_t){ 0, 0, false };

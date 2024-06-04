@@ -11,11 +11,11 @@
 /// CPU-local data of the currently reserved tree
 typedef struct reserved {
 	/// Number of free frames in the tree
-	uint16_t free : 15;
+	treeF_t free : LLFREE_TREE_ORDER + 1;
 	/// Bitfield row index of reserved tree,
 	/// used for identifying the reserved tree and as starting point
 	/// for the next allocation
-	uint64_t start_row : 48;
+	uint64_t start_row : 62 - LLFREE_TREE_ORDER;
 	/// true if there is a reserved tree
 	bool present : 1;
 } reserved_t;
@@ -39,11 +39,11 @@ typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) local {
 /// Initialize the per-cpu data
 void ll_local_init(local_t *self);
 /// Decrement the number of free frames
-bool ll_reserved_dec(reserved_t *self, uint16_t free);
+bool ll_reserved_dec(reserved_t *self, treeF_t free);
 /// Increment the number of free frames
-bool ll_reserved_inc(reserved_t *self, uint64_t tree_idx, uint16_t free);
+bool ll_reserved_inc(reserved_t *self, uint64_t tree_idx, treeF_t free);
 /// Try stealing a reserved tree
-bool ll_steal(reserved_t *self, uint16_t min);
+bool ll_steal(reserved_t *self, treeF_t min);
 
 /// Swap the reserved tree
 bool ll_reserved_swap(reserved_t *self, reserved_t new);

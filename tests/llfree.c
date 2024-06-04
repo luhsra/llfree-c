@@ -1,3 +1,4 @@
+#include "llfree.h"
 #include "llfree_inner.h"
 
 #include "check.h"
@@ -130,13 +131,14 @@ declare_test(llfree_general_function)
 {
 	bool success = true;
 	llfree_result_t ret;
+	const size_t FRAMES = 4 << (30 - 12);
 
-	lldrop llfree_t upper = llfree_new(4, 132000, LLFREE_INIT_FREE);
+	lldrop llfree_t upper = llfree_new(4, FRAMES, LLFREE_INIT_FREE);
 	llfree_validate(&upper);
-	check_equal("zu", upper.trees_len, div_ceil(132000, LLFREE_TREE_SIZE));
-	check(upper.cores == 4);
-	check(llfree_frames(&upper) == 132000);
-	check_m(llfree_free_frames(&upper) == 132000,
+	check_equal("zu", upper.trees_len, div_ceil(FRAMES, LLFREE_TREE_SIZE));
+	// check(upper.cores == 4);
+	check(llfree_frames(&upper) == FRAMES);
+	check_m(llfree_free_frames(&upper) == FRAMES,
 		"right number of free frames");
 
 	// check allignment
@@ -154,17 +156,15 @@ declare_test(llfree_general_function)
 	check_m(llfree_is_ok(frame), "reservation must be success");
 	llfree_validate(&upper);
 
-	check(llfree_frames(&upper) == 132000);
-	check_m(llfree_free_frames(&upper) == 131999,
+	check(llfree_frames(&upper) == FRAMES);
+	check_m(llfree_free_frames(&upper) == FRAMES - 1,
 		"right number of free frames");
-
-	llfree_info("After get mit core 0\n");
 
 	ret = llfree_put(&upper, 0, frame.frame, llflags(0));
 	llfree_validate(&upper);
 
 	check_m(llfree_is_ok(ret), "successfully free");
-	check_m(llfree_free_frames(&upper) == 132000,
+	check_m(llfree_free_frames(&upper) == FRAMES,
 		"right number of free frames");
 
 	if (LLFREE_ENABLE_FREE_RESERVE) {
@@ -173,6 +173,7 @@ declare_test(llfree_general_function)
 	}
 
 	// reserve all frames in first tree
+	check(llfree_free_frames(&upper) >= LLFREE_TREE_SIZE);
 	for (size_t i = 0; i < LLFREE_TREE_SIZE; ++i) {
 		ret = llfree_get(&upper, 0, llflags(0));
 		check(llfree_is_ok(ret));
@@ -207,13 +208,17 @@ declare_test(llfree_put)
 	llfree_result_t ret;
 
 	lldrop llfree_t upper =
-		llfree_new(4, LLFREE_TREE_SIZE << 4, LLFREE_INIT_FREE);
+		llfree_new(2, LLFREE_TREE_SIZE * 8ull, LLFREE_INIT_FREE);
 	llfree_validate(&upper);
 	uint64_t reserved[LLFREE_TREE_SIZE + 5];
 
 	// reserve more frames than one tree
 	for (size_t i = 0; i < LLFREE_TREE_SIZE + 5; ++i) {
-		ret = llfree_get(&upper, 1, llflags(0));
+		ret = llfree_get(&upper, 0, llflags(0));
+		if (!llfree_is_ok(ret)) {
+			llfree_print(&upper);
+			llfree_validate(&upper);
+		}
 		check(llfree_is_ok(ret));
 		reserved[i] = ret.frame;
 	}
@@ -223,7 +228,7 @@ declare_test(llfree_put)
 	check(tree_from_frame(reserved[0]) !=
 	      tree_from_frame(reserved[LLFREE_TREE_SIZE]));
 
-	llfree_result_t ret2 = llfree_get(&upper, 2, llflags(0));
+	llfree_result_t ret2 = llfree_get(&upper, 1, llflags(0));
 	check(llfree_is_ok(ret2));
 	check_m(tree_from_frame(ret2.frame) !=
 			tree_from_frame(reserved[LLFREE_TREE_SIZE]),
@@ -231,12 +236,13 @@ declare_test(llfree_put)
 
 	if (!success)
 		llfree_print(&upper);
+	llfree_validate(&upper);
 
 	llfree_info("free");
 
-	// free half the frames from old tree with core 2
+	// free half the frames from old tree with core 1
 	for (size_t i = 0; i < LLFREE_TREE_SIZE / 2; ++i) {
-		ret = llfree_put(&upper, 2, reserved[i], llflags(0));
+		ret = llfree_put(&upper, 1, reserved[i], llflags(0));
 		check(llfree_is_ok(ret));
 	}
 

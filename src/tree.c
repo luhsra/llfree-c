@@ -1,6 +1,6 @@
 #include "tree.h"
 
-bool tree_reserve(tree_t *self, uint16_t min, uint16_t max, uint8_t kind)
+bool tree_reserve(tree_t *self, treeF_t min, treeF_t max, uint8_t kind)
 {
 	assert(min < max);
 
@@ -12,7 +12,7 @@ bool tree_reserve(tree_t *self, uint16_t min, uint16_t max, uint8_t kind)
 	return false;
 }
 
-bool tree_steal_counter(tree_t *self, uint16_t min)
+bool tree_steal_counter(tree_t *self, treeF_t min)
 {
 	if (self->reserved && self->free >= min) {
 		*self = tree_new(0, true, self->kind);
@@ -21,9 +21,9 @@ bool tree_steal_counter(tree_t *self, uint16_t min)
 	return false;
 }
 
-bool tree_unreserve(tree_t *self, uint16_t free, uint8_t kind)
+bool tree_unreserve(tree_t *self, treeF_t free, uint8_t kind)
 {
-	uint16_t f = self->free + free;
+	treeF_t f = self->free + free;
 	assert(f <= LLFREE_TREE_SIZE);
 	assert(self->reserved);
 
@@ -31,7 +31,7 @@ bool tree_unreserve(tree_t *self, uint16_t free, uint8_t kind)
 	return true;
 }
 
-bool tree_inc(tree_t *self, uint16_t free)
+bool tree_inc(tree_t *self, treeF_t free)
 {
 	assert(self->free + free <= LLFREE_TREE_SIZE);
 
@@ -39,7 +39,7 @@ bool tree_inc(tree_t *self, uint16_t free)
 	return true;
 }
 
-bool tree_dec(tree_t *self, uint16_t free)
+bool tree_dec(tree_t *self, treeF_t free)
 {
 	if (!self->reserved && self->free >= free) {
 		self->free -= free;
@@ -48,7 +48,7 @@ bool tree_dec(tree_t *self, uint16_t free)
 	return false;
 }
 
-bool tree_dec_force(tree_t *self, uint16_t free, uint8_t kind)
+bool tree_dec_force(tree_t *self, treeF_t free, uint8_t kind)
 {
 	// Overwrite tree kind if priority higher (number lower)
 	// FIXED > MOVABLE > HUGE
@@ -61,8 +61,7 @@ bool tree_dec_force(tree_t *self, uint16_t free, uint8_t kind)
 	return false;
 }
 
-bool tree_inc_or_reserve(tree_t *self, uint16_t free, bool *reserve,
-			 uint16_t min)
+bool tree_inc_or_reserve(tree_t *self, treeF_t free, bool *reserve, treeF_t min)
 {
 	ll_unused bool success = tree_inc(self, free); // update counter
 	assert(success);
