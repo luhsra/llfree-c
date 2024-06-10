@@ -4,7 +4,7 @@
 
 #if LLFREE_TREE_ORDER < 16
 /// Free Counter
-typedef uint16_t tree_f;
+typedef uint16_t treeF_t;
 #elif LLFREE_TREE_ORDER < 32
 /// Free Counter
 typedef uint32_t treeF_t;
