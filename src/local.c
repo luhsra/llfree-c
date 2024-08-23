@@ -18,6 +18,16 @@ bool ll_reserved_dec(reserved_t *self, treeF_t free)
 	return false;
 }
 
+bool ll_reserved_dec_check(reserved_t *self, uint64_t tree_idx, treeF_t free)
+{
+	if (self->present && tree_from_row(self->start_row) == tree_idx &&
+	    self->free >= free) {
+		self->free -= free;
+		return true;
+	}
+	return false;
+}
+
 bool ll_reserved_inc(reserved_t *self, uint64_t tree_idx, treeF_t free)
 {
 	if (self->present && tree_from_row(self->start_row) == tree_idx) {
@@ -31,6 +41,16 @@ bool ll_reserved_inc(reserved_t *self, uint64_t tree_idx, treeF_t free)
 bool ll_steal(reserved_t *self, treeF_t min)
 {
 	if (self->present && self->free >= min) {
+		*self = (reserved_t){ 0, 0, false };
+		return true;
+	}
+	return false;
+}
+
+bool ll_steal_check(reserved_t *self, uint64_t tree_idx, treeF_t min)
+{
+	if (self->present && tree_from_row(self->start_row) == tree_idx &&
+	    self->free >= min) {
 		*self = (reserved_t){ 0, 0, false };
 		return true;
 	}

@@ -663,3 +663,45 @@ declare_test(llfree_less_mem)
 
 	return success;
 }
+
+declare_test(llfree_alloc_at)
+{
+	bool success = true;
+
+	lldrop llfree_t upper = llfree_new(4, 1 << 20, LLFREE_INIT_FREE);
+	check(llfree_frames(&upper) == 1 << 20);
+	check(llfree_free_frames(&upper) == 1 << 20);
+
+	llfree_validate(&upper);
+
+	check(llfree_is_ok(llfree_get_at(&upper, 0, 0, llflags(0))));
+	check(llfree_is_ok(llfree_put(&upper, 0, 0, llflags(0))));
+	check(llfree_is_ok(llfree_get_at(&upper, 0, 1, llflags(0))));
+	check(!llfree_is_ok(llfree_get_at(&upper, 0, 1, llflags(0))));
+	check(llfree_is_ok(llfree_put(&upper, 0, 1, llflags(0))));
+
+	llfree_validate(&upper);
+
+	// Test stealing and downgrading
+	llflags_t f_mov = llflags(0);
+	f_mov.movable = true;
+	llfree_result_t res = llfree_get(&upper, 0, f_mov);
+	check(llfree_is_ok(res));
+	llfree_info("get %" PRIu64, res.frame);
+
+	check(llfree_is_ok(
+		llfree_get_at(&upper, 0, res.frame + 1, f_mov)));
+
+	check(llfree_is_ok(
+		llfree_get_at(&upper, 0, res.frame + 2, llflags(0))));
+
+	llfree_validate(&upper);
+
+	check(llfree_is_ok(llfree_put(&upper, 0, res.frame, llflags(0))));
+	check(llfree_is_ok(llfree_put(&upper, 0, res.frame + 1, llflags(0))));
+	check(llfree_is_ok(llfree_put(&upper, 0, res.frame + 2, llflags(0))));
+
+	llfree_validate(&upper);
+
+	return success;
+}

@@ -485,6 +485,85 @@ llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags)
 	return res;
 }
 
+llfree_result_t llfree_get_at(llfree_t *self, size_t core, uint64_t frame,
+			      llflags_t flags)
+{
+	llfree_result_t res;
+
+	assert(self != NULL);
+	assert(flags.order <= LLFREE_MAX_ORDER);
+	assert(frame < self->lower.frames);
+
+	core = core % self->cores;
+	local_t *local = get_local(self, core);
+	uint8_t kind = tree_kind(self, flags);
+
+	size_t tree_idx = tree_from_frame(frame);
+
+	reserved_t old_r;
+	for (size_t r = 0; r < RETRIES; r++) {
+		treeF_t num_frames = 1 << flags.order;
+		// Decrement reserved
+		if (atom_update(&local->reserved[kind], old_r,
+				ll_reserved_dec_check, tree_idx, num_frames))
+			goto search_found;
+
+		// Decrement global
+		tree_t old_t;
+		if (atom_update(&self->trees[tree_idx], old_t, tree_dec_force,
+				num_frames, kind))
+			goto search_found;
+
+		// Decrement other reserved
+		llfree_info("dec other");
+		for (size_t o_core = 0; o_core < self->cores; o_core++) {
+			local_t *o_local = get_local(self, o_core);
+			for (uint8_t o_kind = 0; o_kind < TREE_KINDS;
+			     o_kind++) {
+				reserved_t old;
+				if (o_kind <= kind) {
+					if (atom_update(
+						    &o_local->reserved[o_kind],
+						    old, ll_reserved_dec_check,
+						    tree_idx, num_frames))
+						goto search_found;
+					continue;
+				}
+
+				// Steal and downgrade tree kind...
+				llfree_info("steal other");
+				if (atom_update(&o_local->reserved[o_kind], old,
+						ll_steal_check, tree_idx,
+						num_frames)) {
+					assert(old.present &&
+					       old.free >= num_frames);
+
+					tree_t tree;
+					atom_update(&self->trees[tree_idx],
+						    tree, tree_unreserve,
+						    old.free - num_frames,
+						    kind);
+					goto search_found;
+				}
+				return llfree_err(LLFREE_ERR_MEMORY);
+			}
+		}
+	}
+	// Search failed...
+	llfree_warn("get_at dec failed %" PRIu64, frame);
+	return llfree_err(LLFREE_ERR_MEMORY);
+
+search_found:
+	res = lower_get_at(&self->lower, frame, flags.order);
+	if (!llfree_is_ok(res)) {
+		// Increment global to prevent race conditions
+		tree_t tree;
+		atom_update(&self->trees[tree_idx], tree, tree_inc,
+			    (treeF_t)(1 << flags.order));
+	}
+	return res;
+}
+
 llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 			   llflags_t flags)
 {

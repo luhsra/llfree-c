@@ -213,11 +213,57 @@ llfree_result_t lower_get(lower_t *self, const uint64_t start_frame,
 	assert(order <= LLFREE_MAX_ORDER);
 	assert(start_frame < self->frames);
 
+#ifdef LLFREE_PREFERE_INSTALLED
 	llfree_result_t res = lower_get_inner(self, start_frame, order, false);
 	if (res.error != LLFREE_ERR_MEMORY)
 		return res;
+#endif
 
 	return lower_get_inner(self, start_frame, order, true);
+}
+
+llfree_result_t lower_get_at(lower_t *self, uint64_t frame, size_t order)
+{
+	assert(order <= LLFREE_MAX_ORDER);
+	if (frame + (1 << order) > self->frames || frame % (1 << order) != 0) {
+		llfree_warn("invalid frame %" PRIu64 "\n", frame);
+		return llfree_err(LLFREE_ERR_ADDRESS);
+	}
+
+	size_t child_idx = child_from_frame(frame);
+	_Atomic(child_t) *child = get_child(self, child_idx);
+
+	if (order == LLFREE_MAX_ORDER) {
+		child_pair_t old;
+		_Atomic(child_pair_t) *pair = (_Atomic(child_pair_t) *)child;
+		if (atom_update(pair, old, child_set_max, true)) {
+			return llfree_ok(frame, old.first.reclaimed);
+		}
+		return llfree_err(LLFREE_ERR_MEMORY);
+	}
+	if (order == LLFREE_HUGE_ORDER) {
+		child_t old;
+		if (atom_update(child, old, child_set_huge, true)) {
+			return llfree_ok(frame, old.reclaimed);
+		}
+		return llfree_err(LLFREE_ERR_MEMORY);
+	}
+
+	child_t old;
+	if (atom_update(child, old, child_dec, order, true)) {
+		size_t field_index = frame % CHILD_N;
+		bitfield_t *field = &self->fields[child_idx];
+		llfree_result_t ret =
+			field_toggle(field, field_index, order, false);
+		if (llfree_is_ok(ret))
+			return llfree_ok(frame, old.reclaimed);
+
+		if (!atom_update(child, old, child_inc, order)) {
+			llfree_warn("Undo failed!");
+			assert(false);
+		}
+	}
+	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
 static llfree_result_t split_huge(_Atomic(child_t) *child, bitfield_t *field)
@@ -294,7 +340,7 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order)
 		return ret;
 
 	if (!atom_update(child, old, child_inc, order)) {
-		llfree_warn("Undo failed!");
+		llfree_warn("Inc Failed!");
 		assert(false);
 	}
 

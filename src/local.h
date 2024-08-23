@@ -40,10 +40,12 @@ typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) local {
 void ll_local_init(local_t *self);
 /// Decrement the number of free frames
 bool ll_reserved_dec(reserved_t *self, treeF_t free);
+bool ll_reserved_dec_check(reserved_t *self, uint64_t tree_idx, treeF_t free);
 /// Increment the number of free frames
 bool ll_reserved_inc(reserved_t *self, uint64_t tree_idx, treeF_t free);
 /// Try stealing a reserved tree
 bool ll_steal(reserved_t *self, treeF_t min);
+bool ll_steal_check(reserved_t *self, uint64_t tree_idx, treeF_t min);
 
 /// Swap the reserved tree
 bool ll_reserved_swap(reserved_t *self, reserved_t new);

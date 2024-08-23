@@ -124,9 +124,12 @@ llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
 /// Returns the metadata
 llfree_meta_t llfree_metadata(llfree_t *self);
 
-/// Allocates a frame and returns its number, or a negative error code
+/// Allocates a frame
 llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags);
-/// Frees a frame, returning 0 on success or a negative error code
+/// Try allocating this frame
+llfree_result_t llfree_get_at(llfree_t *self, size_t core, uint64_t frame,
+			      llflags_t flags);
+/// Frees this frame
 llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 			   llflags_t flags);
 

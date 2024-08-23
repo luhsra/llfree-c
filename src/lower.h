@@ -28,6 +28,8 @@ uint8_t *lower_metadata(lower_t *self);
 
 /// Allocates the given frame, returning its number or an error
 llfree_result_t lower_get(lower_t *self, uint64_t start_frame, size_t order);
+/// Try allocating the given frame
+llfree_result_t lower_get_at(lower_t *self, uint64_t frame, size_t order);
 
 /// Deallocates the given frame
 llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order);
