@@ -38,6 +38,8 @@
 
 /// Enable reserve on free heuristic
 #define LLFREE_ENABLE_FREE_RESERVE false
+/// Allocate first from already install huge frames, before falling back to evicted ones
+#define LLFREE_PREFER_INSTALLED false
 
 /// Minimal alignment the llfree requires for its memory range
 #define LLFREE_ALIGN (1u << LLFREE_MAX_ORDER << LLFREE_FRAME_BITS)

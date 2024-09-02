@@ -213,11 +213,12 @@ llfree_result_t lower_get(lower_t *self, const uint64_t start_frame,
 	assert(order <= LLFREE_MAX_ORDER);
 	assert(start_frame < self->frames);
 
-#ifdef LLFREE_PREFERE_INSTALLED
-	llfree_result_t res = lower_get_inner(self, start_frame, order, false);
-	if (res.error != LLFREE_ERR_MEMORY)
-		return res;
-#endif
+	if (LLFREE_PREFER_INSTALLED) {
+		llfree_result_t res =
+			lower_get_inner(self, start_frame, order, false);
+		if (res.error != LLFREE_ERR_MEMORY)
+			return res;
+	}
 
 	return lower_get_inner(self, start_frame, order, true);
 }

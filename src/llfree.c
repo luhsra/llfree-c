@@ -259,7 +259,7 @@ static llfree_result_t reserve_and_get(llfree_t *self, size_t core,
 	uint64_t start = old.present ? tree_from_row(old.start_row) :
 				       (self->trees_len / self->cores * core);
 	assert(start < self->trees_len);
-	// start = align_down(start, cl_trees);
+	start = align_down(start, cl_trees);
 
 	size_t near = (self->trees_len / self->cores) / 4;
 	near = LL_MIN(LL_MAX(near, cl_trees / 4), cl_trees * 2);
