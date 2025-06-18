@@ -208,7 +208,7 @@ declare_test(llfree_put)
 	llfree_result_t ret;
 
 	lldrop llfree_t upper =
-		llfree_new(2, LLFREE_TREE_SIZE * 8ull, LLFREE_INIT_FREE);
+		llfree_new(2, LLFREE_TREE_SIZE * 12ull, LLFREE_INIT_FREE);
 	llfree_validate(&upper);
 	uint64_t reserved[LLFREE_TREE_SIZE + 5];
 
@@ -265,7 +265,7 @@ declare_test(llfree_alloc_all)
 	llfree_result_t ret;
 
 	const int CORES = 8;
-	const uint64_t LENGTH = ((8ul << 30) / LLFREE_FRAME_SIZE); // 8GiB
+	const uint64_t LENGTH = 16 * LLFREE_TREE_SIZE;
 	lldrop llfree_t upper = llfree_new(CORES, LENGTH, LLFREE_INIT_FREE);
 	llfree_validate(&upper);
 
@@ -299,7 +299,7 @@ declare_test(llfree_alloc_all_kinds)
 	llfree_result_t ret;
 
 	const int CORES = 1;
-	const uint64_t LENGTH = ((8ul << 30) / LLFREE_FRAME_SIZE); // 8GiB
+	const uint64_t LENGTH = 16 * LLFREE_TREE_SIZE;
 	llfree_t upper = llfree_new(CORES, LENGTH, LLFREE_INIT_FREE);
 	llfree_validate(&upper);
 
@@ -689,8 +689,7 @@ declare_test(llfree_alloc_at)
 	check(llfree_is_ok(res));
 	llfree_info("get %" PRIu64, res.frame);
 
-	check(llfree_is_ok(
-		llfree_get_at(&upper, 0, res.frame + 1, f_mov)));
+	check(llfree_is_ok(llfree_get_at(&upper, 0, res.frame + 1, f_mov)));
 
 	check(llfree_is_ok(
 		llfree_get_at(&upper, 0, res.frame + 2, llflags(0))));

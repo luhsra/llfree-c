@@ -2,6 +2,7 @@
 
 #include "bitfield.h"
 #include "child.h"
+#include "llfree.h"
 
 typedef struct children {
 	_Alignas(LLFREE_CACHE_SIZE) _Atomic(child_t)
@@ -27,16 +28,15 @@ size_t lower_metadata_size(size_t frames);
 uint8_t *lower_metadata(lower_t *self);
 
 /// Allocates the given frame, returning its number or an error
-llfree_result_t lower_get(lower_t *self, uint64_t start_frame, size_t order);
+llfree_result_t lower_get(lower_t *self, uint64_t start_frame, llflags_t flags);
 /// Try allocating the given frame
-llfree_result_t lower_get_at(lower_t *self, uint64_t frame, size_t order);
+llfree_result_t lower_get_at(lower_t *self, uint64_t frame, llflags_t flags);
 
 /// Deallocates the given frame
-llfree_result_t lower_put(lower_t *self, uint64_t frame, size_t order);
+llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags);
 
 /// Checks if the frame is free
 bool lower_is_free(lower_t *self, uint64_t frame, size_t order);
-
 
 /// Returns the number of huge frames
 size_t lower_huge(lower_t *self);
@@ -44,6 +44,8 @@ size_t lower_huge(lower_t *self);
 size_t lower_free_frames(lower_t *self);
 /// Returns the number of free huge frames
 size_t lower_free_huge(lower_t *self);
+/// Returns the number of free zeroed huge frames
+size_t lower_zeroed_huge(lower_t *self);
 
 /// Returns the number of free pages in the huge page
 size_t lower_free_at_huge(lower_t *self, uint64_t frame);
@@ -51,9 +53,10 @@ size_t lower_free_at_huge(lower_t *self, uint64_t frame);
 size_t lower_free_at_tree(lower_t *self, uint64_t frame);
 
 /// Search for a free and not reclaimed huge page and mark it reclaimed (and optionally allocated)
-llfree_result_t lower_reclaim(lower_t *self, uint64_t start_frame, bool hard);
+llfree_result_t lower_reclaim(lower_t *self, uint64_t start_frame, bool hard,
+			      bool zeroed);
 /// Mark the reclaimed huge page as free, but keep it reclaimed
-llfree_result_t lower_return(lower_t *self, uint64_t frame);
+llfree_result_t lower_return(lower_t *self, uint64_t frame, bool install);
 /// Clear the reclaimed state of the given huge page
 llfree_result_t lower_install(lower_t *self, uint64_t frame);
 /// Return wether a frame is reclaimed

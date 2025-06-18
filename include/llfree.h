@@ -26,7 +26,11 @@
 typedef struct ll_warn_unused llfree_result {
 	/// Usually only valid if error == LLFREE_ERR_OK
 	uint64_t frame : 55;
+	/// If the frame was reclaimed, e.g. by ballooning
 	bool reclaimed : 1;
+	/// If the frame is already zeroed
+	bool zeroed : 1;
+	/// Error code, 0 if no error
 	uint8_t error : 8;
 } llfree_result_t;
 
@@ -34,16 +38,18 @@ typedef struct llfree llfree_t;
 
 /// Create a new result
 static inline llfree_result_t ll_unused llfree_ok(uint64_t frame,
-						  bool reclaimed)
+						  bool reclaimed, bool zeroed)
 {
 	return (llfree_result_t){ .frame = frame,
 				  .reclaimed = reclaimed,
+				  .zeroed = zeroed,
 				  .error = LLFREE_ERR_OK };
 }
 static inline llfree_result_t ll_unused llfree_err(uint8_t err)
 {
 	return (llfree_result_t){ .frame = 0,
 				  .reclaimed = false,
+				  .zeroed = false,
 				  .error = err };
 }
 
@@ -76,12 +82,14 @@ typedef struct llflags {
 	uint8_t order : 8;
 	/// Is this alloation movable: LLFree tries to separete movable and immovable allocations.
 	bool movable : 1;
+	/// If the frame should be zeroed.
+	bool zeroed : 1;
 	// ... Reserved for future use
 } llflags_t;
 
 static inline llflags_t ll_unused llflags(size_t order)
 {
-	return (llflags_t){ .order = (uint8_t)order, .movable = false };
+	return (llflags_t){ .order = (uint8_t)order, .movable = false, .zeroed = false };
 }
 
 /// Size of the required metadata
@@ -155,13 +163,15 @@ size_t llfree_free_at(llfree_t *self, uint64_t frame, size_t order);
 size_t llfree_free_frames(llfree_t *self);
 /// Returns number of currently free frames
 size_t llfree_free_huge(llfree_t *self);
+/// Returns number of currently free zeroed frames
+size_t llfree_zeroed_huge(llfree_t *self);
 
 // == Ballooning ==
 
 /// Search for a free and not reclaimed huge page and mark it reclaimed (and optionally allocated)
 llfree_result_t llfree_reclaim(llfree_t *self, size_t core, bool hard);
 /// Mark the reclaimed huge page as free, but keep it reclaimed
-llfree_result_t llfree_return(llfree_t *self, uint64_t frame);
+llfree_result_t llfree_return(llfree_t *self, uint64_t frame, bool install);
 /// Clear the reclaimed state of the given huge page
 llfree_result_t llfree_install(llfree_t *self, uint64_t frame);
 /// Return wether a frame is reclaimed

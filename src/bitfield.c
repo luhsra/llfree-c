@@ -26,7 +26,8 @@ void field_init(bitfield_t *self)
 /// Set the first aligned 2^`order` zero bits, returning the bit offset
 ///
 /// - See <https://graphics.stanford.edu/~seander/bithacks.html#ZeroInWord>
-bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos); // used in tests
+bool first_zeros_aligned(uint64_t *v, size_t order,
+			 size_t *pos); // used in tests
 bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos)
 {
 	// NOLINTBEGIN(readability-magic-numbers)
@@ -106,8 +107,9 @@ llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
 			if (atom_update(&field->rows[current_i], old,
 					first_zeros_aligned, order, &pos)) {
 				return llfree_ok(
-					(current_i * LLFREE_ATOMIC_SIZE + pos),
-					false);
+					((current_i * LLFREE_ATOMIC_SIZE) +
+					 pos),
+					false, false);
 			}
 		}
 		return llfree_err(LLFREE_ERR_MEMORY);
@@ -117,7 +119,7 @@ llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
 	for_offsetted(row / entries, FIELD_N / entries) {
 		bool failed = false;
 		for (size_t i = 0; i < entries; i++) {
-			size_t idx = current_i * entries + i;
+			size_t idx = (current_i * entries) + i;
 			uint64_t old = 0;
 			if (atom_cmp_exchange(&field->rows[idx], &old,
 					      UINT64_MAX)) {
@@ -126,7 +128,7 @@ llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
 
 			// Undo changes
 			for (size_t j = 0; j < i; j++) {
-				size_t idx = current_i * entries + j;
+				size_t idx = (current_i * entries) + j;
 				uint64_t old = UINT64_MAX;
 				if (!atom_cmp_exchange(&field->rows[idx], &old,
 						       0)) {
@@ -141,7 +143,7 @@ llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
 			// Success, we have updated all rows
 			return llfree_ok(current_i * entries *
 						 LLFREE_ATOMIC_SIZE,
-					 false);
+					 false, false);
 		}
 	}
 

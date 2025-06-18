@@ -4,25 +4,32 @@ void ll_local_init(local_t *self)
 {
 	assert(self != NULL);
 	self->last = (local_history_t){ 0, 0 };
-	self->reserved[TREE_MOVABLE] = (reserved_t){ 0, 0, false };
-	self->reserved[TREE_FIXED] = (reserved_t){ 0, 0, false };
-	self->reserved[TREE_HUGE] = (reserved_t){ 0, 0, false };
+	for (size_t i = 0; i < TREE_KINDS; ++i) {
+		self->reserved[i] = ll_reserved_new(false, 0, 0, 0);
+	}
 }
 
-bool ll_reserved_dec(reserved_t *self, treeF_t free)
+bool ll_reserved_dec(reserved_t *self, treeF_t free, bool zeroed)
 {
 	if (self->present && self->free >= free) {
 		self->free -= free;
+		if (zeroed && self->zeroed >= (free >> LLFREE_CHILD_ORDER)) {
+			self->zeroed -= free >> LLFREE_CHILD_ORDER;
+		}
 		return true;
 	}
 	return false;
 }
 
-bool ll_reserved_dec_check(reserved_t *self, uint64_t tree_idx, treeF_t free)
+bool ll_reserved_dec_check(reserved_t *self, uint64_t tree_idx, treeF_t free,
+			   bool zeroed)
 {
 	if (self->present && tree_from_row(self->start_row) == tree_idx &&
 	    self->free >= free) {
 		self->free -= free;
+		if (zeroed && self->zeroed >= (free >> LLFREE_CHILD_ORDER)) {
+			self->zeroed -= free >> LLFREE_CHILD_ORDER;
+		}
 		return true;
 	}
 	return false;
@@ -41,7 +48,7 @@ bool ll_reserved_inc(reserved_t *self, uint64_t tree_idx, treeF_t free)
 bool ll_steal(reserved_t *self, treeF_t min)
 {
 	if (self->present && self->free >= min) {
-		*self = (reserved_t){ 0, 0, false };
+		*self = ll_reserved_new(false, 0, 0, 0);
 		return true;
 	}
 	return false;
@@ -51,7 +58,7 @@ bool ll_steal_check(reserved_t *self, uint64_t tree_idx, treeF_t min)
 {
 	if (self->present && tree_from_row(self->start_row) == tree_idx &&
 	    self->free >= min) {
-		*self = (reserved_t){ 0, 0, false };
+		*self = ll_reserved_new(false, 0, 0, 0);
 		return true;
 	}
 	return false;
