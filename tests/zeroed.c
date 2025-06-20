@@ -125,13 +125,11 @@ declare_test(zeroed_all)
 	llflags_t flags = llflags(LLFREE_CHILD_ORDER);
 	flags.zeroed = true;
 
-	res = llfree_get(&upper, 0, flags);
-	check(llfree_is_ok(res));
-	check(!res.zeroed);
-
-	res = llfree_get(&upper, 0, flags);
-	check(llfree_is_ok(res));
-	check(!res.zeroed);
+	for (size_t i = 0; i < FRAMES / 2; i += LLFREE_CHILD_SIZE) {
+		llfree_result_t res = llfree_get(&upper, 0, flags);
+		check(llfree_is_ok(res));
+		check(!res.zeroed);
+	}
 
 	llfree_validate(&upper);
 

@@ -22,7 +22,7 @@ declare_test(child_counter_inc)
 	bool success = true;
 	bool ret = false;
 
-	child_t actual = child_new(0x200, true, false, false);
+	child_t actual = child_new(0x200, false, false, false);
 	ret = child_inc(&actual, 0);
 	check_m(!ret, "out of range");
 
@@ -71,7 +71,7 @@ declare_test(child_counter_dec)
 	check_equal("u", actual.free, expect.free);
 	check_equal("u", actual.huge, expect.huge);
 
-	actual = child_new(320, true, false, false);
+	actual = child_new(0, true, false, false);
 	ret = child_dec(&actual, 0, false);
 	check_m(!ret, "invalid state");
 

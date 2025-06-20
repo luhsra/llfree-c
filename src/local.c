@@ -281,9 +281,7 @@ local_result_t ll_local_set_start(local_t *self, size_t core,
 	r_kind_t kind = r_kind_change(previous_change);
 	bool success = atom_update(&entry->reserved[kind.id], old,
 				   ll_reserved_set_start, start_row, false);
-	return local_result(success, old.present, old.start_row,
-			    tree_new(false, r_kind_to_tree(kind), old.free,
-				     old.zeroed));
+	return local_result_reserved(success, old, kind);
 }
 
 local_result_t ll_local_steal(local_t *self, size_t core, tree_change_t change,

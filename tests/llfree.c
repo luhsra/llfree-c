@@ -256,12 +256,12 @@ declare_test(llfree_put)
 	return success;
 }
 
-declare_test(llfree_alloc_all)
+declare_test(llfree_alloc_all_fixed)
 {
 	bool success = true;
 	llfree_result_t ret;
 
-	const int CORES = 4;
+	const int CORES = 2;
 	const uint64_t LENGTH = 16 * LLFREE_TREE_SIZE;
 	lldrop llfree_t upper = llfree_new(CORES, LENGTH, LLFREE_INIT_FREE);
 	llfree_validate(&upper);

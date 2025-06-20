@@ -23,6 +23,8 @@ static inline child_t ll_unused child_new(uint16_t free, bool huge,
 					  bool reclaimed, bool zeroed)
 {
 	assert(free <= LLFREE_CHILD_SIZE);
+	assert(!huge || (free == 0 && !zeroed));
+	assert(!zeroed || free == LLFREE_CHILD_SIZE);
 	return (child_t){ .free = free,
 			  .huge = huge,
 			  .reclaimed = reclaimed,

@@ -90,7 +90,6 @@ static inline tree_change_t tree_change(tree_kind_t kind, treeF_t frames,
 		assert(frames % LLFREE_CHILD_SIZE == 0);
 		return tree_change_huge(frames >> LLFREE_CHILD_ORDER, zeroed);
 	}
-	assert(zeroed == 0);
 	return tree_change_small(frames, kind.id == TREE_MOVABLE.id);
 }
 
@@ -124,8 +123,9 @@ static inline ll_unused tree_t tree_new(bool reserved, tree_kind_t kind,
 {
 	assert(free <= LLFREE_TREE_SIZE);
 	assert(zeroed <= LLFREE_TREE_CHILDREN);
-	assert(kind.id == TREE_HUGE.id || zeroed == 0);
 	assert(kind.id != TREE_HUGE.id || (free % LLFREE_CHILD_SIZE) == 0);
+	if (kind.id != TREE_HUGE.id)
+		zeroed = 0;
 	return (tree_t){ .reserved = reserved,
 			 .kind = kind.id,
 			 .free = free,
