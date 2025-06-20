@@ -22,7 +22,7 @@ static llfree_t llfree_new(size_t cores, size_t frames, uint8_t init)
 static void llfree_drop(llfree_t *self)
 {
 	llfree_meta_size_t ms =
-		llfree_metadata_size(self->cores, llfree_frames(self));
+		llfree_metadata_size(llfree_cores(self), llfree_frames(self));
 	llfree_meta_t m = llfree_metadata(self);
 	llfree_ext_free(LLFREE_CACHE_SIZE, ms.local, m.local);
 	llfree_ext_free(LLFREE_CACHE_SIZE, ms.trees, m.trees);
@@ -50,7 +50,7 @@ declare_test(zeroed_basic)
 	llfree_print(&upper);
 
 	// zero some memory...
-	res = llfree_reclaim(&upper, 0, true);
+	res = llfree_reclaim(&upper, 0, true, true);
 	check(llfree_is_ok(res));
 	check(!res.zeroed);
 	// zeroing operation...
@@ -75,9 +75,11 @@ declare_test(zeroed_all)
 	check(llfree_frames(&upper) == FRAMES);
 	check(llfree_free_frames(&upper) == FRAMES);
 
+	llfree_info("Zeroing all pages");
+
 	// zero everything
 	for (size_t i = 0; i < FRAMES; i += LLFREE_CHILD_SIZE) {
-		llfree_result_t res = llfree_reclaim(&upper, i, true);
+		llfree_result_t res = llfree_reclaim(&upper, i, true, true);
 		check(llfree_is_ok(res));
 		if (res.zeroed) llfree_print(&upper);
 		check_m(!res.zeroed, "frame %zu should not be zeroed",
@@ -86,17 +88,14 @@ declare_test(zeroed_all)
 		res = llfree_return(&upper, res.frame, true);
 		check(llfree_is_ok(res));
 	}
-	llfree_validate(&upper);
 
 	llfree_info("All pages zeroed");
+	llfree_validate(&upper);
 	check(llfree_zeroed_huge(&upper) == FRAMES / LLFREE_CHILD_SIZE);
 
 	// now there should only be zeroed pages
-	llfree_result_t res = llfree_reclaim(&upper, 0, true);
-	check(llfree_is_ok(res));
-	check(res.zeroed);
-	res = llfree_return(&upper, res.frame, true);
-	check(llfree_is_ok(res));
+	llfree_result_t res = llfree_reclaim(&upper, 0, true, true);
+	check(!llfree_is_ok(res) && res.error == LLFREE_ERR_MEMORY);
 
 	// now we should be able to all pages as zeroed
 	for (size_t i = 0; i < FRAMES; i += LLFREE_CHILD_SIZE) {
@@ -120,9 +119,16 @@ declare_test(zeroed_all)
 
 	check(llfree_zeroed_huge(&upper) == 0);
 
+	llfree_info("No zeroed pages left");
+
 	// allocation should now return a non-zeroed page
 	llflags_t flags = llflags(LLFREE_CHILD_ORDER);
 	flags.zeroed = true;
+
+	res = llfree_get(&upper, 0, flags);
+	check(llfree_is_ok(res));
+	check(!res.zeroed);
+
 	res = llfree_get(&upper, 0, flags);
 	check(llfree_is_ok(res));
 	check(!res.zeroed);

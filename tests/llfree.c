@@ -28,7 +28,7 @@ static llfree_t llfree_new(size_t cores, size_t frames, uint8_t init)
 static void llfree_drop(llfree_t *self)
 {
 	llfree_meta_size_t ms =
-		llfree_metadata_size(self->cores, llfree_frames(self));
+		llfree_metadata_size(llfree_cores(self), llfree_frames(self));
 	llfree_meta_t m = llfree_metadata(self);
 	llfree_ext_free(LLFREE_CACHE_SIZE, ms.local, m.local);
 	llfree_ext_free(LLFREE_CACHE_SIZE, ms.trees, m.trees);
@@ -131,9 +131,9 @@ declare_test(llfree_general_function)
 {
 	bool success = true;
 	llfree_result_t ret;
-	const size_t FRAMES = 4 << (30 - 12);
+	const size_t FRAMES = 16 * LLFREE_TREE_SIZE;
 
-	lldrop llfree_t upper = llfree_new(4, FRAMES, LLFREE_INIT_FREE);
+	lldrop llfree_t upper = llfree_new(2, FRAMES, LLFREE_INIT_FREE);
 	llfree_validate(&upper);
 	check_equal("zu", upper.trees_len, div_ceil(FRAMES, LLFREE_TREE_SIZE));
 	// check(upper.cores == 4);
@@ -144,11 +144,8 @@ declare_test(llfree_general_function)
 	// check allignment
 	check_m((uint64_t)upper.trees % LLFREE_CACHE_SIZE == 0,
 		"Alignment of trees");
-	for (unsigned i = 0; i < upper.cores; ++i) {
-		check_equal_m("zu",
-			      (uint64_t)&upper.local[i] % LLFREE_CACHE_SIZE,
-			      0ul, "Alignment of local");
-	}
+	check_equal_m(PRIu64, (uint64_t)upper.local % LLFREE_CACHE_SIZE,
+		      (uint64_t)0ul, "Alignment of local");
 
 	llfree_info("Before get");
 
@@ -167,10 +164,10 @@ declare_test(llfree_general_function)
 	check_m(llfree_free_frames(&upper) == FRAMES,
 		"right number of free frames");
 
-	if (LLFREE_ENABLE_FREE_RESERVE) {
-		local_history_t last = atom_load(&upper.local[0].last);
-		check_equal("zu", last.idx, tree_from_frame(frame.frame));
-	}
+	// if (LLFREE_ENABLE_FREE_RESERVE) {
+	// 	local_history_t last = atom_load(&upper.local[0].last);
+	// 	check_equal("zu", last.idx, tree_from_frame(frame.frame));
+	// }
 
 	// reserve all frames in first tree
 	check(llfree_free_frames(&upper) >= LLFREE_TREE_SIZE);
@@ -187,15 +184,15 @@ declare_test(llfree_general_function)
 	check_m(tree_from_frame(frame.frame) != tree_from_frame(ret.frame),
 		"second tree must be allocated");
 
-	uint64_t free_frames = llfree_free_frames(&upper);
+	size_t free_frames = llfree_free_frames(&upper);
 	// reserve and free a HugeFrame
 	frame = llfree_get(&upper, 0, llflags(LLFREE_HUGE_ORDER));
 	check(llfree_is_ok(frame));
-	check_equal("zu", llfree_free_frames(&upper),
+	check_equal(PRIuS, llfree_free_frames(&upper),
 		    free_frames - LLFREE_CHILD_SIZE);
 	check(llfree_is_ok(llfree_put(&upper, 0, frame.frame,
 				      llflags(LLFREE_HUGE_ORDER))));
-	check_equal("zu", llfree_free_frames(&upper), free_frames);
+	check_equal(PRIuS, llfree_free_frames(&upper), free_frames);
 
 	llfree_validate(&upper);
 
@@ -247,11 +244,11 @@ declare_test(llfree_put)
 	}
 
 	// core 2 must have now this first tree reserved
-	if (LLFREE_ENABLE_FREE_RESERVE) {
-		reserved_t res = upper.local[2].reserved[0];
-		check_equal("zu", tree_from_row(res.start_row),
-			    (uint64_t)tree_from_frame(reserved[0]));
-	}
+	// if (LLFREE_ENABLE_FREE_RESERVE) {
+	// 	reserved_t res = upper.local[2].reserved[0];
+	// 	check_equal("zu", tree_from_row(res.start_row),
+	// 		    (uint64_t)tree_from_frame(reserved[0]));
+	// }
 	if (!success)
 		llfree_print(&upper);
 	llfree_validate(&upper);
@@ -264,7 +261,7 @@ declare_test(llfree_alloc_all)
 	bool success = true;
 	llfree_result_t ret;
 
-	const int CORES = 8;
+	const int CORES = 4;
 	const uint64_t LENGTH = 16 * LLFREE_TREE_SIZE;
 	lldrop llfree_t upper = llfree_new(CORES, LENGTH, LLFREE_INIT_FREE);
 	llfree_validate(&upper);
@@ -689,8 +686,10 @@ declare_test(llfree_alloc_at)
 	check(llfree_is_ok(res));
 	llfree_info("get %" PRIu64, res.frame);
 
+	llfree_info("Allocate first");
 	check(llfree_is_ok(llfree_get_at(&upper, 0, res.frame + 1, f_mov)));
 
+	llfree_info("Allocate lower -> steal + demote");
 	check(llfree_is_ok(
 		llfree_get_at(&upper, 0, res.frame + 2, llflags(0))));
 

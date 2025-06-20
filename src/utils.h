@@ -3,6 +3,20 @@
 #include "llfree.h"
 #include "llfree_platform.h"
 
+/// Optional size_t type
+typedef struct optional_size_t {
+	bool present : 1;
+	size_t value : (sizeof(size_t) * 8) - 1;
+} optional_size_t;
+static inline optional_size_t optional_size(size_t value)
+{
+	return (optional_size_t){ .present = true, .value = value };
+}
+static inline optional_size_t optional_size_none(void)
+{
+	return (optional_size_t){ .present = false, .value = 0 };
+}
+
 /// Minimal size the LLFree can manage
 #define MIN_PAGES (1ul << LLFREE_MAX_ORDER)
 /// 64 Bit Addresses - 12 Bit needed for offset inside the Page
@@ -89,6 +103,13 @@ static inline ll_unused size_t align_up(size_t val, size_t align)
 {
 	return align_down(val + align - 1, align);
 }
+
+static inline ll_unused size_t log2(uint64_t val)
+{
+	assert(val > 0);
+	return (size_t)(63 - leading_zeros(val));
+}
+
 /// Pause CPU for polling
 static inline ll_unused void spin_wait(void)
 {
@@ -100,4 +121,12 @@ static inline ll_unused void spin_wait(void)
 #else
 #error Unknown architecture
 #endif
+}
+
+static inline ll_unused char *INDENT(size_t indent)
+{
+	size_t const max_indent = 32;
+	char *spaces = "                                ";
+	assert(indent < max_indent / 4);
+	return &spaces[max_indent - (indent * 4)];
 }

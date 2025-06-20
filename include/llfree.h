@@ -1,5 +1,6 @@
 #pragma once
 
+#include "linux/types.h"
 #include "llfree_types.h"
 
 /// Unused functions and variables
@@ -169,7 +170,7 @@ size_t llfree_zeroed_huge(llfree_t *self);
 // == Ballooning ==
 
 /// Search for a free and not reclaimed huge page and mark it reclaimed (and optionally allocated)
-llfree_result_t llfree_reclaim(llfree_t *self, size_t core, bool hard);
+llfree_result_t llfree_reclaim(llfree_t *self, size_t core, bool hard, bool require_non_zeroed);
 /// Mark the reclaimed huge page as free, but keep it reclaimed
 llfree_result_t llfree_return(llfree_t *self, uint64_t frame, bool install);
 /// Clear the reclaimed state of the given huge page

@@ -1,7 +1,7 @@
 #include "check.h"
 #include "tree.h"
 
-#define equal_trees(actual, expect)            \
+#define equal_trees(actual, expect)                 \
 	check_equal("u", actual.free, expect.free); \
 	check_equal("u", actual.reserved, expect.reserved)
 
@@ -20,19 +20,19 @@ declare_test(tree_init)
 	treeF_t free = 498;
 	bool reserved = false;
 
-	tree_t actual = tree_new(free, reserved, TREE_FIXED, 0);
+	tree_t actual = tree_new(reserved, TREE_FIXED, free, 0);
 	check_equal("u", actual.free, free);
 	check_equal("u", actual.reserved, reserved);
 
 	free = LLFREE_TREE_SIZE; // maximum value
 	reserved = false;
-	actual = tree_new(free, reserved, TREE_FIXED, 0);
+	actual = tree_new(reserved, TREE_FIXED, free, 0);
 	check_equal("u", actual.free, free);
 	check_equal("u", actual.reserved, reserved);
 
 	free = 0; // minimum value
 	reserved = true; // check if reserved is set
-	actual = tree_new(free, reserved, TREE_FIXED, 0);
+	actual = tree_new(reserved, TREE_FIXED, free, 0);
 	check_equal("u", actual.free, free);
 	check_equal("u", actual.reserved, reserved);
 
@@ -44,31 +44,32 @@ declare_test(tree_reserve)
 	int success = true;
 	bool ret = false;
 
-	tree_t actual = tree_new(764, false, TREE_FIXED, 0);
-	tree_t expect = tree_new(0, true, TREE_FIXED, 0);
+	tree_t actual = tree_new(false, TREE_FIXED, 764, 0);
+	tree_t expect = tree_new(true, TREE_FIXED, 0, 0);
 
-	ret = tree_reserve(&actual, 0, (1 << LLFREE_TREE_ORDER), TREE_FIXED);
+	tree_change_t change = tree_change_small(0, false);
+	ret = tree_reserve(&actual, change, (1 << LLFREE_TREE_ORDER));
 	check(ret);
 	equal_trees(actual, expect);
 
-	// chek min counter value
-	actual = tree_new(0, false, TREE_FIXED, 0);
-	expect = tree_new(0, true, TREE_FIXED, 0);
-	ret = tree_reserve(&actual, 0, (1 << LLFREE_TREE_ORDER), TREE_FIXED);
+	// check min counter value
+	actual = tree_new(false, TREE_FIXED, 0, 0);
+	expect = tree_new(true, TREE_FIXED, 0, 0);
+	ret = tree_reserve(&actual, change, (1 << LLFREE_TREE_ORDER));
 	check(ret);
 	equal_trees(actual, expect);
 
 	// if already reserved
-	actual = tree_new(456, true, TREE_FIXED, 0);
+	actual = tree_new(true, TREE_FIXED, 456, 0);
 	expect = actual; // no change expected
-	ret = tree_reserve(&actual, 0, (1 << LLFREE_TREE_ORDER), TREE_FIXED);
+	ret = tree_reserve(&actual, change, (1 << LLFREE_TREE_ORDER));
 	check_m(!ret, "already reserved");
 	equal_trees(actual, expect);
 
 	// max counter value
-	actual = tree_new(LLFREE_TREE_SIZE, false, TREE_FIXED, 0);
-	expect = tree_new(0, true, TREE_FIXED, 0);
-	ret = tree_reserve(&actual, 0, (1 << LLFREE_TREE_ORDER), TREE_FIXED);
+	actual = tree_new(false, TREE_FIXED, LLFREE_TREE_SIZE, 0);
+	expect = tree_new(true, TREE_FIXED, 0, 0);
+	ret = tree_reserve(&actual, change, (1 << LLFREE_TREE_ORDER));
 	check(ret);
 	equal_trees(actual, expect);
 
@@ -87,17 +88,17 @@ declare_test(tree_unreserve)
 
 	free = 0;
 	frees = 987;
-	actual = tree_new(free, true, TREE_FIXED, 0);
-	expect = tree_new(free + frees, false, TREE_FIXED, 0);
-	ret = tree_unreserve(&actual, frees, TREE_FIXED, 0);
+	actual = tree_new(true, TREE_FIXED, free, 0);
+	expect = tree_new(false, TREE_FIXED, free + frees, 0);
+	ret = tree_unreserve(&actual, tree_change_small(frees, false));
 	check(ret);
 	equal_trees(actual, expect);
 
 	free = 453;
 	frees = 987;
-	actual = tree_new(free, true, TREE_FIXED, 0);
-	expect = tree_new(free + frees, false, TREE_FIXED, 0);
-	ret = tree_unreserve(&actual, frees, TREE_FIXED, 0);
+	actual = tree_new(true, TREE_FIXED, free, 0);
+	expect = tree_new(false, TREE_FIXED, free + frees, 0);
+	ret = tree_unreserve(&actual, tree_change_small(frees, false));
 	check(ret);
 	equal_trees(actual, expect);
 
@@ -116,43 +117,42 @@ declare_test(tree_inc)
 
 	order = 0;
 	free = 0;
-	actual = tree_new(free, false, TREE_FIXED, 0);
-	expect = tree_new(free + (treeF_t)(1 << order), false, TREE_FIXED, 0);
-	ret = tree_inc(&actual, (treeF_t)(1 << order), false);
+	actual = tree_new(false, TREE_FIXED, free, 0);
+	expect = tree_new(false, TREE_FIXED, free + (treeF_t)(1 << order), 0);
+	ret = tree_put(&actual, tree_change_small((treeF_t)(1 << order), false));
 	check(ret);
 	equal_trees(actual, expect);
 
 	order = 0;
-	free = LLFREE_TREE_SIZE -
-	       (treeF_t)(1 << order); // max free for success
-	actual = tree_new(free, false, TREE_FIXED, 0);
-	expect = tree_new(free + (treeF_t)(1 << order), false, TREE_FIXED, 0);
-	ret = tree_inc(&actual, (treeF_t)(1 << order), false);
+	free = LLFREE_TREE_SIZE - (treeF_t)(1 << order); // max free for success
+	actual = tree_new(false, TREE_FIXED, free, 0);
+	expect = tree_new(false, TREE_FIXED, free + (treeF_t)(1 << order), 0);
+	ret = tree_put(&actual, tree_change_small((treeF_t)(1 << order), false));
 	check(ret);
 	equal_trees(actual, expect);
 
 	order = 0;
 	free = 3456;
 	// should be no difference if reserved is true
-	actual = tree_new(free, true, TREE_FIXED, 0);
-	expect = tree_new(free + (treeF_t)(1 << order), true, TREE_FIXED, 0);
-	ret = tree_inc(&actual, (treeF_t)(1 << order), false);
+	actual = tree_new(true, TREE_FIXED, free, 0);
+	expect = tree_new(true, TREE_FIXED, free + (treeF_t)(1 << order), 0);
+	ret = tree_put(&actual, tree_change_small((treeF_t)(1 << order), false));
 	check(ret);
 	equal_trees(actual, expect);
 
 	order = LLFREE_HUGE_ORDER;
 	free = 3456;
-	actual = tree_new(free, true, TREE_FIXED, 0);
-	expect = tree_new(free + (treeF_t)(1 << order), true, TREE_FIXED, 0);
-	ret = tree_inc(&actual, (treeF_t)(1 << order), false);
+	actual = tree_new(true, TREE_FIXED, free, 0);
+	expect = tree_new(true, TREE_FIXED, free + (treeF_t)(1 << order), 0);
+	ret = tree_put(&actual, tree_change_small((treeF_t)(1 << order), false));
 	check(ret);
 	equal_trees(actual, expect);
 
 	order = LLFREE_HUGE_ORDER;
 	free = LLFREE_TREE_SIZE - (1 << 9); // max free
-	actual = tree_new(free, true, TREE_FIXED, 0);
-	expect = tree_new(free + (treeF_t)(1 << order), true, TREE_FIXED, 0);
-	ret = tree_inc(&actual, (treeF_t)(1 << order), false);
+	actual = tree_new(true, TREE_HUGE, free, 0);
+	expect = tree_new(true, TREE_HUGE, free + (treeF_t)(1 << order), 0);
+	ret = tree_put(&actual, tree_change_huge(1, false));
 	check(ret);
 	equal_trees(actual, expect);
 

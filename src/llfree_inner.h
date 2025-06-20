@@ -12,8 +12,6 @@ typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) llfree {
 	lower_t lower;
 	/// Cpu-local data
 	local_t *local;
-	/// Length of local
-	size_t cores;
 	/// Array of tree entries
 	_Atomic(tree_t) *trees;
 	size_t trees_len;

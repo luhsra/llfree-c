@@ -414,7 +414,7 @@ size_t lower_zeroed_huge(lower_t *self) {
 	size_t count = 0;
 	for (size_t i = 0; i < child_count(self); ++i) {
 		child_t child = atom_load(get_child(self, i));
-		if (child.zeroed && child.free == CHILD_N)
+		if (child.free == CHILD_N && child.zeroed)
 			++count;
 	}
 	return count;

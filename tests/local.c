@@ -14,21 +14,21 @@ declare_test(local_last_free_inc)
 {
 	bool success = true;
 
-	local_t local;
-	ll_local_init(&local);
+	local_t *local = llfree_ext_alloc(LLFREE_CACHE_SIZE, ll_local_size(1));
+	ll_local_init(local, 1);
 
 	for (size_t i = 0; i < LAST_FREES; i++) {
-		check(!ll_local_free_inc(&local, 0));
+		check(!ll_local_free_inc(local, 0, 0));
 	}
-	check(ll_local_free_inc(&local, 0));
-	check(ll_local_free_inc(&local, 0));
+	check(ll_local_free_inc(local, 0, 0));
+	check(ll_local_free_inc(local, 0, 0));
 
-	check(!ll_local_free_inc(&local, 1));
-	check(!ll_local_free_inc(&local, 0));
+	check(!ll_local_free_inc(local, 0, 1));
+	check(!ll_local_free_inc(local, 0, 0));
 
 	for (size_t i = 0; i < LAST_FREES; i++) {
-		check(!ll_local_free_inc(&local, 1));
+		check(!ll_local_free_inc(local, 0, 1));
 	}
-	check(ll_local_free_inc(&local, 1));
+	check(ll_local_free_inc(local, 0, 1));
 	return success;
 }
