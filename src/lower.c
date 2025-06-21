@@ -325,14 +325,14 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags)
 	if (order == LLFREE_MAX_ORDER) {
 		child_pair_t old;
 		if (atom_update((_Atomic(child_pair_t) *)child, old,
-				child_clear_max))
+				child_clear_max, flags.zeroed))
 			return llfree_err(LLFREE_ERR_OK);
 
 		return llfree_err(LLFREE_ERR_MEMORY);
 	}
 	if (order == LLFREE_HUGE_ORDER) {
 		child_t old;
-		if (atom_update(child, old, child_clear_huge))
+		if (atom_update(child, old, child_clear_huge, flags.zeroed))
 			return llfree_err(LLFREE_ERR_OK);
 
 		return llfree_err(LLFREE_ERR_ADDRESS);

@@ -34,12 +34,12 @@ bool child_set_huge(child_t *self, bool allow_reclaimed, bool zeroed)
 	return false;
 }
 
-bool child_clear_huge(child_t *self)
+bool child_clear_huge(child_t *self, bool zeroed)
 {
 	if (self->huge) {
 		assert(self->free == 0);
 		*self = child_new(LLFREE_CHILD_SIZE, false, self->reclaimed,
-				  false);
+				  zeroed);
 		return true;
 	}
 	return false;
@@ -61,14 +61,14 @@ bool child_set_max(child_pair_t *self, bool allow_reclaimed, bool zeroed)
 	return false;
 }
 
-bool child_clear_max(child_pair_t *self)
+bool child_clear_max(child_pair_t *self, bool zeroed)
 {
 	if (self->first.huge && self->second.huge) {
 		assert(self->first.free == 0 && self->second.free == 0);
 		self->first = child_new(LLFREE_CHILD_SIZE, false,
-					self->first.reclaimed, false);
+					self->first.reclaimed, zeroed);
 		self->second = child_new(LLFREE_CHILD_SIZE, false,
-					 self->second.reclaimed, false);
+					 self->second.reclaimed, zeroed);
 		return true;
 	}
 	return false;

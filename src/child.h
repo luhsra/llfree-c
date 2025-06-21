@@ -40,7 +40,7 @@ bool child_dec(child_t *self, size_t order, bool allow_reclaimed);
 /// Alloc the child
 bool child_set_huge(child_t *self, bool allow_reclaimed, bool zeroed);
 /// Free the child
-bool child_clear_huge(child_t *self);
+bool child_clear_huge(child_t *self, bool zeroed);
 
 typedef struct child_pair {
 	child_t first, second;
@@ -49,7 +49,7 @@ typedef struct child_pair {
 /// Alloc a pair of child entries
 bool child_set_max(child_pair_t *self, bool allow_reclaimed, bool zeroed);
 /// Free a pair of child entries
-bool child_clear_max(child_pair_t *self);
+bool child_clear_max(child_pair_t *self, bool zeroed);
 
 /// Set the child to reclaimed if it is free and not already reclaimed
 bool child_reclaim(child_t *self, bool alloc, bool zeroed);
