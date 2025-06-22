@@ -241,6 +241,9 @@ static local_result_t ll_local_get_raw(entry_t *self, r_kind_t kind,
 	reserved_t old;
 	bool success = atom_update(&self->reserved[kind.id], old,
 				   ll_reserved_get, tree_idx, change);
+        // The kind could be demoted when stealing!
+	r_kind_t change_kind = r_kind_change(change);
+	kind = r_kind(LL_MIN(kind.id, change_kind.id));
 	return local_result_reserved(success, old, kind);
 }
 
