@@ -6,6 +6,7 @@
 #include <stdatomic.h>
 
 #define ll_align(align) __attribute__((aligned(align)))
+#define unlikely(x) __builtin_expect(!!(x), 0)
 
 #define PRIuS "zu"
 #define PRIxS "zx"
@@ -70,7 +71,7 @@
 #define llfree_debug(str, ...)
 #endif
 
-static const int ATOM_LOAD_ORDER = memory_order_acquire;
+	static const int ATOM_LOAD_ORDER = memory_order_acquire;
 static const int ATOM_UPDATE_ORDER = memory_order_acq_rel;
 static const int ATOM_STORE_ORDER = memory_order_release;
 

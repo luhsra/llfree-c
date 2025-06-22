@@ -114,8 +114,8 @@ static bool ll_reserved_get(reserved_t *self, optional_size_t tree_idx,
 	    tree_from_row(self->start_row) != tree_idx.value)
 		return false;
 
-	if (change.kind.id == RESERVED_HUGE.id) {
-		treeF_t diff = (treeF_t)(change.huge << LLFREE_HUGE_ORDER);
+	if (change.kind.id == TREE_HUGE.id) {
+		treeF_t diff = (change.huge << LLFREE_HUGE_ORDER);
 		if (self->free >= diff && self->zeroed >= change.zeroed) {
 			self->free -= diff;
 			self->zeroed -= change.zeroed;
@@ -141,9 +141,8 @@ static bool ll_reserved_put(reserved_t *self, size_t tree_idx,
 	if (!self->present || tree_from_row(self->start_row) != tree_idx)
 		return false;
 
-	if (change.kind.id == RESERVED_HUGE.id) {
-		treeF_t free = self->free +
-			       (treeF_t)(change.huge << LLFREE_HUGE_ORDER);
+	if (change.kind.id == TREE_HUGE.id) {
+		treeF_t free = self->free + (change.huge << LLFREE_HUGE_ORDER);
 		treeF_t zeroed = self->zeroed + change.zeroed;
 		assert(free <= LLFREE_TREE_SIZE);
 		assert(zeroed <= LLFREE_TREE_CHILDREN);
@@ -238,11 +237,9 @@ static local_result_t ll_local_get_raw(entry_t *self, r_kind_t kind,
 				       optional_size_t tree_idx)
 {
 	reserved_t old;
-	if (atom_update(&self->reserved[kind.id], old, ll_reserved_get,
-			tree_idx, change)) {
-		return local_result_reserved(true, old, kind);
-	}
-	return local_result_reserved(false, old, kind);
+	bool success = atom_update(&self->reserved[kind.id], old,
+				   ll_reserved_get, tree_idx, change);
+	return local_result_reserved(success, old, kind);
 }
 
 local_result_t ll_local_get(local_t *self, size_t core, tree_change_t change,
@@ -261,7 +258,7 @@ bool ll_local_put(local_t *self, size_t core, tree_change_t change,
 	r_kind_t kind = r_kind_change(change);
 	bool success = atom_update(&entry->reserved[kind.id], old,
 				   ll_reserved_put, tree_idx, change);
-	if (!success && kind.id >= TREE_HUGE.id) {
+	if (!success && kind.id >= RESERVED_HUGE.id) {
 		// try other zeroed/non-zeroed reservation
 		r_kind_t other_kind = (kind.id == RESERVED_ZEROED.id) ?
 					      RESERVED_HUGE :

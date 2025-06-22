@@ -61,17 +61,18 @@ typedef struct tree_change {
 		/// Huge (and potentially Zeroed)
 		struct {
 			/// The number of huge frames
-			uint8_t huge;
+			treeF_t huge;
 			/// The number of zeroed huge frames
-			uint8_t zeroed;
+			treeF_t zeroed;
 		};
 	};
 } tree_change_t;
 
-static inline tree_change_t tree_change_huge(uint8_t huge, uint8_t zeroed)
+static inline tree_change_t tree_change_huge(treeF_t huge, treeF_t zeroed)
 {
 	assert(huge <= LLFREE_TREE_CHILDREN);
 	assert(zeroed <= LLFREE_TREE_CHILDREN);
+	assert(zeroed <= huge);
 	return (tree_change_t){ .kind = TREE_HUGE,
 				.huge = huge,
 				.zeroed = zeroed };
@@ -83,9 +84,11 @@ static inline tree_change_t tree_change_small(treeF_t frames, bool movable)
 				.frames = frames };
 }
 static inline tree_change_t tree_change(tree_kind_t kind, treeF_t frames,
-					uint8_t zeroed)
+					treeF_t zeroed)
 {
+	assert(kind.id < TREE_KINDS);
 	assert(frames <= LLFREE_TREE_SIZE);
+	assert(zeroed <= LLFREE_TREE_CHILDREN);
 	if (kind.id == TREE_HUGE.id) {
 		assert(frames % LLFREE_CHILD_SIZE == 0);
 		return tree_change_huge(frames >> LLFREE_CHILD_ORDER, zeroed);
@@ -124,8 +127,12 @@ static inline ll_unused tree_t tree_new(bool reserved, tree_kind_t kind,
 	assert(free <= LLFREE_TREE_SIZE);
 	assert(zeroed <= LLFREE_TREE_CHILDREN);
 	assert(kind.id != TREE_HUGE.id || (free % LLFREE_CHILD_SIZE) == 0);
+	assert(kind.id < TREE_KINDS);
+	// Correct zeroed count
 	if (kind.id != TREE_HUGE.id)
 		zeroed = 0;
+	else if (zeroed > (free >> LLFREE_CHILD_ORDER))
+		zeroed = free >> LLFREE_CHILD_ORDER;
 	return (tree_t){ .reserved = reserved,
 			 .kind = kind.id,
 			 .free = free,

@@ -194,10 +194,10 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, size_t idx,
 		lower_get(&self->lower, frame_from_tree(idx), flags);
 
 	if (llfree_is_ok(res)) {
-		// write back llfree_err
-		tree_t new = tree_new(
-			true, kind, old.free - (treeF_t)(1 << flags.order),
-			old.zeroed - (rargs->flags.zeroed ? 1 : 0));
+		tree_t new = old;
+		bool success = tree_get(&new, tree_change_flags(flags));
+		assert(success);
+		new.reserved = true;
 		swap_reserved(self, rargs->core, idx, new, change);
 	} else {
 		llfree_debug("reserve failed c=%zu idx=%zu kind=%s",
@@ -330,10 +330,9 @@ static llfree_result_t get_from_local(llfree_t *self, size_t core,
 		}
 
 		// Undo decrement (inc global tree)
-		tree_change_t change = change;
 		tree_t tree;
-		atom_update(&self->trees[tree_from_row(old->start_row)], tree,
-			    tree_put, change);
+		size_t tree_idx = tree_from_row(old->start_row);
+		atom_update(&self->trees[tree_idx], tree, tree_put, change);
 
 		return res;
 	}
@@ -433,7 +432,7 @@ static llfree_result_t alloc_global_tree(llfree_t *self, size_t idx, void *args)
 	if (!atom_update(&self->trees[idx], old, tree_get, change))
 		return llfree_err(LLFREE_ERR_MEMORY);
 
-	assert(!old.reserved && old.free >= (1 << flags.order));
+	assert(old.free >= (1 << flags.order));
 
 	llfree_result_t res =
 		lower_get(&self->lower, frame_from_tree(idx), flags);
@@ -624,17 +623,18 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 		return llfree_err(LLFREE_ERR_OK);
 
 	// Update global tree or reserve
-	tree_t old_t;
+	tree_t old;
 	tree_change_t change = tree_change_flags(flags);
-	atom_update(&self->trees[tree_idx], old_t, tree_put_or_reserve, change,
+	atom_update(&self->trees[tree_idx], old, tree_put_or_reserve, change,
 		    &reserve, TREE_LOWER_LIM);
 
-	tree_t tmp = old_t;
-	tree_put(&tmp, change);
-	if (tmp.zeroed > 0 && !atom_load(&self->contains_zeroed))
+	tree_t new = old;
+	bool success = tree_put(&new, change);
+	assert(success);
+	if (new.zeroed > 0 && !atom_load(&self->contains_zeroed))
 		atom_store(&self->contains_zeroed, true);
-	if (tmp.kind == TREE_HUGE.id &&
-	    tmp.free >> LLFREE_CHILD_ORDER > tmp.zeroed &&
+	if (new.kind == TREE_HUGE.id &&
+	    (new.free >> LLFREE_CHILD_ORDER) > new.zeroed &&
 	    !atom_load(&self->contains_huge))
 		atom_store(&self->contains_huge, true);
 
@@ -642,13 +642,7 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 	// Reserve trees where a lot of frees happen, assuming locality
 	if (reserve) {
 		// fully reserve the new tree
-		treeF_t free = old_t.free + (treeF_t)(1 << flags.order);
-		assert(!old_t.reserved && free <= LLFREE_TREE_SIZE);
-		treeF_t zeroed = old_t.zeroed + (flags.zeroed ? 1 : 0);
-		assert(zeroed <= LLFREE_TREE_SIZE);
-
-		tree_t new =
-			tree_new(true, tree_kind(old_t.kind), free, zeroed);
+		new.reserved = true;
 		swap_reserved(self, core, tree_idx, new, change);
 	}
 	return llfree_err(LLFREE_ERR_OK);
@@ -919,8 +913,14 @@ static void validate_tree(llfree_t *self, local_result_t res)
 	check(tree.reserved);
 	check(tree.kind < TREE_KINDS);
 	check(tree.kind <= res.tree.kind);
-	check(tree.free + res.tree.free <= LLFREE_TREE_SIZE);
+	treeF_t free = tree.free + res.tree.free;
+	check(free <= LLFREE_TREE_SIZE);
 	check(tree.zeroed + res.tree.zeroed <= LLFREE_TREE_SIZE);
+	if (tree.kind == TREE_HUGE.id) {
+		check(res.tree.free % (1 << LLFREE_HUGE_ORDER) == 0);
+		check(tree.free % (1 << LLFREE_HUGE_ORDER) == 0);
+		check(tree.zeroed <= free >> LLFREE_CHILD_ORDER);
+	}
 	check_equal(PRIuS, (size_t)(tree.free + res.tree.free),
 		    lower_free_at_tree(&self->lower,
 				       frame_from_row(res.start_row)));
@@ -944,9 +944,12 @@ void llfree_validate(llfree_t *self)
 			check_equal(PRIuS, free, (size_t)tree.free);
 			check_m(tree.kind == TREE_HUGE.id || tree.zeroed == 0,
 				"tree %" PRIuS " invalid", tree_idx);
-			if (tree.kind == TREE_HUGE.id)
+			if (tree.kind == TREE_HUGE.id) {
+				check(tree.free % (1 << LLFREE_HUGE_ORDER) ==
+				      0);
 				check(tree.zeroed <= tree.free >>
 				      LLFREE_CHILD_ORDER);
+			}
 		}
 		zeroed += tree.zeroed;
 	}

@@ -429,11 +429,14 @@ declare_test(llfree_parallel_alloc)
 	for (size_t i = 0; i < CORES; ++i) {
 		still_reserved += rets[i]->sp;
 	}
+
 	// now all threads are terminated
 	check_equal("zu", llfree_frames(&upper) - llfree_free_frames(&upper),
 		    still_reserved);
 	check_equal("zu", llfree_free_frames(&upper),
 		    lower_free_frames(&upper.lower));
+	check_equal("zu", llfree_free_huge(&upper),
+		    lower_free_huge(&upper.lower));
 	llfree_validate(&upper);
 
 	// duplicate check
