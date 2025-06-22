@@ -16,6 +16,7 @@ typedef struct reserved {
 	uint64_t start_row : 64 - (LLFREE_TREE_ORDER + 1) -
 		(LLFREE_TREE_CHILDREN_ORDER + 1) - 1;
 } reserved_t;
+_Static_assert(sizeof(reserved_t) == sizeof(uint64_t), "size overflow");
 
 /// Counts last frees in same tree
 typedef struct local_history {
@@ -24,6 +25,7 @@ typedef struct local_history {
 	/// Number of frees in the same tree
 	uint16_t frees : 16;
 } local_history_t;
+_Static_assert(sizeof(local_history_t) == sizeof(uint64_t), "size overflow");
 
 /// Represents a reserved tree kind
 typedef struct r_kind {
