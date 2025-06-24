@@ -235,18 +235,23 @@ static llfree_result_t reserve_and_get(llfree_t *self, size_t core,
 				.flags = flags,
 				.free = { 0, 0 } };
 
-	// Over half filled trees
-	args.free = (p_range_t){ LLFREE_TREE_SIZE / 16, LLFREE_TREE_SIZE / 2 };
-	res = search(self, start, 1, near, reserve_tree_and_get, &args);
-	if (res.error != LLFREE_ERR_MEMORY)
-		return res;
+	if (flags.order < LLFREE_HUGE_ORDER) {
+		// Over half filled trees
+		args.free = (p_range_t){ LLFREE_TREE_SIZE / 16,
+					 LLFREE_TREE_SIZE / 2 };
+		res = search(self, start, 1, near, reserve_tree_and_get, &args);
+		if (res.error != LLFREE_ERR_MEMORY)
+			return res;
 
-	// Partially filled tree
-	args.free = (p_range_t){ LLFREE_TREE_SIZE / 64,
-				 LLFREE_TREE_SIZE - (LLFREE_TREE_SIZE / 16) };
-	res = search(self, start, 1, 2 * near, reserve_tree_and_get, &args);
-	if (res.error != LLFREE_ERR_MEMORY)
-		return res;
+		// Partially filled tree
+		args.free = (p_range_t){ LLFREE_TREE_SIZE / 64,
+					 LLFREE_TREE_SIZE -
+						 (LLFREE_TREE_SIZE / 16) };
+		res = search(self, start, 1, 2 * near, reserve_tree_and_get,
+			     &args);
+		if (res.error != LLFREE_ERR_MEMORY)
+			return res;
+	}
 
 	// Not free tree
 	args.free = (p_range_t){ 0, LLFREE_TREE_SIZE - 1 };
