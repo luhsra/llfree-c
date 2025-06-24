@@ -17,6 +17,7 @@ static struct test_case TESTS[TEST_CASE_N] = { 0 };
 int main(int argc, char **argv)
 {
 	size_t fail_counter = 0;
+	size_t failed_tests[TEST_CASE_N] = { 0 };
 
 	printf("\x1b[92mRunning %zu test cases...\x1b[0m\n", test_case_i);
 
@@ -29,6 +30,7 @@ int main(int argc, char **argv)
 
 		printf("\x1b[92mRunning test '%s'\x1b[0m\n", TESTS[i].name);
 		if (!(TESTS[i].f)()) {
+			failed_tests[fail_counter] = i;
 			fail_counter += 1;
 		}
 	}
@@ -39,6 +41,10 @@ int main(int argc, char **argv)
 		printf("\x1b[91m----------------FAILED-----------------\x1b[0m\n");
 		printf("Failed %zu out of %zu tests.\n", fail_counter,
 		       test_case_i);
+		for (size_t i = 0; i < fail_counter; i++) {
+			printf("\t\x1b[91m%s\x1b[0m\n",
+			       TESTS[failed_tests[i]].name);
+		}
 		return 1;
 	}
 	return 0;

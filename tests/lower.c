@@ -46,7 +46,7 @@ declare_test(lower_init)
 
 	check_equal("zu", child_count(&actual), 2lu);
 	bitfield_is_free(actual.fields[0]);
-	check_equal("zu", lower_free_frames(&actual), actual.frames);
+	check_equal("zu", lower_stats(&actual).free_frames, actual.frames);
 	lower_drop(&actual);
 
 	frames = 1023;
@@ -56,7 +56,7 @@ declare_test(lower_init)
 	check_equal_bitfield(
 		actual.fields[1],
 		((bitfield_t){ { 0, 0, 0, 0, 0, 0, 0, 0x8000000000000000 } }));
-	check_equal("zu", lower_free_frames(&actual), actual.frames);
+	check_equal("zu", lower_stats(&actual).free_frames, actual.frames);
 	lower_drop(&actual);
 
 	frames = 632;
@@ -64,7 +64,7 @@ declare_test(lower_init)
 
 	check_equal("zu", child_count(&actual), 2lu);
 	check_equal("zu", actual.frames, 632ul);
-	check_equal("zu", lower_free_frames(&actual), 0lu);
+	check_equal("zu", lower_stats(&actual).free_frames, 0lu);
 	lower_drop(&actual);
 
 	frames = 685161;
@@ -78,7 +78,7 @@ declare_test(lower_init)
 				 UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
 				 UINT64_MAX } }));
 	check_equal("zu", actual.frames, frames);
-	check_equal("zu", lower_free_frames(&actual), actual.frames);
+	check_equal("zu", lower_stats(&actual).free_frames, actual.frames);
 
 	// check alignment
 
@@ -291,23 +291,23 @@ declare_test(lower_is_free)
 
 	lower_t actual = lower_new(1360, LLFREE_INIT_FREE);
 
-	assert(lower_is_free(&actual, 0, 0));
-	assert(lower_is_free(&actual, 910, 0));
+	assert(lower_stats_at(&actual, 0, 0).free_frames);
+	assert(lower_stats_at(&actual, 910, 0).free_frames);
 
 	lower_drop(&actual);
 
 	actual = lower_new(1360, LLFREE_INIT_ALLOC);
 
-	assert(!lower_is_free(&actual, 0, 0));
-	assert(!lower_is_free(&actual, 513, 0));
-	assert(!lower_is_free(&actual, 511, 0));
+	assert(!lower_stats_at(&actual, 0, 0).free_frames);
+	assert(!lower_stats_at(&actual, 513, 0).free_frames);
+	assert(!lower_stats_at(&actual, 511, 0).free_frames);
 
 	assert(llfree_is_ok(lower_put(&actual, 513, llflags(0))));
 	assert(llfree_is_ok(lower_put(&actual, 511, llflags(0))));
 
-	assert(lower_is_free(&actual, 513, 0));
-	assert(lower_is_free(&actual, 511, 0));
-	assert(!lower_is_free(&actual, 512, 0));
+	assert(lower_stats_at(&actual, 513, 0).free_frames);
+	assert(lower_stats_at(&actual, 511, 0).free_frames);
+	assert(!lower_stats_at(&actual, 512, 0).free_frames);
 
 	lower_drop(&actual);
 	return success;
@@ -366,7 +366,7 @@ declare_test(lower_huge)
 	offset = frame2.frame % LLFREE_CHILD_SIZE;
 	check_equal("lu", offset, 0ul);
 	check(frame1.frame != frame2.frame);
-	check_equal("lu", actual.frames - lower_free_frames(&actual),
+	check_equal("lu", actual.frames - lower_stats(&actual).free_frames,
 		    2ul * LLFREE_CHILD_SIZE);
 
 	// request a regular frame
@@ -404,7 +404,7 @@ declare_test(lower_huge)
 		check(llfree_is_ok(frame));
 	}
 
-	check_equal_m("zu", lower_free_frames(&actual), 0lu,
+	check_equal_m("zu", lower_stats(&actual).free_frames, 0lu,
 		      "fully allocated with huge frames");
 
 	// reservation at full memory must fail
@@ -422,7 +422,7 @@ declare_test(lower_huge)
 		lower_put(&actual, frame1.frame, llflags(LLFREE_HUGE_ORDER))));
 
 	// check if right amout of free regular frames are present
-	check_equal("zu", lower_free_frames(&actual), LLFREE_CHILD_SIZE + 1ul);
+	check_equal("zu", lower_stats(&actual).free_frames, LLFREE_CHILD_SIZE + 1ul);
 
 	// new acquired frame should be in same positon as the old no 1
 	check(lower_get(&actual, 0, llflags(LLFREE_HUGE_ORDER)).frame ==
@@ -445,7 +445,7 @@ declare_test(lower_max)
 		check_m(llfree_is_ok(frame), "%zu", i);
 	}
 
-	check_equal("zu", lower_free_frames(&lower), 0lu);
+	check_equal("zu", lower_stats(&lower).free_frames, 0lu);
 
 	for (size_t i = 0; i < FRAMES / (1 << LLFREE_MAX_ORDER); ++i) {
 		llfree_result_t ret = lower_put(&lower,
@@ -463,7 +463,7 @@ declare_test(lower_free_all)
 	const uint64_t len = (1 << 13) + 35; // 16 HP + 35 regular frames
 	lower_t lower = lower_new(len, LLFREE_INIT_ALLOC);
 	check_equal("zu", lower.frames, len);
-	check_equal_m("zu", lower_free_frames(&lower), 0lu,
+	check_equal_m("zu", lower_stats(&lower).free_frames, 0lu,
 		      "all_frames_are_allocated");
 
 	// free all HPs
@@ -472,7 +472,7 @@ declare_test(lower_free_all)
 		ret = lower_put(&lower, i * 512, llflags(LLFREE_HUGE_ORDER));
 		check(llfree_is_ok(ret));
 	}
-	check_equal_m("zu", lower_free_frames(&lower),
+	check_equal_m("zu", lower_stats(&lower).free_frames,
 		      lower.frames - (512ul + 35),
 		      "one allocated HF and the 35 regular frames");
 
@@ -483,7 +483,7 @@ declare_test(lower_free_all)
 		check(llfree_is_ok(ret));
 	}
 
-	check_equal_m("zu", lower_free_frames(&lower), lower.frames,
+	check_equal_m("zu", lower_stats(&lower).free_frames, lower.frames,
 		      "lower should be completely free");
 
 	return success;

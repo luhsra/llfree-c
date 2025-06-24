@@ -47,10 +47,9 @@ static inline llfree_result_t ll_unused llfree_ok(uint64_t frame,
 }
 static inline llfree_result_t ll_unused llfree_err(uint8_t err)
 {
-	return (llfree_result_t){ .frame = 0,
-				  .reclaimed = false,
-				  .zeroed = false,
-				  .error = err };
+	return (llfree_result_t){
+		.frame = 0, .reclaimed = false, .zeroed = false, .error = err
+	};
 }
 
 /// Check if the result is ok (no error)
@@ -89,7 +88,9 @@ typedef struct llflags {
 
 static inline llflags_t ll_unused llflags(size_t order)
 {
-	return (llflags_t){ .order = (uint8_t)order, .movable = false, .zeroed = false };
+	return (llflags_t){ .order = (uint8_t)order,
+			    .movable = false,
+			    .zeroed = false };
 }
 
 /// Size of the required metadata
@@ -146,42 +147,50 @@ llfree_result_t llfree_drain(llfree_t *self, size_t core);
 
 /// Returns the number of cores this allocator was initialized with
 size_t llfree_cores(const llfree_t *self);
-
 /// Returns the total number of frames the allocator can allocate
 size_t llfree_frames(const llfree_t *self);
-
 /// Returns the total number of huge frames the allocator can allocate
 size_t llfree_huge(const llfree_t *self);
 
-/// Checks if a frame is allocated, returning 0 if not
-bool llfree_is_free(const llfree_t *self, uint64_t frame, size_t order);
-/// Returns the number of frames in the given chunk.
-/// Note: This is only implemented for 0, HUGE_ORDER and TREE_ORDER.
-size_t llfree_free_at(llfree_t *self, uint64_t frame, size_t order);
+/// LLFree statistics
+typedef struct ll_stats {
+	size_t frames;
+	size_t huge;
+	size_t free_frames;
+	size_t free_huge;
+	size_t zeroed_huge;
+	size_t reclaimed_huge;
+} ll_stats_t;
 
-/// Returns number of currently free frames
-size_t llfree_free_frames(const llfree_t *self);
-/// Returns number of currently free frames
-size_t llfree_free_huge(const llfree_t *self);
-/// Returns number of currently free zeroed frames
-size_t llfree_zeroed_huge(const llfree_t *self);
+/// Returns number of currently free/huge/zeroed frames.
+/// Does not include reclaimed frames and huge/zeroed can be inaccurate.
+ll_stats_t llfree_stats(const llfree_t *self);
+/// Counts free/huge/zeroed/reclaimed frames.
+ll_stats_t llfree_full_stats(const llfree_t *self);
+/// Returns the stats for the frame (order == 0), huge frame (order == LLFREE_HUGE_ORDER),
+/// or tree (order == LLFREE_TREE_ORDER).
+/// Might not include reclaimed frames and huge/zeroed can be inaccurate.
+ll_stats_t llfree_stats_at(const llfree_t *self, uint64_t frame, size_t order);
+/// Returns the stats for the frame (order == 0), huge frame (order == LLFREE_HUGE_ORDER),
+/// or tree (order == LLFREE_TREE_ORDER).
+ll_stats_t llfree_full_stats_at(const llfree_t *self, uint64_t frame,
+				size_t order);
 
 // == Ballooning ==
 
 /// Search for a free and not reclaimed huge page and mark it reclaimed (and optionally allocated)
-llfree_result_t llfree_reclaim(llfree_t *self, size_t core, bool hard, bool require_non_zeroed);
+llfree_result_t llfree_reclaim(llfree_t *self, size_t core, bool hard,
+			       bool require_non_zeroed);
 /// Mark the reclaimed huge page as free, but keep it reclaimed
 llfree_result_t llfree_return(llfree_t *self, uint64_t frame, bool install);
 /// Clear the reclaimed state of the given huge page
 llfree_result_t llfree_install(llfree_t *self, uint64_t frame);
-/// Return wether a frame is reclaimed
-bool llfree_is_reclaimed(llfree_t *self, uint64_t frame);
 
 // == Debugging ==
 
 /// Prints the allocators state for debugging with given Rust printer
-void llfree_print_debug(const llfree_t *self, void (*writer)(void *, const char *),
-			void *arg);
+void llfree_print_debug(const llfree_t *self,
+			void (*writer)(void *, const char *), void *arg);
 
 /// Prints detailed stats about the allocator state
 void llfree_print(const llfree_t *self);

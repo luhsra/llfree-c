@@ -68,7 +68,9 @@ bool ll_local_free_inc(local_t *self, size_t core, size_t tree_idx);
 void ll_local_drain(local_t *self, size_t core);
 
 /// Return the number of free frames for all core
-size_t ll_local_free_frames(const local_t *self);
+ll_stats_t ll_local_stats(const local_t *self);
+/// Return the number of free frames for all core
+ll_stats_t ll_local_stats_at(const local_t *self, size_t tree_idx);
 
 /// Get the index of the last reclaimed tree for a core
 size_t ll_local_reclaimed(const local_t *self, size_t core);

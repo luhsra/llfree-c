@@ -387,18 +387,47 @@ void ll_local_drain(local_t *self, size_t core)
 	}
 }
 
-size_t ll_local_free_frames(const local_t *self)
+ll_stats_t ll_local_stats(const local_t *self)
 {
-	size_t total = 0;
-	for (size_t i = 0; i < self->cores; i++) {
-		const entry_t *entry = &self->entries[i];
-		for (size_t j = 0; j < RESERVED_KINDS; j++) {
-			reserved_t res = atom_load(&entry->reserved[j]);
-			if (res.present)
-				total += res.free;
+	ll_stats_t stats = { 0, 0, 0, 0, 0, 0 };
+	for (size_t c = 0; c < self->cores; c++) {
+		const entry_t *entry = &self->entries[c];
+		for (size_t k = 0; k < RESERVED_KINDS; k++) {
+			reserved_t res = atom_load(&entry->reserved[k]);
+			if (!res.present)
+				continue;
+			stats.free_frames += res.free;
+			if (k >= RESERVED_HUGE.id) {
+				stats.free_huge += res.free >>
+						   LLFREE_HUGE_ORDER;
+				stats.zeroed_huge += res.zeroed;
+			}
 		}
 	}
-	return total;
+	return stats;
+}
+
+ll_stats_t ll_local_stats_at(const local_t *self, size_t tree_idx)
+{
+	ll_stats_t stats = { 0, 0, 0, 0, 0, 0 };
+	for (size_t c = 0; c < self->cores; c++) {
+		const entry_t *entry = &self->entries[c];
+		for (size_t k = 0; k < RESERVED_KINDS; k++) {
+			reserved_t res = atom_load(&entry->reserved[k]);
+			if (!res.present)
+				continue;
+			if (tree_from_row(res.start_row) == tree_idx) {
+				stats.free_frames = res.free;
+				if (k >= RESERVED_HUGE.id) {
+					stats.free_huge = res.free >>
+							  LLFREE_HUGE_ORDER;
+					stats.zeroed_huge = res.zeroed;
+				}
+				return stats;
+			}
+		}
+	}
+	return stats;
 }
 
 size_t ll_local_reclaimed(const local_t *self, size_t core)

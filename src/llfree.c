@@ -679,58 +679,63 @@ size_t llfree_huge(const llfree_t *self)
 	return div_ceil(self->lower.frames, 1 << LLFREE_HUGE_ORDER);
 }
 
-size_t llfree_free_frames(const llfree_t *self)
+ll_stats_t llfree_stats(const llfree_t *self)
 {
 	assert(self != NULL);
-	uint64_t free = 0;
+
 	// Local counters
-	free += ll_local_free_frames(self->local);
+	ll_stats_t stats = ll_local_stats(self->local);
+	stats.frames = self->lower.frames;
+	stats.huge = div_ceil(self->lower.frames, 1 << LLFREE_HUGE_ORDER);
+
 	// Global counters
 	for (size_t i = 0; i < self->trees_len; i++) {
 		tree_t t = atom_load(&self->trees[i]);
-		free += t.free;
+		stats.free_frames += t.free;
+		if (t.kind == TREE_HUGE.id) {
+			stats.free_huge += t.free >> LLFREE_HUGE_ORDER;
+			stats.zeroed_huge += t.zeroed;
+		}
 	}
-	return free;
+	return stats;
 }
 
-size_t llfree_free_huge(const llfree_t *self)
+ll_stats_t llfree_full_stats(const llfree_t *self)
 {
 	assert(self != NULL);
-	if (atom_load(&self->contains_huge))
-		// Count in the lower allocator
-		return lower_free_huge(&self->lower);
-	return 0;
+	return lower_stats(&self->lower);
 }
 
-size_t llfree_zeroed_huge(const llfree_t *self)
+ll_stats_t llfree_stats_at(const llfree_t *self, uint64_t frame, size_t order)
 {
 	assert(self != NULL);
-	if (atom_load(&self->contains_zeroed))
-		// Count in the lower allocator
-		return lower_zeroed_huge(&self->lower);
-	return 0;
-}
-
-bool llfree_is_free(const llfree_t *self, uint64_t frame, size_t order)
-{
-	assert(self != NULL);
-	return lower_is_free(&self->lower, frame, order);
-}
-
-size_t llfree_free_at(llfree_t *self, uint64_t frame, size_t order)
-{
-	assert(self != NULL);
-	if (order == 0) // is_free is sufficient for order 0
-		return lower_is_free(&self->lower, frame, 0);
-	if (order == LLFREE_HUGE_ORDER)
-		return lower_free_at_huge(&self->lower, frame);
 	if (order == LLFREE_TREE_ORDER) {
-		size_t tree_idx = frame >> LLFREE_TREE_ORDER;
-		assert(tree_idx < self->trees_len);
-		tree_t tree = atom_load(&self->trees[tree_idx]);
-		return tree.free;
+		ll_stats_t stats = {
+			LLFREE_TREE_SIZE, LLFREE_TREE_CHILDREN, 0, 0, 0, 0
+		};
+		tree_t tree = atom_load(&self->trees[tree_from_frame(frame)]);
+		stats.free_frames = tree.free;
+		if (tree.kind == TREE_HUGE.id) {
+			stats.free_huge = tree.free >> LLFREE_HUGE_ORDER;
+			stats.zeroed_huge = tree.zeroed;
+		}
+		if (tree.reserved) {
+			ll_stats_t local_stats =
+				ll_local_stats_at(self->local, frame);
+			stats.free_frames += local_stats.free_frames;
+			stats.free_huge += local_stats.free_huge;
+			stats.zeroed_huge += local_stats.zeroed_huge;
+		}
+		return stats;
 	}
-	return 0;
+	return lower_stats_at(&self->lower, frame, order);
+}
+
+ll_stats_t llfree_full_stats_at(const llfree_t *self, uint64_t frame,
+				size_t order)
+{
+	assert(self != NULL);
+	return lower_stats_at(&self->lower, frame, order);
 }
 
 struct try_reclaim_args {
@@ -825,11 +830,6 @@ llfree_result_t llfree_install(llfree_t *self, uint64_t frame)
 	return lower_install(&self->lower, frame);
 }
 
-bool llfree_is_reclaimed(llfree_t *self, uint64_t frame)
-{
-	return lower_is_reclaimed(&self->lower, frame);
-}
-
 void llfree_print_debug(const llfree_t *self,
 			void (*writer)(void *, const char *), void *arg)
 {
@@ -846,14 +846,14 @@ void llfree_print_debug(const llfree_t *self,
 	}
 
 	char msg[256];
+
+	ll_stats_t stats = llfree_stats(self);
 	snprintf(msg, sizeof(msg),
 		 "LLC { cores: %" PRIuS ", frames: %" PRIuS "/%" PRIuS
 		 ", huge: %" PRIuS "/%" PRIuS "/%" PRIuS ", trees: %" PRIuS
 		 "/%" PRIuS " m=%" PRIuS " }\n",
-		 llfree_cores(self), llfree_free_frames(self),
-		 self->lower.frames, lower_zeroed_huge(&self->lower),
-		 lower_free_huge(&self->lower),
-		 div_ceil(self->lower.frames, LLFREE_CHILD_SIZE), free_trees,
+		 llfree_cores(self), stats.free_frames, stats.frames,
+		 stats.zeroed_huge, stats.free_huge, stats.huge, free_trees,
 		 self->trees_len, movable_trees);
 	writer(arg, msg);
 }
@@ -862,8 +862,10 @@ void llfree_print(const llfree_t *self)
 {
 	llfree_info_start();
 	llfree_info_cont("llfree_t {\n");
-	llfree_info_cont("%sframes: %" PRIuS "\n", INDENT(1),
-			 self->lower.frames);
+	ll_stats_t stats = llfree_stats(self);
+
+	llfree_info_cont("%sframes: %" PRIuS ", huge: %" PRIuS "\n", INDENT(1),
+			 stats.frames, stats.huge);
 
 	size_t free_trees = 0;
 	for (size_t i = 0; i < self->trees_len; i++) {
@@ -873,8 +875,8 @@ void llfree_print(const llfree_t *self)
 	}
 	llfree_info_cont("%sfree: { frames: %" PRIuS ", huge: %" PRIuS
 			 ", trees: %" PRIuS " }\n",
-			 INDENT(1), llfree_free_frames(self),
-			 llfree_free_huge(self), free_trees);
+			 INDENT(1), stats.free_frames, stats.free_huge,
+			 free_trees);
 
 	ll_local_print(self->local, 1);
 
@@ -894,7 +896,7 @@ void llfree_print(const llfree_t *self)
 #define check(x)                               \
 	({                                     \
 		if (!(x)) {                    \
-			llfree_info("failed"); \
+			llfree_warn("failed"); \
 			assert(false);         \
 		}                              \
 	})
@@ -902,7 +904,7 @@ void llfree_print(const llfree_t *self)
 #define check_m(x, fmt, ...)                                        \
 	({                                                          \
 		if (!(x)) {                                         \
-			llfree_info("failed: " fmt, ##__VA_ARGS__); \
+			llfree_warn("failed: " fmt, ##__VA_ARGS__); \
 			assert(false);                              \
 		}                                                   \
 	})
@@ -910,7 +912,7 @@ void llfree_print(const llfree_t *self)
 #define check_equal(fmt, actual, expected)                                 \
 	({                                                                 \
 		if ((actual) != (expected)) {                              \
-			llfree_info("failed: %" fmt " == %" fmt, (actual), \
+			llfree_warn("failed: %" fmt " == %" fmt, (actual), \
 				    (expected));                           \
 			assert(false);                                     \
 		}                                                          \
@@ -921,6 +923,7 @@ static void validate_tree(const llfree_t *self, local_result_t res)
 	assert(res.present);
 	assert(tree_from_row(res.start_row) < self->trees_len);
 	tree_t tree = atom_load(&self->trees[tree_from_row(res.start_row)]);
+
 	check(tree.reserved);
 	check(tree.kind < TREE_KINDS);
 	check(tree.kind <= res.tree.kind);
@@ -932,39 +935,59 @@ static void validate_tree(const llfree_t *self, local_result_t res)
 		check(tree.free % (1 << LLFREE_HUGE_ORDER) == 0);
 		check(tree.zeroed <= free >> LLFREE_CHILD_ORDER);
 	}
-	check_equal(PRIuS, (size_t)(tree.free + res.tree.free),
-		    lower_free_at_tree(&self->lower,
-				       frame_from_row(res.start_row)));
+	ll_stats_t tree_stats = lower_stats_at(
+		&self->lower, frame_from_row(res.start_row), LLFREE_TREE_ORDER);
+	check_equal(PRIuS, (size_t)free, tree_stats.free_frames);
 }
 
 void llfree_validate(const llfree_t *self)
 {
-	check_equal(PRIuS, llfree_free_frames(self),
-		    lower_free_frames(&self->lower));
-	check_equal(PRIuS, llfree_free_huge(self),
-		    lower_free_huge(&self->lower));
+	ll_stats_t stats = lower_stats(&self->lower);
+	// llfree free is computed differently
+	ll_stats_t fast_stats = llfree_stats(self);
+	check_equal(PRIuS, stats.frames, fast_stats.frames);
+	check_equal(PRIuS, stats.huge, fast_stats.huge);
+	check_equal(PRIuS, stats.free_frames, fast_stats.free_frames);
+	check(stats.free_huge >= fast_stats.free_huge); // fast might count less
+	check(stats.zeroed_huge >= fast_stats.zeroed_huge);
 
-	size_t zeroed = 0;
 	for (size_t tree_idx = 0; tree_idx < self->trees_len; tree_idx++) {
 		tree_t tree = atom_load(&self->trees[tree_idx]);
 		check(tree.free <= LLFREE_TREE_SIZE);
 		check(tree.kind < TREE_KINDS);
 		if (!tree.reserved) {
-			size_t free = lower_free_at_tree(
-				&self->lower, frame_from_tree(tree_idx));
-			check_equal(PRIuS, free, (size_t)tree.free);
-			check_m(tree.kind == TREE_HUGE.id || tree.zeroed == 0,
-				"tree %" PRIuS " invalid", tree_idx);
+			ll_stats_t tree_stats = lower_stats_at(
+				&self->lower, frame_from_tree(tree_idx),
+				LLFREE_TREE_ORDER);
+			ll_stats_t fast_tree_stats =
+				llfree_stats_at(self, frame_from_tree(tree_idx),
+						LLFREE_TREE_ORDER);
+			check_equal(PRIuS, tree_stats.free_frames,
+				    (size_t)tree.free);
+			check_equal(PRIuS, fast_tree_stats.free_frames,
+				    (size_t)tree.free);
+
 			if (tree.kind == TREE_HUGE.id) {
 				check(tree.free % (1 << LLFREE_HUGE_ORDER) ==
 				      0);
 				check(tree.zeroed <= tree.free >>
 				      LLFREE_CHILD_ORDER);
+				check_equal(PRIuS, fast_tree_stats.free_huge,
+					    (size_t)tree.free >>
+						    LLFREE_HUGE_ORDER);
+				check_equal(PRIuS, tree_stats.free_huge,
+					    (size_t)tree.free >>
+						    LLFREE_HUGE_ORDER);
+
+				check_equal(PRIuS, tree_stats.zeroed_huge,
+					    (size_t)tree.zeroed);
+				check_equal(PRIuS, fast_tree_stats.zeroed_huge,
+					    (size_t)tree.zeroed);
+			} else {
+				check(tree.zeroed == 0);
 			}
 		}
-		zeroed += tree.zeroed;
 	}
-	check(lower_zeroed_huge(&self->lower) >= zeroed);
 
 	ll_local_validate(self->local, self, validate_tree);
 }

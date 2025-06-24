@@ -35,22 +35,11 @@ llfree_result_t lower_get_at(lower_t *self, uint64_t frame, llflags_t flags);
 /// Deallocates the given frame
 llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags);
 
-/// Checks if the frame is free
-bool lower_is_free(const lower_t *self, uint64_t frame, size_t order);
-
-/// Returns the number of huge frames
-size_t lower_huge(const lower_t *self);
-/// Returns the number of free base frames
-size_t lower_free_frames(const lower_t *self);
-/// Returns the number of free huge frames
-size_t lower_free_huge(const lower_t *self);
-/// Returns the number of free zeroed huge frames
-size_t lower_zeroed_huge(const lower_t *self);
-
-/// Returns the number of free pages in the huge page
-size_t lower_free_at_huge(const lower_t *self, uint64_t frame);
-/// Returns the number of free pages in the huge page
-size_t lower_free_at_tree(const lower_t *self, uint64_t frame);
+/// Counts free/huge/zeroed/reclaimed frames
+ll_stats_t lower_stats(const lower_t *self);
+/// Returns the stats for the frame (order == 0), huge frame (order == LLFREE_HUGE_ORDER),
+/// or tree (order == LLFREE_TREE_ORDER)
+ll_stats_t lower_stats_at(const lower_t *self, uint64_t frame, size_t order);
 
 /// Search for a free and not reclaimed huge page and mark it reclaimed (and optionally allocated)
 llfree_result_t lower_reclaim(lower_t *self, uint64_t start_frame, bool hard,

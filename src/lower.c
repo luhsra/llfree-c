@@ -360,85 +360,75 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags)
 	return llfree_err(LLFREE_ERR_OK);
 }
 
-bool lower_is_free(const lower_t *self, uint64_t frame, size_t order)
-{
-	assert(order == 0 || order == LLFREE_HUGE_ORDER);
-	// check if outside of managed space
-	if (frame >= self->frames)
-		return false;
-
-	size_t child_index = child_from_frame(frame);
-
-	child_t child = atom_load(get_child(self, child_index));
-
-	if (order == LLFREE_HUGE_ORDER) {
-		return (!child.huge && child.free == CHILD_N);
-	}
-
-	size_t field_index = frame % CHILD_N;
-
-	if (child.free < (1 << order))
-		return false;
-
-	return field_is_free(&self->fields[child_index], field_index);
-}
-
-size_t lower_huge(const lower_t *self)
+ll_stats_t lower_stats(const lower_t *self)
 {
 	assert(self != NULL);
-	return child_count(self);
-}
-
-size_t lower_free_frames(const lower_t *self)
-{
-	size_t count = 0;
-	for (size_t i = 0; i < child_count(self); i++) {
-		child_t child = atom_load(get_child(self, i));
-		count += (size_t)child.free;
-	}
-	return count;
-}
-
-size_t lower_free_huge(const lower_t *self)
-{
-	size_t count = 0;
+	ll_stats_t stats = {
+		self->frames, div_ceil(self->frames, CHILD_N), 0, 0, 0, 0
+	};
 	for (size_t i = 0; i < child_count(self); ++i) {
 		child_t child = atom_load(get_child(self, i));
-		if (child.free == CHILD_N)
-			++count;
+		stats.free_frames += (size_t)child.free;
+		stats.free_huge += child.free == CHILD_N;
+		stats.zeroed_huge += child.zeroed;
+		stats.reclaimed_huge += child.reclaimed;
 	}
-	return count;
+	return stats;
 }
 
-size_t lower_zeroed_huge(const lower_t *self) {
-	size_t count = 0;
-	for (size_t i = 0; i < child_count(self); ++i) {
+ll_stats_t lower_stats_at(const lower_t *self, uint64_t frame, size_t order)
+{
+	assert(self != NULL);
+	ll_stats_t stats = { 0, 0, 0, 0, 0, 0 };
+
+	if (frame >= self->frames) {
+		llfree_warn("invalid frame %" PRIu64 "\n", frame);
+		return stats;
+	}
+
+	if (order == 0) {
+		size_t i = child_from_frame(frame);
 		child_t child = atom_load(get_child(self, i));
-		if (child.free == CHILD_N && child.zeroed)
-			++count;
+		stats.frames = 1;
+		stats.huge = 0;
+		stats.zeroed_huge = child.zeroed;
+		stats.reclaimed_huge = child.reclaimed;
+		if (child.free == CHILD_N) {
+			stats.free_frames = CHILD_N;
+			stats.free_huge = 1;
+		} else if (child.free > 0) {
+			stats.free_frames = field_is_free(&self->fields[i],
+							  frame % CHILD_N);
+			stats.free_huge = 0;
+		}
+	} else if (order == LLFREE_HUGE_ORDER) {
+		size_t i = child_from_frame(frame);
+		child_t child = atom_load(get_child(self, i));
+		stats.frames = CHILD_N;
+		stats.huge = 1;
+		stats.free_frames = (size_t)child.free;
+		stats.free_huge = child.free == CHILD_N;
+		stats.zeroed_huge = child.zeroed;
+		stats.reclaimed_huge = child.reclaimed;
+	} else if (order == LLFREE_TREE_ORDER) {
+		size_t start = align_down(frame >> LLFREE_CHILD_ORDER,
+					  LLFREE_TREE_CHILDREN);
+		stats.frames = LLFREE_TREE_SIZE;
+		stats.huge = LLFREE_TREE_CHILDREN;
+		for (size_t i = 0; i < LLFREE_TREE_CHILDREN; ++i) {
+			child_t child = atom_load(get_child(self, start + i));
+			// llfree_info("child %zu: free=%zu huge=%d zeroed=%d",
+			// 	    start + i, (size_t)child.free, child.huge,
+			// 	    child.zeroed);
+			stats.free_frames += (size_t)child.free;
+			stats.free_huge += child.free == CHILD_N;
+			stats.zeroed_huge += child.zeroed;
+			stats.reclaimed_huge += child.reclaimed;
+		}
+	} else {
+		llfree_warn("invalid order %zu\n", order);
 	}
-	return count;
-}
-
-size_t lower_free_at_huge(const lower_t *self, uint64_t frame)
-{
-	assert(frame >> LLFREE_CHILD_ORDER < child_count(self));
-	child_t child = atom_load(get_child(self, frame >> LLFREE_CHILD_ORDER));
-	return child.free;
-}
-
-size_t lower_free_at_tree(const lower_t *self, uint64_t frame)
-{
-	assert(frame >> LLFREE_CHILD_ORDER < child_count(self));
-	size_t free = 0;
-	size_t start =
-		align_down(frame >> LLFREE_CHILD_ORDER, LLFREE_TREE_CHILDREN);
-	for (size_t i = 0; i < LLFREE_TREE_CHILDREN; ++i) {
-		child_t child = atom_load(get_child(self, start + i));
-		assert(child.free <= CHILD_N);
-		free += child.free;
-	}
-	return free;
+	return stats;
 }
 
 llfree_result_t lower_reclaim(lower_t *self, uint64_t start_frame, bool hard,

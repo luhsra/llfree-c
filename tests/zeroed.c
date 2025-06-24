@@ -38,7 +38,7 @@ declare_test(zeroed_basic)
 	lldrop llfree_t upper = llfree_new(2, FRAMES, LLFREE_INIT_FREE);
 	llfree_validate(&upper);
 	check(llfree_frames(&upper) == FRAMES);
-	check(llfree_free_frames(&upper) == FRAMES);
+	check(llfree_stats(&upper).free_frames == FRAMES);
 
 	// try allocate a zero page while none are available
 	llflags_t flags = llflags(LLFREE_CHILD_ORDER);
@@ -73,7 +73,7 @@ declare_test(zeroed_all)
 	lldrop llfree_t upper = llfree_new(2, FRAMES, LLFREE_INIT_FREE);
 	llfree_validate(&upper);
 	check(llfree_frames(&upper) == FRAMES);
-	check(llfree_free_frames(&upper) == FRAMES);
+	check(llfree_stats(&upper).free_frames == FRAMES);
 
 	llfree_info("Zeroing all pages");
 
@@ -91,7 +91,7 @@ declare_test(zeroed_all)
 
 	llfree_info("All pages zeroed");
 	llfree_validate(&upper);
-	check(llfree_zeroed_huge(&upper) == FRAMES / LLFREE_CHILD_SIZE);
+	check(llfree_stats(&upper).zeroed_huge == FRAMES / LLFREE_CHILD_SIZE);
 
 	// now there should only be zeroed pages
 	llfree_result_t res = llfree_reclaim(&upper, 0, true, true);
@@ -108,7 +108,7 @@ declare_test(zeroed_all)
 
 	llfree_info("All pages allocated");
 	llfree_print(&upper);
-	check(llfree_free_frames(&upper) == 0);
+	check(llfree_stats(&upper).free_frames == 0);
 	llfree_validate(&upper);
 
 	// free half of the zeroed pages -> they become dirty
@@ -117,7 +117,7 @@ declare_test(zeroed_all)
 		check(llfree_is_ok(res));
 	}
 
-	check(llfree_zeroed_huge(&upper) == 0);
+	check(llfree_stats(&upper).zeroed_huge == 0);
 
 	llfree_info("No zeroed pages left");
 
