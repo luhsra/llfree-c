@@ -49,19 +49,12 @@
 	printf("\x1b[93m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
 	       ##__VA_ARGS__)
 
-#ifdef VERBOSE
 #define llfree_info_start() printf("\x1b[90m%s:%d: ", __FILE__, __LINE__)
 #define llfree_info_cont(str, ...) printf(str, ##__VA_ARGS__)
 #define llfree_info_end() printf("\x1b[0m\n")
 #define llfree_info(str, ...)                                         \
 	printf("\x1b[90m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
 	       ##__VA_ARGS__)
-#else
-#define llfree_info_start()
-#define llfree_info_cont(str, ...)
-#define llfree_info_end()
-#define llfree_info(str, ...)
-#endif
 
 #ifdef DEBUG
 #define llfree_debug(str, ...)                                        \

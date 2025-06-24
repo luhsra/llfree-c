@@ -42,10 +42,10 @@ static inline ll_unused tree_kind_t tree_kind(uint8_t id)
 /// Contains huge pages (movability is irrelevant)
 #define TREE_HUGE tree_kind(2u)
 
-static inline ll_unused char *tree_kind_name(tree_kind_t kind)
+static inline ll_unused const char *tree_kind_name(tree_kind_t kind)
 {
 	assert(kind.id < TREE_KINDS);
-	return ((char *[]){ "fixed", "movable", "huge" })[kind.id];
+	return ((const char *[]){ "fixed", "movable", "huge" })[kind.id];
 }
 
 /// Tree change transaction

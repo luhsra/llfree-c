@@ -123,10 +123,10 @@ static inline ll_unused void spin_wait(void)
 #endif
 }
 
-static inline ll_unused char *INDENT(size_t indent)
+static inline ll_unused const char *INDENT(size_t indent)
 {
 	size_t const max_indent = 32;
-	char *spaces = "                                ";
+	const char *spaces = "                                ";
 	assert(indent < max_indent / 4);
 	return &spaces[max_indent - (indent * 4)];
 }
