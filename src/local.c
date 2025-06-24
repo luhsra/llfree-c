@@ -228,7 +228,7 @@ void ll_local_init(local_t *self, size_t cores)
 	}
 }
 
-size_t ll_local_cores(local_t *self)
+size_t ll_local_cores(const local_t *self)
 {
 	assert(self != NULL);
 	return self->cores;
@@ -241,7 +241,7 @@ static local_result_t ll_local_get_raw(entry_t *self, r_kind_t kind,
 	reserved_t old;
 	bool success = atom_update(&self->reserved[kind.id], old,
 				   ll_reserved_get, tree_idx, change);
-        // The kind could be demoted when stealing!
+	// The kind could be demoted when stealing!
 	r_kind_t change_kind = r_kind_change(change);
 	kind = r_kind(LL_MIN(kind.id, change_kind.id));
 	return local_result_reserved(success, old, kind);
@@ -259,17 +259,20 @@ bool ll_local_put(local_t *self, size_t core, tree_change_t change,
 		  size_t tree_idx)
 {
 	entry_t *entry = &self->entries[core % self->cores];
-	reserved_t old;
+	treeF_t frames = change.kind.id >= TREE_HUGE.id ?
+				 (change.huge << LLFREE_HUGE_ORDER) :
+				 change.frames;
+	bool success = false;
 	r_kind_t kind = r_kind_change(change);
-	bool success = atom_update(&entry->reserved[kind.id], old,
-				   ll_reserved_put, tree_idx, change);
-	if (!success && kind.id >= RESERVED_HUGE.id) {
-		// try other zeroed/non-zeroed reservation
-		r_kind_t other_kind = (kind.id == RESERVED_ZEROED.id) ?
-					      RESERVED_HUGE :
-					      RESERVED_ZEROED;
-		return atom_update(&entry->reserved[other_kind.id], old,
-				   ll_reserved_put, tree_idx, change);
+	for (int k = kind.id; !success && k >= 0; k--) {
+		kind = r_kind(k);
+		treeF_t zeroed = kind.id == RESERVED_ZEROED.id ? change.zeroed :
+								 0;
+		tree_change_t c =
+			tree_change(r_kind_to_tree(kind), frames, zeroed);
+		reserved_t old;
+		success = atom_update(&entry->reserved[kind.id], old,
+				      ll_reserved_put, tree_idx, c);
 	}
 	return success;
 }
@@ -384,11 +387,11 @@ void ll_local_drain(local_t *self, size_t core)
 	}
 }
 
-size_t ll_local_free_frames(local_t *self)
+size_t ll_local_free_frames(const local_t *self)
 {
 	size_t total = 0;
 	for (size_t i = 0; i < self->cores; i++) {
-		entry_t *entry = &self->entries[i];
+		const entry_t *entry = &self->entries[i];
 		for (size_t j = 0; j < RESERVED_KINDS; j++) {
 			reserved_t res = atom_load(&entry->reserved[j]);
 			if (res.present)
@@ -398,7 +401,7 @@ size_t ll_local_free_frames(local_t *self)
 	return total;
 }
 
-size_t ll_local_reclaimed(local_t *self, size_t core)
+size_t ll_local_reclaimed(const local_t *self, size_t core)
 {
 	return atom_load(&self->entries[core % self->cores].last_reclaimed);
 }
@@ -408,7 +411,7 @@ void ll_local_set_reclaimed(local_t *self, size_t core, size_t reclaimed_idx)
 		   reclaimed_idx);
 }
 
-void ll_local_print(local_t *self, size_t indent)
+void ll_local_print(const local_t *self, size_t indent)
 {
 	if (indent == 0)
 		llfree_info_start();
@@ -417,7 +420,7 @@ void ll_local_print(local_t *self, size_t indent)
 
 	for (size_t i = 0; i < self->cores; ++i) {
 		llfree_info_cont("%sentry[%zu] {\n", INDENT(indent + 1), i);
-		entry_t *entry = &self->entries[i];
+		const entry_t *entry = &self->entries[i];
 		for (size_t j = 0; j < RESERVED_KINDS; ++j) {
 			reserved_t res = atom_load(&entry->reserved[j]);
 			llfree_info_cont("%s%s:\t{ present: %d, free: %" PRIu64
@@ -443,13 +446,13 @@ void ll_local_print(local_t *self, size_t indent)
 	if (indent == 0)
 		llfree_info_end();
 }
-void ll_local_validate(local_t *self, llfree_t *llfree,
-		       void (*validate_tree)(llfree_t *llfree,
+void ll_local_validate(const local_t *self, const llfree_t *llfree,
+		       void (*validate_tree)(const llfree_t *llfree,
 					     local_result_t res))
 {
 	assert(self != NULL);
 	for (size_t i = 0; i < self->cores; i++) {
-		entry_t *entry = &self->entries[i];
+		const entry_t *entry = &self->entries[i];
 		for (size_t j = 0; j < RESERVED_KINDS; j++) {
 			reserved_t res = atom_load(&entry->reserved[j]);
 			assert(res.free <= LLFREE_TREE_SIZE);

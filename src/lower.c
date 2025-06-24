@@ -5,12 +5,12 @@
 
 #define CHILD_N LLFREE_CHILD_SIZE
 
-static size_t child_count(lower_t *self)
+static size_t child_count(const lower_t *self)
 {
 	return div_ceil(self->frames, CHILD_N);
 }
 
-static _Atomic(child_t) *get_child(lower_t *self, size_t i)
+static _Atomic(child_t) *get_child(const lower_t *self, size_t i)
 {
 	assert(i < align_up(child_count(self), LLFREE_TREE_CHILDREN));
 	return &self->children[i / LLFREE_TREE_CHILDREN]
@@ -130,7 +130,7 @@ llfree_result_t lower_init(lower_t *self, size_t frames, uint8_t init,
 	return llfree_err(LLFREE_ERR_OK);
 }
 
-uint8_t *lower_metadata(lower_t *self)
+uint8_t *lower_metadata(const lower_t *self)
 {
 	return (uint8_t *)self->fields;
 }
@@ -360,7 +360,7 @@ llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags)
 	return llfree_err(LLFREE_ERR_OK);
 }
 
-bool lower_is_free(lower_t *self, uint64_t frame, size_t order)
+bool lower_is_free(const lower_t *self, uint64_t frame, size_t order)
 {
 	assert(order == 0 || order == LLFREE_HUGE_ORDER);
 	// check if outside of managed space
@@ -383,13 +383,13 @@ bool lower_is_free(lower_t *self, uint64_t frame, size_t order)
 	return field_is_free(&self->fields[child_index], field_index);
 }
 
-size_t lower_huge(lower_t *self)
+size_t lower_huge(const lower_t *self)
 {
 	assert(self != NULL);
 	return child_count(self);
 }
 
-size_t lower_free_frames(lower_t *self)
+size_t lower_free_frames(const lower_t *self)
 {
 	size_t count = 0;
 	for (size_t i = 0; i < child_count(self); i++) {
@@ -399,7 +399,7 @@ size_t lower_free_frames(lower_t *self)
 	return count;
 }
 
-size_t lower_free_huge(lower_t *self)
+size_t lower_free_huge(const lower_t *self)
 {
 	size_t count = 0;
 	for (size_t i = 0; i < child_count(self); ++i) {
@@ -410,7 +410,7 @@ size_t lower_free_huge(lower_t *self)
 	return count;
 }
 
-size_t lower_zeroed_huge(lower_t *self) {
+size_t lower_zeroed_huge(const lower_t *self) {
 	size_t count = 0;
 	for (size_t i = 0; i < child_count(self); ++i) {
 		child_t child = atom_load(get_child(self, i));
@@ -420,14 +420,14 @@ size_t lower_zeroed_huge(lower_t *self) {
 	return count;
 }
 
-size_t lower_free_at_huge(lower_t *self, uint64_t frame)
+size_t lower_free_at_huge(const lower_t *self, uint64_t frame)
 {
 	assert(frame >> LLFREE_CHILD_ORDER < child_count(self));
 	child_t child = atom_load(get_child(self, frame >> LLFREE_CHILD_ORDER));
 	return child.free;
 }
 
-size_t lower_free_at_tree(lower_t *self, uint64_t frame)
+size_t lower_free_at_tree(const lower_t *self, uint64_t frame)
 {
 	assert(frame >> LLFREE_CHILD_ORDER < child_count(self));
 	size_t free = 0;
@@ -478,14 +478,14 @@ llfree_result_t lower_install(lower_t *self, uint64_t frame)
 	return llfree_err(LLFREE_ERR_ADDRESS);
 }
 
-bool lower_is_reclaimed(lower_t *self, uint64_t frame)
+bool lower_is_reclaimed(const lower_t *self, uint64_t frame)
 {
 	_Atomic(child_t) *child = get_child(self, child_from_frame(frame));
 	child_t c = atom_load(child);
 	return c.reclaimed;
 }
 
-void lower_print(lower_t *self)
+void lower_print(const lower_t *self)
 {
 	llfree_info_start();
 	llfree_info_cont("lower_t {\n");

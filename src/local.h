@@ -14,7 +14,7 @@ size_t ll_local_size(size_t cores);
 /// Initialize the per-cpu data
 void ll_local_init(local_t *self, size_t cores);
 /// Get the number of cores
-size_t ll_local_cores(local_t *self);
+size_t ll_local_cores(const local_t *self);
 
 /// Result of a local get/put operation, usually the previous value
 typedef struct local_result {
@@ -68,15 +68,15 @@ bool ll_local_free_inc(local_t *self, size_t core, size_t tree_idx);
 void ll_local_drain(local_t *self, size_t core);
 
 /// Return the number of free frames for all core
-size_t ll_local_free_frames(local_t *self);
+size_t ll_local_free_frames(const local_t *self);
 
 /// Get the index of the last reclaimed tree for a core
-size_t ll_local_reclaimed(local_t *self, size_t core);
+size_t ll_local_reclaimed(const local_t *self, size_t core);
 void ll_local_set_reclaimed(local_t *self, size_t core, size_t reclaimed_idx);
 
 /// Debug print the local data
-void ll_local_print(local_t *self, size_t indent);
+void ll_local_print(const local_t *self, size_t indent);
 /// Validate the local data, checking for consistency
-void ll_local_validate(local_t *self, llfree_t *llfree,
-		       void (*validate_tree)(llfree_t *llfree,
+void ll_local_validate(const local_t *self, const llfree_t *llfree,
+		       void (*validate_tree)(const llfree_t *llfree,
 					     local_result_t res));

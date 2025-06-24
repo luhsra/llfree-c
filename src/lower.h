@@ -25,7 +25,7 @@ llfree_result_t lower_init(lower_t *self, size_t frames, uint8_t init,
 /// Size of the required metadata
 size_t lower_metadata_size(size_t frames);
 /// Returns the metadata
-uint8_t *lower_metadata(lower_t *self);
+uint8_t *lower_metadata(const lower_t *self);
 
 /// Allocates the given frame, returning its number or an error
 llfree_result_t lower_get(lower_t *self, uint64_t start_frame, llflags_t flags);
@@ -36,21 +36,21 @@ llfree_result_t lower_get_at(lower_t *self, uint64_t frame, llflags_t flags);
 llfree_result_t lower_put(lower_t *self, uint64_t frame, llflags_t flags);
 
 /// Checks if the frame is free
-bool lower_is_free(lower_t *self, uint64_t frame, size_t order);
+bool lower_is_free(const lower_t *self, uint64_t frame, size_t order);
 
 /// Returns the number of huge frames
-size_t lower_huge(lower_t *self);
+size_t lower_huge(const lower_t *self);
 /// Returns the number of free base frames
-size_t lower_free_frames(lower_t *self);
+size_t lower_free_frames(const lower_t *self);
 /// Returns the number of free huge frames
-size_t lower_free_huge(lower_t *self);
+size_t lower_free_huge(const lower_t *self);
 /// Returns the number of free zeroed huge frames
-size_t lower_zeroed_huge(lower_t *self);
+size_t lower_zeroed_huge(const lower_t *self);
 
 /// Returns the number of free pages in the huge page
-size_t lower_free_at_huge(lower_t *self, uint64_t frame);
+size_t lower_free_at_huge(const lower_t *self, uint64_t frame);
 /// Returns the number of free pages in the huge page
-size_t lower_free_at_tree(lower_t *self, uint64_t frame);
+size_t lower_free_at_tree(const lower_t *self, uint64_t frame);
 
 /// Search for a free and not reclaimed huge page and mark it reclaimed (and optionally allocated)
 llfree_result_t lower_reclaim(lower_t *self, uint64_t start_frame, bool hard,
@@ -60,7 +60,7 @@ llfree_result_t lower_return(lower_t *self, uint64_t frame, bool install);
 /// Clear the reclaimed state of the given huge page
 llfree_result_t lower_install(lower_t *self, uint64_t frame);
 /// Return wether a frame is reclaimed
-bool lower_is_reclaimed(lower_t *self, uint64_t frame);
+bool lower_is_reclaimed(const lower_t *self, uint64_t frame);
 
 /// Print debug info
-void lower_print(lower_t *self);
+void lower_print(const lower_t *self);

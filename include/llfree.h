@@ -1,6 +1,5 @@
 #pragma once
 
-#include "linux/types.h"
 #include "llfree_types.h"
 
 /// Unused functions and variables
@@ -131,7 +130,7 @@ llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
 			    uint8_t init, llfree_meta_t meta);
 
 /// Returns the metadata
-llfree_meta_t llfree_metadata(llfree_t *self);
+llfree_meta_t llfree_metadata(const llfree_t *self);
 
 /// Allocates a frame
 llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags);
@@ -146,26 +145,26 @@ llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
 llfree_result_t llfree_drain(llfree_t *self, size_t core);
 
 /// Returns the number of cores this allocator was initialized with
-size_t llfree_cores(llfree_t *self);
+size_t llfree_cores(const llfree_t *self);
 
 /// Returns the total number of frames the allocator can allocate
-size_t llfree_frames(llfree_t *self);
+size_t llfree_frames(const llfree_t *self);
 
 /// Returns the total number of huge frames the allocator can allocate
-size_t llfree_huge(llfree_t *self);
+size_t llfree_huge(const llfree_t *self);
 
 /// Checks if a frame is allocated, returning 0 if not
-bool llfree_is_free(llfree_t *self, uint64_t frame, size_t order);
+bool llfree_is_free(const llfree_t *self, uint64_t frame, size_t order);
 /// Returns the number of frames in the given chunk.
 /// Note: This is only implemented for 0, HUGE_ORDER and TREE_ORDER.
 size_t llfree_free_at(llfree_t *self, uint64_t frame, size_t order);
 
 /// Returns number of currently free frames
-size_t llfree_free_frames(llfree_t *self);
+size_t llfree_free_frames(const llfree_t *self);
 /// Returns number of currently free frames
-size_t llfree_free_huge(llfree_t *self);
+size_t llfree_free_huge(const llfree_t *self);
 /// Returns number of currently free zeroed frames
-size_t llfree_zeroed_huge(llfree_t *self);
+size_t llfree_zeroed_huge(const llfree_t *self);
 
 // == Ballooning ==
 
@@ -181,10 +180,10 @@ bool llfree_is_reclaimed(llfree_t *self, uint64_t frame);
 // == Debugging ==
 
 /// Prints the allocators state for debugging with given Rust printer
-void llfree_print_debug(llfree_t *self, void (*writer)(void *, char *),
+void llfree_print_debug(const llfree_t *self, void (*writer)(void *, const char *),
 			void *arg);
 
 /// Prints detailed stats about the allocator state
-void llfree_print(llfree_t *self);
+void llfree_print(const llfree_t *self);
 /// Validate the internal data structures
-void llfree_validate(llfree_t *self);
+void llfree_validate(const llfree_t *self);
