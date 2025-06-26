@@ -46,6 +46,14 @@ static inline ll_unused uint64_t frame_from_child(size_t child)
 {
 	return (uint64_t)child << LLFREE_CHILD_ORDER;
 }
+static inline ll_unused size_t huge_from_frame(uint64_t frame)
+{
+	return frame >> LLFREE_HUGE_ORDER;
+}
+static inline ll_unused uint64_t frame_from_huge(size_t huge)
+{
+	return (uint64_t)huge << LLFREE_HUGE_ORDER;
+}
 
 static inline ll_unused uint64_t row_from_frame(uint64_t frame)
 {

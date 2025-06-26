@@ -260,21 +260,21 @@ bool ll_local_put(local_t *self, size_t core, tree_change_t change,
 {
 	entry_t *entry = &self->entries[core % self->cores];
 	treeF_t frames = change.kind.id >= TREE_HUGE.id ?
-				 (change.huge << LLFREE_HUGE_ORDER) :
+				 frame_from_huge(change.huge) :
 				 change.frames;
-	bool success = false;
+
 	r_kind_t kind = r_kind_change(change);
-	for (int k = kind.id; !success && k >= 0; k--) {
-		kind = r_kind(k);
-		treeF_t zeroed = kind.id == RESERVED_ZEROED.id ? change.zeroed :
-								 0;
-		tree_change_t c =
-			tree_change(r_kind_to_tree(kind), frames, zeroed);
+	for (size_t k = 0; k < RESERVED_KINDS; k++) {
+		kind = r_kind((kind.id + k) % RESERVED_KINDS);
+		tree_kind_t t_kind = tree_kind(LL_MIN(
+			r_kind_to_tree(kind).id, change.kind.id));
+		tree_change_t c = tree_change(t_kind, frames, change.zeroed);
 		reserved_t old;
-		success = atom_update(&entry->reserved[kind.id], old,
-				      ll_reserved_put, tree_idx, c);
+		if (atom_update(&entry->reserved[kind.id], old, ll_reserved_put,
+				tree_idx, c))
+			return true;
 	}
-	return success;
+	return false;
 }
 
 local_result_t ll_local_set_start(local_t *self, size_t core,

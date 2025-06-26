@@ -431,8 +431,8 @@ ll_stats_t lower_stats_at(const lower_t *self, uint64_t frame, size_t order)
 	return stats;
 }
 
-llfree_result_t lower_reclaim(lower_t *self, uint64_t start_frame, bool hard,
-			      bool zeroed)
+llfree_result_t lower_reclaim(lower_t *self, uint64_t start_frame, bool alloc, bool not_reclaimed,
+			      bool not_zeroed)
 {
 	assert(self != 0);
 
@@ -441,7 +441,7 @@ llfree_result_t lower_reclaim(lower_t *self, uint64_t start_frame, bool hard,
 	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
 		child_t old;
 		_Atomic(child_t) *child = get_child(self, current_i);
-		if (atom_update(child, old, child_reclaim, hard, zeroed)) {
+		if (atom_update(child, old, child_reclaim, alloc, not_reclaimed, not_zeroed)) {
 			return llfree_ok(frame_from_child(current_i),
 					 old.reclaimed, old.zeroed);
 		}

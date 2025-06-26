@@ -54,10 +54,8 @@ typedef struct tree_change {
 	tree_kind_t kind;
 	union {
 		/// Movable/Fixed
-		struct {
-			/// The number of base frames
-			treeF_t frames;
-		};
+		/// The number of base frames
+		treeF_t frames;
 		/// Huge (and potentially Zeroed)
 		struct {
 			/// The number of huge frames
@@ -166,6 +164,10 @@ bool tree_put_or_reserve(tree_t *self, tree_change_t change, bool *reserve,
 			 treeF_t min);
 
 bool tree_demote(tree_t *self, tree_kind_t kind);
+
+/// Try reclaiming a huge page from the tree.
+bool tree_reclaim(tree_t *self, bool *success, bool not_zeroed, bool alloc);
+bool tree_undo_reclaim(tree_t *self, bool not_zeroed, bool alloc);
 
 /// Debug print the tree
 void tree_print(tree_t *self, size_t idx, size_t indent);

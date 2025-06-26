@@ -179,8 +179,8 @@ ll_stats_t llfree_full_stats_at(const llfree_t *self, uint64_t frame,
 // == Ballooning ==
 
 /// Search for a free and not reclaimed huge page and mark it reclaimed (and optionally allocated)
-llfree_result_t llfree_reclaim(llfree_t *self, size_t core, bool hard,
-			       bool require_non_zeroed);
+llfree_result_t llfree_reclaim(llfree_t *self, size_t core, bool alloc, bool not_reclaimed,
+			       bool not_zeroed);
 /// Mark the reclaimed huge page as free, but keep it reclaimed
 llfree_result_t llfree_return(llfree_t *self, uint64_t frame, bool install);
 /// Clear the reclaimed state of the given huge page

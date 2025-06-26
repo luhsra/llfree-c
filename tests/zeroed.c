@@ -50,7 +50,7 @@ declare_test(zeroed_basic)
 	llfree_print(&upper);
 
 	// zero some memory...
-	res = llfree_reclaim(&upper, 0, true, true);
+	res = llfree_reclaim(&upper, 0, true, true, true);
 	check(llfree_is_ok(res));
 	check(!res.zeroed);
 	// zeroing operation...
@@ -79,7 +79,7 @@ declare_test(zeroed_all)
 
 	// zero everything
 	for (size_t i = 0; i < FRAMES; i += LLFREE_CHILD_SIZE) {
-		llfree_result_t res = llfree_reclaim(&upper, i, true, true);
+		llfree_result_t res = llfree_reclaim(&upper, i, true, true, true);
 		check(llfree_is_ok(res));
 		if (res.zeroed) llfree_print(&upper);
 		check_m(!res.zeroed, "frame %zu should not be zeroed",
@@ -94,7 +94,7 @@ declare_test(zeroed_all)
 	check(llfree_stats(&upper).zeroed_huge == FRAMES / LLFREE_CHILD_SIZE);
 
 	// now there should only be zeroed pages
-	llfree_result_t res = llfree_reclaim(&upper, 0, true, true);
+	llfree_result_t res = llfree_reclaim(&upper, 0, true, true, true);
 	check(!llfree_is_ok(res) && res.error == LLFREE_ERR_MEMORY);
 
 	// now we should be able to all pages as zeroed

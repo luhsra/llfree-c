@@ -42,8 +42,8 @@ ll_stats_t lower_stats(const lower_t *self);
 ll_stats_t lower_stats_at(const lower_t *self, uint64_t frame, size_t order);
 
 /// Search for a free and not reclaimed huge page and mark it reclaimed (and optionally allocated)
-llfree_result_t lower_reclaim(lower_t *self, uint64_t start_frame, bool hard,
-			      bool zeroed);
+llfree_result_t lower_reclaim(lower_t *self, uint64_t start_frame, bool alloc, bool not_reclaimed,
+			      bool not_zeroed);
 /// Mark the reclaimed huge page as free, but keep it reclaimed
 llfree_result_t lower_return(lower_t *self, uint64_t frame, bool install);
 /// Clear the reclaimed state of the given huge page

@@ -61,14 +61,14 @@ bool tree_get(tree_t *self, tree_change_t change)
 bool tree_get_exact(tree_t *self, tree_change_t change)
 {
 	// Do not allow fallback from Huge to Zeroed!
-	treeF_t non_zeroed = self->free >> LLFREE_CHILD_ORDER;
+	treeF_t not_zeroed = self->free >> LLFREE_CHILD_ORDER;
 	if (change.kind.id == TREE_HUGE.id) {
-		assert(non_zeroed >= self->zeroed);
-		non_zeroed -= self->zeroed;
-		if ((change.huge - change.zeroed) > non_zeroed)
+		assert(not_zeroed >= self->zeroed);
+		not_zeroed -= self->zeroed;
+		if ((change.huge - change.zeroed) > not_zeroed)
 			return false;
 	} else {
-		if (change.frames >> LLFREE_CHILD_ORDER > non_zeroed)
+		if (change.frames >> LLFREE_CHILD_ORDER > not_zeroed)
 			return false; // not enough non-zeroed frames
 	}
 
@@ -77,10 +77,9 @@ bool tree_get_exact(tree_t *self, tree_change_t change)
 
 bool tree_reserve(tree_t *self, tree_change_t change, treeF_t max)
 {
-	tree_t copy = *self;
 	if (!self->reserved &&
 	    (self->kind == change.kind.id || self->free == LLFREE_TREE_SIZE) &&
-	    self->free <= max && tree_get_exact(&copy, change)) {
+	    self->free <= max && tree_get_exact(self, change)) {
 		*self = tree_new(true, change.kind, 0, 0);
 		return true;
 	}
@@ -89,13 +88,10 @@ bool tree_reserve(tree_t *self, tree_change_t change, treeF_t max)
 
 bool tree_steal_counter(tree_t *self, tree_change_t change)
 {
-	tree_t copy = *self;
-	if (self->reserved && self->kind == change.kind.id &&
-	    tree_get_exact(&copy, change)) {
-		*self = tree_new(true, tree_kind(self->kind), 0, 0);
-		return true;
-	}
-	return false;
+	if (!self->reserved)
+		return false;
+	self->reserved = false; // just for tree reserve
+	return tree_reserve(self, change, LLFREE_TREE_SIZE);
 }
 
 bool tree_unreserve(tree_t *self, tree_change_t change)
@@ -129,6 +125,50 @@ bool tree_demote(tree_t *self, tree_kind_t kind)
 		self->kind = kind.id;
 		self->zeroed = 0; // reset zeroed count
 		return true;
+	}
+	return false;
+}
+
+bool tree_reclaim(tree_t *self, bool *success, bool not_zeroed, bool alloc)
+{
+	*success = false;
+	if (!self->reserved && self->free >= LLFREE_CHILD_SIZE &&
+	    (!not_zeroed || huge_from_frame(self->free) > self->zeroed)) {
+		if (alloc) {
+			tree_change_t change = tree_change(
+				tree_kind(self->kind), LLFREE_CHILD_SIZE, 0);
+			if (tree_get(self, change)) {
+				*success = true;
+				return true;
+			}
+		} else {
+			*success = true;
+			if (not_zeroed && self->kind == TREE_HUGE.id) {
+				// Reclaimed pages are zeroed by the caller
+				*self = tree_new(self->reserved,
+						 tree_kind(self->kind),
+						 self->free, self->zeroed + 1);
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool tree_undo_reclaim(tree_t *self, bool not_zeroed, bool alloc)
+{
+	if (alloc) {
+		tree_change_t change = tree_change(tree_kind(self->kind),
+						   LLFREE_CHILD_SIZE, 0);
+		return tree_put(self, change);
+	}
+	if (not_zeroed && self->kind == TREE_HUGE.id) {
+		// Undo increment of zeroed
+		if (self->zeroed > 0) {
+			*self = tree_new(self->reserved, tree_kind(self->kind),
+					 self->free, self->zeroed - 1);
+			return true;
+		}
 	}
 	return false;
 }

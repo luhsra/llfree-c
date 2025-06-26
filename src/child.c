@@ -74,10 +74,12 @@ bool child_clear_max(child_pair_t *self, bool zeroed)
 	return false;
 }
 
-bool child_reclaim(child_t *self, bool alloc, bool zeroed)
+bool child_reclaim(child_t *self, bool alloc, bool not_reclaimed,
+		   bool not_zeroed)
 {
 	if (self->free == LLFREE_CHILD_SIZE && !self->huge &&
-	    self->zeroed == zeroed && (alloc ? true : !self->reclaimed)) {
+	    (!not_reclaimed || !self->reclaimed) &&
+	    (!not_zeroed || !self->zeroed)) {
 		*self = child_new(alloc ? 0 : LLFREE_CHILD_SIZE, alloc, true,
 				  self->zeroed);
 		return true;

@@ -52,7 +52,7 @@ bool child_set_max(child_pair_t *self, bool allow_reclaimed, bool zeroed);
 bool child_clear_max(child_pair_t *self, bool zeroed);
 
 /// Set the child to reclaimed if it is free and not already reclaimed
-bool child_reclaim(child_t *self, bool alloc, bool zeroed);
+bool child_reclaim(child_t *self, bool alloc, bool not_reclaimed, bool not_zeroed);
 /// Free the child but keep it reclaimed
 bool child_return(child_t *self, bool install);
 /// Clear the reclaimed flag
