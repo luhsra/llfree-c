@@ -264,15 +264,16 @@ bool ll_local_put(local_t *self, size_t core, tree_change_t change,
 				 change.frames;
 
 	r_kind_t kind = r_kind_change(change);
-	for (size_t k = 0; k < RESERVED_KINDS; k++) {
-		kind = r_kind((kind.id + k) % RESERVED_KINDS);
-		tree_kind_t t_kind = tree_kind(LL_MIN(
-			r_kind_to_tree(kind).id, change.kind.id));
+	// Only lower kinds, as higher kinds would have to be demoted
+	for (int k = kind.id; k > 0; k--) {
+		kind = r_kind(k);
+		tree_kind_t t_kind = r_kind_to_tree(kind);
 		tree_change_t c = tree_change(t_kind, frames, change.zeroed);
 		reserved_t old;
 		if (atom_update(&entry->reserved[kind.id], old, ll_reserved_put,
-				tree_idx, c))
+				tree_idx, c)) {
 			return true;
+		}
 	}
 	return false;
 }

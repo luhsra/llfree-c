@@ -150,6 +150,7 @@ bool tree_reclaim(tree_t *self, bool *success, bool not_zeroed, bool alloc)
 						 self->free, self->zeroed + 1);
 				return true;
 			}
+			// Success, but no change necessary
 		}
 	}
 	return false;
