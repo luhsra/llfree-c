@@ -28,6 +28,19 @@ static inline optional_size_t optional_size_none(void)
 #define LL_MIN(a, b) ((a) > (b) ? (b) : (a))
 #define LL_MASK(bits) ((1u << (bits)) - 1)
 
+/// Iterates over a Range between multiples of len starting at idx.
+///
+/// Starting at idx up to the next Multiple of len (exclusive). Then the next
+/// step will be the highest multiple of len less than idx. (_base_idx)
+/// Loop will end after len iterations.
+/// code will be executed in each loop.
+/// The current loop value can accessed by current_i
+#define for_offsetted(start, len, current_i)                              \
+	for (size_t _i = 0, _offset = (start) % (len),                    \
+		    _base_idx = (start) - _offset, (current_i) = (start); \
+	     _i < (len);                                                  \
+	     _i = _i + 1, (current_i) = _base_idx + ((_i + _offset) % (len)))
+
 // conversion functions
 static inline ll_unused size_t tree_from_frame(uint64_t frame)
 {

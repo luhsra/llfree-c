@@ -1,4 +1,4 @@
-#include "check.h"
+#include "test.h"
 #include "local.h"
 #include "utils.h"
 

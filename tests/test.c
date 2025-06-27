@@ -1,5 +1,5 @@
 #include "llfree.h"
-#include "check.h"
+#include "test.h"
 #include "utils.h"
 
 #include <stdlib.h>

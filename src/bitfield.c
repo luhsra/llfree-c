@@ -101,7 +101,7 @@ llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
 	uint64_t row = row_from_frame(start_frame) % FIELD_N;
 
 	if (num_frames <= LLFREE_ATOMIC_SIZE) {
-		for_offsetted(row, FIELD_N) {
+		for_offsetted(row, FIELD_N, current_i) {
 			size_t pos = 0;
 			uint64_t old;
 			if (atom_update(&field->rows[current_i], old,
@@ -116,7 +116,7 @@ llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
 	}
 
 	size_t entries = num_frames / LLFREE_ATOMIC_SIZE;
-	for_offsetted(row / entries, FIELD_N / entries) {
+	for_offsetted(row / entries, FIELD_N / entries, current_i) {
 		bool failed = false;
 		for (size_t i = 0; i < entries; i++) {
 			size_t idx = (current_i * entries) + i;

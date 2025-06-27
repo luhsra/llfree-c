@@ -779,8 +779,9 @@ static llfree_result_t try_reclaim(llfree_t *self, size_t idx, void *args)
 	if (!llfree_is_ok(res)) {
 		// If we changed the tree, undo this transaction
 		if (alloc || (not_zeroed && old.kind == TREE_HUGE.id)) {
-			bool changed = atom_update(&self->trees[idx], old, tree_undo_reclaim,
-				    not_zeroed, alloc);
+			bool changed = atom_update(&self->trees[idx], old,
+						   tree_undo_reclaim,
+						   not_zeroed, alloc);
 			assert(!alloc || changed);
 		}
 	}
@@ -794,12 +795,22 @@ llfree_result_t llfree_reclaim(llfree_t *self, size_t core, bool alloc,
 	size_t start_idx = ll_local_reclaimed(self->local, core);
 
 	// Search and allocate
-	llfree_result_t ret;
+	llfree_result_t ret = llfree_err(LLFREE_ERR_MEMORY);
 	// First try to reclaim non-zeroed frames
 	struct try_reclaim_args args = { .alloc = alloc,
 					 .not_reclaimed = not_reclaimed,
 					 .not_zeroed = true };
+
+	// Search for non-zeroed first
 	ret = search(self, start_idx, 0, self->trees_len, try_reclaim, &args);
+
+	// Fallback to any frame
+	if (!not_zeroed && !llfree_is_ok(ret) &&
+	    ret.error == LLFREE_ERR_MEMORY) {
+		args.not_zeroed = false;
+		ret = search(self, start_idx, 0, self->trees_len, try_reclaim,
+			     &args);
+	}
 
 	// Update the local reclaim index
 	if (llfree_is_ok(ret) && start_idx != tree_from_frame(ret.frame)) {

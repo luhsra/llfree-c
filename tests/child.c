@@ -1,5 +1,5 @@
 #include "child.h"
-#include "check.h"
+#include "test.h"
 #include "lower.h"
 
 #define check_counter(actual, expect)                \

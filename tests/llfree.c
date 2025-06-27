@@ -1,7 +1,7 @@
 #include "llfree.h"
 #include "llfree_inner.h"
 
-#include "check.h"
+#include "test.h"
 #include "llfree_platform.h"
 #include "local.h"
 #include "lower.h"
@@ -34,7 +34,7 @@ static void llfree_drop(llfree_t *self)
 	llfree_ext_free(LLFREE_CACHE_SIZE, ms.trees, m.trees);
 	llfree_ext_free(LLFREE_CACHE_SIZE, ms.lower, m.lower);
 }
-#define lldrop __attribute__((cleanup(llfree_drop)))
+#define lldrop [[gnu::cleanup(llfree_drop)]]
 
 declare_test(llfree_init)
 {

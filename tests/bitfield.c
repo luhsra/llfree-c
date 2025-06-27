@@ -1,4 +1,4 @@
-#include "check.h"
+#include "test.h"
 #include "bitfield.h"
 
 static inline bitfield_t bf(uint64_t b0, uint64_t b1, uint64_t b2, uint64_t b3,

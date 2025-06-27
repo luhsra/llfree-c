@@ -1,7 +1,7 @@
 #include "linux/types.h"
 #include "llfree.h"
 #include "llfree_inner.h"
-#include "check.h"
+#include "test.h"
 #include "llfree_platform.h"
 
 static llfree_t llfree_new(size_t cores, size_t frames, uint8_t init)

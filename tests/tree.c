@@ -1,4 +1,4 @@
-#include "check.h"
+#include "test.h"
 #include "tree.h"
 
 #define equal_trees(actual, expect)                 \

@@ -142,7 +142,7 @@ static llfree_result_t get_max(lower_t *self, uint64_t frame,
 
 	size_t idx = child_from_frame(frame) / 2;
 	assert(idx < child_count(self) / 2);
-	for_offsetted(idx, LLFREE_TREE_CHILDREN / 2) {
+	for_offsetted(idx, LLFREE_TREE_CHILDREN / 2, current_i) {
 		child_pair_t old;
 		_Atomic(child_pair_t) *pair =
 			(_Atomic(child_pair_t) *)get_child(self, current_i * 2);
@@ -165,7 +165,7 @@ static llfree_result_t get_huge(lower_t *self, uint64_t frame,
 
 	size_t idx = child_from_frame(frame);
 	assert(idx < child_count(self));
-	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
+	for_offsetted(idx, LLFREE_TREE_CHILDREN, current_i) {
 		child_t old;
 		_Atomic(child_t) *child = get_child(self, current_i);
 		if (atom_update(child, old, child_set_huge, allow_reclaimed,
@@ -188,7 +188,7 @@ static llfree_result_t lower_get_inner(lower_t *self, uint64_t frame,
 
 	const size_t idx = child_from_frame(frame);
 	assert(idx < child_count(self));
-	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
+	for_offsetted(idx, LLFREE_TREE_CHILDREN, current_i) {
 		child_t old;
 		_Atomic(child_t) *child = get_child(self, current_i);
 		if (atom_update(child, old, child_dec, flags.order,
@@ -438,7 +438,7 @@ llfree_result_t lower_reclaim(lower_t *self, uint64_t start_frame, bool alloc, b
 
 	size_t idx = child_from_frame(start_frame);
 	assert(idx < child_count(self));
-	for_offsetted(idx, LLFREE_TREE_CHILDREN) {
+	for_offsetted(idx, LLFREE_TREE_CHILDREN, current_i) {
 		child_t old;
 		_Atomic(child_t) *child = get_child(self, current_i);
 		if (atom_update(child, old, child_reclaim, alloc, not_reclaimed, not_zeroed)) {
