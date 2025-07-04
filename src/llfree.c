@@ -301,7 +301,7 @@ static bool ll_unused sync_with_global(llfree_t *self, size_t core,
 			 steal_change))
 		return false;
 
-	assert(old_tree.kind == old.tree.kind);
+	assert(old_tree.kind == old.tree.kind || old_tree.free == LLFREE_TREE_SIZE);
 
 	tree_change_t stolen_change = tree_change(
 		tree_kind(old_tree.kind), old_tree.free, old_tree.zeroed);
