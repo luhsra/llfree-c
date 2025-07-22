@@ -25,7 +25,7 @@
 /// Result type, to distinguish between normal integers
 typedef struct ll_warn_unused llfree_result {
 	/// Usually only valid if error == LLFREE_ERR_OK
-	uint64_t frame : 55;
+	uint64_t frame : 54;
 	/// If the frame was reclaimed, e.g. by ballooning
 	bool reclaimed : 1;
 	/// If the frame is already zeroed
