@@ -440,7 +440,7 @@ declare_test(llfree_parallel_alloc)
 		    still_reserved);
 	check_equal("zu", llfree_stats(&upper).free_frames,
 		    lower_stats(&upper.lower).free_frames);
-	check_equal("zu", llfree_stats(&upper).free_huge,
+	check_equal("zu", llfree_full_stats(&upper).free_huge,
 		    lower_stats(&upper.lower).free_huge);
 	llfree_validate(&upper);
 
