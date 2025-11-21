@@ -20,13 +20,13 @@ size_t ll_local_cores(const local_t *self);
 typedef struct local_result {
 	bool success;
 	bool present;
-	size_t start_row;
 	tree_t tree;
+	size_t start_row;
 } local_result_t;
 static inline local_result_t local_result(bool success, bool present,
 					  size_t start_row, tree_t tree)
 {
-	return (local_result_t){ success, present, start_row, tree };
+	return (local_result_t){ success, present, tree, start_row };
 }
 
 /// Decrement the number of free frames
