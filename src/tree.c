@@ -80,7 +80,7 @@ bool tree_reserve(tree_t *self, tree_change_t change, treeF_t max)
 	if (!self->reserved &&
 	    (self->kind == change.kind.id || self->free == LLFREE_TREE_SIZE) &&
 	    self->free <= max && tree_get_exact(self, change)) {
-		*self = tree_new(true, change.kind, 0, 0);
+		*self = tree_new(true, tree_kind(self->kind), 0, 0);
 		return true;
 	}
 	return false;
@@ -88,10 +88,11 @@ bool tree_reserve(tree_t *self, tree_change_t change, treeF_t max)
 
 bool tree_steal_counter(tree_t *self, tree_change_t change)
 {
-	if (!self->reserved)
-		return false;
-	self->reserved = false; // just for tree reserve
-	return tree_reserve(self, change, LLFREE_TREE_SIZE);
+	if (self->reserved) {
+		self->reserved = false; // fake for reservation
+		return tree_reserve(self, change, LLFREE_TREE_SIZE);
+	}
+	return false;
 }
 
 bool tree_unreserve(tree_t *self, tree_change_t change)

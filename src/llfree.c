@@ -147,8 +147,9 @@ static llfree_result_t search(llfree_t *self, uint64_t start, uint64_t offset,
 static void swap_reserved(llfree_t *self, size_t core, size_t new_idx,
 			  tree_t new, tree_change_t previous_change)
 {
-	llfree_debug("swap c=%zu idx=%zu kind=%s", core, new_idx,
-		     tree_kind_name(tree_kind(new.kind)));
+	llfree_debug("swap c=%zu idx=%zu: c_kind=%s kind=%s free=%" PRIu64,
+		     core, new_idx, tree_kind_name(previous_change.kind),
+		     tree_kind_name(tree_kind(new.kind)), (uint64_t)new.free);
 	local_result_t res =
 		ll_local_swap(self->local, core, previous_change, new_idx, new);
 	assert(res.success);
@@ -215,7 +216,7 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, size_t idx,
 ///
 /// The search for a new tree aims to be both fast and avoid fragmentation.
 static llfree_result_t reserve_and_get(llfree_t *self, size_t core,
-				       llflags_t flags, local_result_t old)
+				       llflags_t flags, uint64_t start)
 {
 	const size_t cl_trees = LLFREE_CACHE_SIZE / sizeof(tree_t);
 
@@ -223,9 +224,6 @@ static llfree_result_t reserve_and_get(llfree_t *self, size_t core,
 
 	llfree_debug("reserve c=%zu o=%d kind=%s (z=%d)", core, flags.order,
 		     tree_kind_name(tree_kind_flags(flags)), flags.zeroed);
-	uint64_t start = old.present ?
-				 tree_from_row(old.start_row) :
-				 (self->trees_len / llfree_cores(self) * core);
 	assert(start < self->trees_len);
 	start = align_down(start, cl_trees);
 
@@ -302,15 +300,19 @@ static bool ll_unused sync_with_global(llfree_t *self, size_t core,
 
 	assert(old_tree.kind == old.tree.kind ||
 	       old_tree.free == LLFREE_TREE_SIZE);
+	assert(old_tree.zeroed == 0 || old_tree.kind == TREE_HUGE.id);
 
 	tree_change_t stolen_change = tree_change(
 		tree_kind(old_tree.kind), old_tree.free, old_tree.zeroed);
 	if (!ll_local_put(self->local, core, stolen_change, tree_idx)) {
+		llfree_warn("sync local failed c=%zu idx=%zu", core, tree_idx);
 		// Revert the steal
 		atom_update(&self->trees[tree_idx], old_tree, tree_put,
 			    stolen_change);
 		return false;
 	}
+	llfree_debug("sync success c=%zu kind=%s free=%" PRIu64, core,
+		    tree_kind_name(change.kind), (uint64_t)old_tree.free);
 	return true;
 }
 
@@ -481,8 +483,7 @@ llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags)
 			flags.zeroed = false;
 	}
 
-	local_result_t old = local_result(
-		false, false, 0, tree_new(false, tree_kind_flags(flags), 0, 0));
+	uint64_t start = self->trees_len / llfree_cores(self) * core;
 	llfree_result_t res;
 
 	bool has_locals = self->trees_len >
@@ -490,7 +491,10 @@ llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags)
 	if (has_locals) {
 retry:
 		for (size_t i = 0; i < RETRIES; i++) {
+			local_result_t old;
 			res = get_from_local(self, core, flags, &old);
+			if (res.error == LLFREE_ERR_MEMORY && old.present)
+				start = tree_from_row(old.start_row);
 			if (res.error != LLFREE_ERR_RETRY)
 				break;
 		}
@@ -499,7 +503,7 @@ retry:
 			return res;
 
 		// reserve new tree
-		res = reserve_and_get(self, core, flags, old);
+		res = reserve_and_get(self, core, flags, start);
 		if (res.error != LLFREE_ERR_MEMORY)
 			return res;
 
@@ -537,9 +541,8 @@ retry:
 
 	// just take from any tree
 	// TODO: we might want to have another start index
-	size_t idx = old.present ? tree_from_row(old.start_row) : 0;
 	flags.zeroed = false;
-	return alloc_any_global(self, idx, flags);
+	return alloc_any_global(self, start, flags);
 }
 
 llfree_result_t llfree_get_at(llfree_t *self, size_t core, uint64_t frame,

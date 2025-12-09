@@ -271,13 +271,15 @@ bool ll_local_put(local_t *self, size_t core, tree_change_t change,
 	treeF_t frames = change.kind.id >= TREE_HUGE.id ?
 				 frame_from_huge(change.huge) :
 				 change.frames;
+	treeF_t zeroed = change.kind.id == TREE_HUGE.id ? change.zeroed : 0;
 
 	r_kind_t kind = r_kind_from_change(change);
 	// Only lower kinds, as higher kinds would have to be demoted
-	for (int k = kind.id; k > 0; k--) {
+	for (int k = kind.id; k >= 0; k--) {
 		kind = r_kind(k);
+		treeF_t z = kind.id == RESERVED_ZEROED.id ? zeroed : 0;
 		tree_kind_t t_kind = r_kind_to_tree(kind);
-		tree_change_t c = tree_change(t_kind, frames, change.zeroed);
+		tree_change_t c = tree_change(t_kind, frames, z);
 		reserved_t old;
 		if (atom_update(&entry->reserved[kind.id], old, ll_reserved_put,
 				tree_idx, c)) {

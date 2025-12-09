@@ -38,7 +38,7 @@
 #define LLFREE_TREE_SIZE (1u << LLFREE_TREE_ORDER)
 
 /// Enable reserve on free heuristic
-#define LLFREE_ENABLE_FREE_RESERVE false
+#define LLFREE_ENABLE_FREE_RESERVE true
 /// Allocate first from already install huge frames, before falling back to evicted ones
 #define LLFREE_PREFER_INSTALLED false
 
@@ -46,19 +46,19 @@
 #define LLFREE_ALIGN (1u << LLFREE_MAX_ORDER << LLFREE_FRAME_BITS)
 
 #define llfree_warn(str, ...)                                         \
-	printf("\x1b[93m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
+	fprintf(stderr, "\x1b[93m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
 	       ##__VA_ARGS__)
 
-#define llfree_info_start() printf("\x1b[90m%s:%d: ", __FILE__, __LINE__)
-#define llfree_info_cont(str, ...) printf(str, ##__VA_ARGS__)
-#define llfree_info_end() printf("\x1b[0m\n")
+#define llfree_info_start() fprintf(stderr, "\x1b[90m%s:%d: ", __FILE__, __LINE__)
+#define llfree_info_cont(str, ...) fprintf(stderr, str, ##__VA_ARGS__)
+#define llfree_info_end() fprintf(stderr, "\x1b[0m\n")
 #define llfree_info(str, ...)                                         \
-	printf("\x1b[90m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
+	fprintf(stderr, "\x1b[90m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
 	       ##__VA_ARGS__)
 
 #ifdef DEBUG
 #define llfree_debug(str, ...)                                        \
-	printf("\x1b[90m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
+	fprintf(stderr, "\x1b[90m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
 	       ##__VA_ARGS__)
 #else
 #define llfree_debug(str, ...)
