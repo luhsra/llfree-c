@@ -32,7 +32,7 @@ typedef struct r_kind {
 	uint8_t id;
 } r_kind_t;
 /// Number of tree kinds
-#define RESERVED_KINDS (size_t)(4u)
+#define RESERVED_KINDS (size_t)(5u)
 static inline ll_unused r_kind_t r_kind(uint8_t id)
 {
 	assert(id < RESERVED_KINDS);
@@ -42,41 +42,47 @@ static inline ll_unused r_kind_t r_kind(uint8_t id)
 #define RESERVED_FIXED r_kind(0)
 /// Contains movable pages
 #define RESERVED_MOVABLE r_kind(1)
+/// Contains at least one long-lived page
+#define RESERVED_LONG_LIVING r_kind(2)
 /// Contains huge pages (movability is irrelevant)
-#define RESERVED_HUGE r_kind(2)
+#define RESERVED_HUGE r_kind(3)
 /// Contains at least one zeroed huge page
-#define RESERVED_ZEROED r_kind(3)
+#define RESERVED_ZEROED r_kind(4)
 
 static inline ll_unused char *r_kind_name(r_kind_t kind)
 {
 	assert(kind.id < RESERVED_KINDS);
-	return ((char *[]){ "fixed", "movable", "huge", "zeroed" })[kind.id];
+	return ((char *[RESERVED_KINDS]){ "fixed", "movable", "long-lived",
+					  "huge", "zeroed" })[kind.id];
 }
 
-static inline ll_unused r_kind_t r_kind_flags(llflags_t flags)
+static inline ll_unused r_kind_t r_kind_from_flags(llflags_t flags)
 {
 	if (flags.order >= LLFREE_HUGE_ORDER)
 		return flags.zeroed ? RESERVED_ZEROED : RESERVED_HUGE;
 	if (flags.movable)
-		return RESERVED_MOVABLE;
+		return flags.long_living ? RESERVED_LONG_LIVING :
+					   RESERVED_MOVABLE;
 	return RESERVED_FIXED;
 }
-static inline ll_unused r_kind_t r_kind_change(tree_change_t change)
+static inline ll_unused r_kind_t r_kind_from_change(tree_change_t change)
 {
-	if (change.kind.id == RESERVED_HUGE.id) {
+	if (change.kind.id == RESERVED_HUGE.id)
 		return change.zeroed ? RESERVED_ZEROED : RESERVED_HUGE;
-	}
-	if (change.kind.id == RESERVED_MOVABLE.id) {
+	if (change.kind.id == RESERVED_MOVABLE.id)
 		return RESERVED_MOVABLE;
-	}
+	if (change.kind.id == RESERVED_LONG_LIVING.id)
+		return RESERVED_LONG_LIVING;
 	return RESERVED_FIXED;
 }
-static inline ll_unused r_kind_t r_kind_tree(tree_t tree)
+static inline ll_unused r_kind_t r_kind_from_tree(tree_t tree)
 {
 	if (tree.kind == TREE_FIXED.id)
 		return RESERVED_FIXED;
 	if (tree.kind == TREE_MOVABLE.id)
 		return RESERVED_MOVABLE;
+	if (tree.kind == TREE_LONG_LIVING.id)
+		return RESERVED_LONG_LIVING;
 	return tree.zeroed ? RESERVED_ZEROED : RESERVED_HUGE;
 }
 
@@ -86,6 +92,8 @@ static inline ll_unused tree_kind_t r_kind_to_tree(r_kind_t kind)
 		return TREE_FIXED;
 	if (kind.id == RESERVED_MOVABLE.id)
 		return TREE_MOVABLE;
+	if (kind.id == RESERVED_LONG_LIVING.id)
+		return TREE_LONG_LIVING;
 	return TREE_HUGE;
 }
 
@@ -242,7 +250,7 @@ static local_result_t ll_local_get_raw(entry_t *self, r_kind_t kind,
 	bool success = atom_update(&self->reserved[kind.id], old,
 				   ll_reserved_get, tree_idx, change);
 	// The kind could be demoted when stealing!
-	r_kind_t change_kind = r_kind_change(change);
+	r_kind_t change_kind = r_kind_from_change(change);
 	kind = r_kind(LL_MIN(kind.id, change_kind.id));
 	return local_result_reserved(success, old, kind);
 }
@@ -252,7 +260,8 @@ local_result_t ll_local_get(local_t *self, size_t core, tree_change_t change,
 {
 	entry_t *entry = &self->entries[core % self->cores];
 	// Try decrementing the local counter
-	return ll_local_get_raw(entry, r_kind_change(change), change, tree_idx);
+	return ll_local_get_raw(entry, r_kind_from_change(change), change,
+				tree_idx);
 }
 
 bool ll_local_put(local_t *self, size_t core, tree_change_t change,
@@ -263,7 +272,7 @@ bool ll_local_put(local_t *self, size_t core, tree_change_t change,
 				 frame_from_huge(change.huge) :
 				 change.frames;
 
-	r_kind_t kind = r_kind_change(change);
+	r_kind_t kind = r_kind_from_change(change);
 	// Only lower kinds, as higher kinds would have to be demoted
 	for (int k = kind.id; k > 0; k--) {
 		kind = r_kind(k);
@@ -284,7 +293,7 @@ local_result_t ll_local_set_start(local_t *self, size_t core,
 {
 	entry_t *entry = &self->entries[core % self->cores];
 	reserved_t old;
-	r_kind_t kind = r_kind_change(previous_change);
+	r_kind_t kind = r_kind_from_change(previous_change);
 	bool success = atom_update(&entry->reserved[kind.id], old,
 				   ll_reserved_set_start, start_row, false);
 	return local_result_reserved(success, old, kind);
@@ -293,7 +302,7 @@ local_result_t ll_local_set_start(local_t *self, size_t core,
 local_result_t ll_local_steal(local_t *self, size_t core, tree_change_t change,
 			      bool demote, optional_size_t tree_idx)
 {
-	r_kind_t kind = r_kind_change(change);
+	r_kind_t kind = r_kind_from_change(change);
 
 	size_t start = demote ? kind.id + 1 : 0;
 	size_t end = demote ? RESERVED_KINDS : kind.id;
@@ -315,7 +324,7 @@ local_result_t ll_local_steal(local_t *self, size_t core, tree_change_t change,
 local_result_t ll_local_demote(local_t *self, size_t core,
 			       tree_change_t previous_change, size_t tree_idx)
 {
-	r_kind_t kind = r_kind_change(previous_change);
+	r_kind_t kind = r_kind_from_change(previous_change);
 	assert(kind.id < RESERVED_ZEROED.id);
 
 	for (size_t c = core; c < self->cores; c++) {
@@ -338,9 +347,9 @@ local_result_t ll_local_swap(local_t *self, size_t core,
 			     tree_change_t previous_change, size_t new_idx,
 			     tree_t new_tree)
 {
-	r_kind_t kind = r_kind_change(previous_change);
+	r_kind_t kind = r_kind_from_change(previous_change);
 	// if the new tree has a lower kind, use it
-	r_kind_t other_kind = r_kind_tree(new_tree);
+	r_kind_t other_kind = r_kind_from_tree(new_tree);
 	kind = r_kind(LL_MIN(kind.id, other_kind.id));
 
 	reserved_t old;

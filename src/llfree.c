@@ -289,9 +289,8 @@ static bool ll_unused sync_with_global(llfree_t *self, size_t core,
 	} else {
 		if (old.tree.free >= change.frames)
 			return false;
-		steal_change =
-			tree_change_small(change.frames - old.tree.free,
-					  change.kind.id == TREE_MOVABLE.id);
+		steal_change = tree_change_small(change.frames - old.tree.free,
+						 change.kind);
 	}
 
 	size_t tree_idx = tree_from_row(old.start_row);
@@ -301,7 +300,8 @@ static bool ll_unused sync_with_global(llfree_t *self, size_t core,
 			 steal_change))
 		return false;
 
-	assert(old_tree.kind == old.tree.kind || old_tree.free == LLFREE_TREE_SIZE);
+	assert(old_tree.kind == old.tree.kind ||
+	       old_tree.free == LLFREE_TREE_SIZE);
 
 	tree_change_t stolen_change = tree_change(
 		tree_kind(old_tree.kind), old_tree.free, old_tree.zeroed);

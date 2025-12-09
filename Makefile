@@ -59,7 +59,7 @@ test_build: $(BUILDDIR)/$(TESTDIR) $(LIB) $(TESTOBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(TESTOBJS) $(LIB) -o $(BUILDDIR)/$(TESTDIR)/tests
 
 test: test_build
-	./$(BUILDDIR)/$(TESTDIR)/tests $(A)
+	./$(BUILDDIR)/$(TESTDIR)/tests $(T)
 
 
 clean:

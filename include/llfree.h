@@ -83,6 +83,8 @@ typedef struct llflags {
 	bool movable : 1;
 	/// If the frame should be zeroed.
 	bool zeroed : 1;
+	/// Long-living allocation: try separating long-living and short-living allocations.
+	bool long_living : 1;
 	// ... Reserved for future use
 } llflags_t;
 
@@ -90,7 +92,8 @@ static inline llflags_t ll_unused llflags(size_t order)
 {
 	return (llflags_t){ .order = (uint8_t)order,
 			    .movable = false,
-			    .zeroed = false };
+			    .zeroed = false,
+			    .long_living = false };
 }
 
 /// Size of the required metadata
@@ -179,8 +182,8 @@ ll_stats_t llfree_full_stats_at(const llfree_t *self, uint64_t frame,
 // == Ballooning ==
 
 /// Search for a free and not reclaimed huge page and mark it reclaimed (and optionally allocated)
-llfree_result_t llfree_reclaim(llfree_t *self, size_t core, bool alloc, bool not_reclaimed,
-			       bool not_zeroed);
+llfree_result_t llfree_reclaim(llfree_t *self, size_t core, bool alloc,
+			       bool not_reclaimed, bool not_zeroed);
 /// Mark the reclaimed huge page as free, but keep it reclaimed
 llfree_result_t llfree_return(llfree_t *self, uint64_t frame, bool install);
 /// Clear the reclaimed state of the given huge page

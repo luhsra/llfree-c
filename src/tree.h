@@ -4,7 +4,7 @@
 
 typedef uint32_t treeF_t;
 #define LLFREE_TREE_FREE_BITS \
-	((sizeof(treeF_t) * 8) - 1 - 2 - (LLFREE_TREE_CHILDREN_ORDER + 1))
+	((sizeof(treeF_t) * 8) - 1 - 3 - (LLFREE_TREE_CHILDREN_ORDER + 1))
 _Static_assert(LLFREE_TREE_FREE_BITS > LLFREE_TREE_ORDER, "Tree free counter");
 
 /// Tree entry
@@ -12,7 +12,7 @@ typedef struct tree {
 	/// Whether this tree has been reserved.
 	bool reserved : 1;
 	/// The kind of pages this tree contains.
-	uint8_t kind : 2;
+	uint8_t kind : 3;
 	/// Number of free frames in this tree.
 	/// If TREE_HUGE, this has to be a multiple of LLFREE_CHILD_SIZE.
 	treeF_t free : LLFREE_TREE_FREE_BITS;
@@ -29,7 +29,7 @@ typedef struct tree_kind {
 	uint8_t id;
 } tree_kind_t;
 /// Number of tree kinds
-#define TREE_KINDS (size_t)(3u)
+#define TREE_KINDS (size_t)(4u)
 static inline ll_unused tree_kind_t tree_kind(uint8_t id)
 {
 	assert(id < TREE_KINDS);
@@ -39,13 +39,16 @@ static inline ll_unused tree_kind_t tree_kind(uint8_t id)
 #define TREE_FIXED tree_kind(0u)
 /// Contains movable pages
 #define TREE_MOVABLE tree_kind(1u)
+/// Contains long-lived pages
+#define TREE_LONG_LIVING tree_kind(2u)
 /// Contains huge pages (movability is irrelevant)
-#define TREE_HUGE tree_kind(2u)
+#define TREE_HUGE tree_kind(3u)
 
 static inline ll_unused const char *tree_kind_name(tree_kind_t kind)
 {
 	assert(kind.id < TREE_KINDS);
-	return ((const char *[]){ "fixed", "movable", "huge" })[kind.id];
+	return ((const char *[]){ "fixed", "movable", "long-lived",
+				  "huge" })[kind.id];
 }
 
 /// Tree change transaction
@@ -75,11 +78,11 @@ static inline tree_change_t tree_change_huge(treeF_t huge, treeF_t zeroed)
 				.huge = huge,
 				.zeroed = zeroed };
 }
-static inline tree_change_t tree_change_small(treeF_t frames, bool movable)
+static inline tree_change_t tree_change_small(treeF_t frames, tree_kind_t kind)
 {
 	assert(frames <= LLFREE_TREE_SIZE);
-	return (tree_change_t){ .kind = movable ? TREE_MOVABLE : TREE_FIXED,
-				.frames = frames };
+	assert(kind.id < TREE_HUGE.id);
+	return (tree_change_t){ .kind = kind, .frames = frames };
 }
 static inline tree_change_t tree_change(tree_kind_t kind, treeF_t frames,
 					treeF_t zeroed)
@@ -91,24 +94,27 @@ static inline tree_change_t tree_change(tree_kind_t kind, treeF_t frames,
 		assert(frames % LLFREE_CHILD_SIZE == 0);
 		return tree_change_huge(frames >> LLFREE_CHILD_ORDER, zeroed);
 	}
-	return tree_change_small(frames, kind.id == TREE_MOVABLE.id);
+	return tree_change_small(frames, kind);
 }
 
 static inline tree_kind_t tree_kind_flags(llflags_t flags)
 {
 	if (flags.order >= LLFREE_HUGE_ORDER)
 		return TREE_HUGE;
-	return flags.movable ? TREE_MOVABLE : TREE_FIXED;
+	if (flags.movable)
+		return flags.long_living ? TREE_LONG_LIVING : TREE_MOVABLE;
+	return TREE_FIXED;
 }
 static inline tree_change_t tree_change_flags(llflags_t flags)
 {
-	if (flags.order >= LLFREE_HUGE_ORDER) {
-		size_t huge = 1 << (flags.order - LLFREE_CHILD_ORDER);
+	size_t frames = 1 << flags.order;
+	if (frames >= LLFREE_HUGE_ORDER) {
+		size_t huge = huge_from_frame(frames);
 		assert(huge <= LLFREE_TREE_CHILDREN);
 		return tree_change_huge(huge,
 					(flags.zeroed && huge == 1) ? huge : 0);
 	}
-	return tree_change_small(1 << flags.order, flags.movable);
+	return tree_change_small(frames, tree_kind_flags(flags));
 }
 
 typedef struct p_range {
