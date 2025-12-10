@@ -2,7 +2,7 @@
   description = "LLFree Environment";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
   };
 
   outputs =
@@ -23,17 +23,11 @@
           pkgs = nixpkgs.legacyPackages.${system};
         in
         {
-          default = pkgs.mkShellNoCC {
+          default = pkgs.mkShell.override { stdenv = pkgs.clangStdenv; } {
             buildInputs = with pkgs; [
-              llvmPackages_20.clang
-              llvmPackages_20.lld
-              llvmPackages_20.llvm
-              llvmPackages_20.clang-tools
+              lldb
               bear
             ];
-            env = {
-              LLVM = 1;
-            };
           };
         }
       );
