@@ -34,7 +34,7 @@ static void llfree_drop(llfree_t *self)
 	llfree_ext_free(LLFREE_CACHE_SIZE, ms.trees, m.trees);
 	llfree_ext_free(LLFREE_CACHE_SIZE, ms.lower, m.lower);
 }
-#define lldrop [[gnu::cleanup(llfree_drop)]]
+#define lldrop __attribute__((cleanup(llfree_drop)))
 
 declare_test(llfree_init)
 {
@@ -368,19 +368,21 @@ static int comp(const void *a, const void *b)
 static void *alloc_frames(void *arg)
 {
 	struct arg *args = arg;
+	llfree_info("spawn %zu", args->core);
 
-	struct ret *ret = malloc(sizeof(struct ret));
+	struct ret *ret = calloc(1, sizeof(struct ret));
 	assert(ret != NULL);
 
-	ret->frames = malloc(args->amount * sizeof(int64_t));
+	ret->frames = calloc(args->amount, sizeof(int64_t));
 	assert(ret->frames != NULL);
 
-	srand((unsigned int)args->core);
+	unsigned int seed = args->core;
+
 	for (size_t i = 0; i < args->allocations; ++i) {
 		// if full or in 1/3 times free a random reserved frame;
 		if (ret->sp == args->amount ||
-		    (ret->sp > 0 && rand() % 8 > 4)) {
-			size_t random_idx = (size_t)rand() % ret->sp;
+		    (ret->sp > 0 && (rand_r(&seed) % 8) > 4)) {
+			size_t random_idx = ((size_t)rand_r(&seed)) % ret->sp;
 			llfree_result_t res = llfree_put(
 				args->upper, args->core,
 				ret->frames[random_idx], llflags(args->order));

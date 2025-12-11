@@ -11,16 +11,18 @@
 #define ll_warn_unused
 #endif
 
-/// Success
-#define LLFREE_ERR_OK ((uint8_t)0)
-/// Not enough memory
-#define LLFREE_ERR_MEMORY ((uint8_t)1)
-/// Failed atomic operation, retry procedure
-#define LLFREE_ERR_RETRY ((uint8_t)2)
-/// Invalid address
-#define LLFREE_ERR_ADDRESS ((uint8_t)3)
-/// Allocator not initialized or initialization failed
-#define LLFREE_ERR_INIT ((uint8_t)4)
+enum: uint8_t {
+	/// Success
+	LLFREE_ERR_OK = 0,
+	/// Not enough memory
+	LLFREE_ERR_MEMORY = 1,
+	/// Failed atomic operation, retry procedure
+	LLFREE_ERR_RETRY = 2,
+	/// Invalid address
+	LLFREE_ERR_ADDRESS = 3,
+	/// Allocator not initialized or initialization failed
+	LLFREE_ERR_INIT = 4,
+};
 
 /// Result type, to distinguish between normal integers
 typedef struct ll_warn_unused llfree_result {
@@ -59,7 +61,7 @@ static inline bool ll_unused llfree_is_ok(llfree_result_t r)
 }
 
 /// Init modes
-enum {
+enum: uint8_t {
 	/// Clear the allocator marking all frames as free
 	LLFREE_INIT_FREE = 0,
 	/// Clear the allocator marking all frames as allocated

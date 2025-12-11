@@ -17,7 +17,7 @@ typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) llfree {
 	size_t trees_len;
 
 	/// false means there are no zeroed pages or we should search for non-zeroed pages
-	_Atomic(bool) contains_zeroed;
+	_Atomic(uint8_t) contains_zeroed;
 	/// false means there are no huge pages or we should look for zero pages
-	_Atomic(bool) contains_huge;
+	_Atomic(uint8_t) contains_huge;
 } llfree_t;
