@@ -155,9 +155,9 @@ static inline size_t tree_prio(tree_t tree)
 }
 
 #define SEARCH_BEST 3
-static llfree_result_t search_best(llfree_t *self, uint64_t start,
-				   uint64_t offset, uint64_t len,
-				   search_fn callback, void *args)
+__attribute((unused)) static llfree_result_t
+search_best(llfree_t *self, uint64_t start, uint64_t offset, uint64_t len,
+	    search_fn callback, void *args)
 {
 	assert(self != NULL && callback != NULL);
 
@@ -225,7 +225,7 @@ static void swap_reserved(llfree_t *self, size_t core, size_t new_idx,
 {
 	llfree_debug("swap c=%zu idx=%zu: c_kind=%s kind=%s free=%" PRIu64,
 		     core, new_idx, tree_kind_name(previous_change.kind),
-		     tree_kind_name(tree_kind(new.kind)), (uint64_t) new.free);
+		     tree_kind_name(tree_kind(new.kind)), (uint64_t)new.free);
 	local_result_t res =
 		ll_local_swap(self->local, core, previous_change, new_idx, new);
 	assert(res.success);
@@ -294,6 +294,7 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, size_t idx,
 static llfree_result_t reserve_and_get(llfree_t *self, size_t core,
 				       llflags_t flags, uint64_t start)
 {
+#if 1
 	assert(start < self->trees_len);
 
 	llfree_result_t res;
@@ -319,7 +320,8 @@ static llfree_result_t reserve_and_get(llfree_t *self, size_t core,
 		if (res.error != LLFREE_ERR_MEMORY)
 			return res;
 
-		res = search(self, start, 1, near, reserve_tree_and_get, &args);
+		res = search(self, start, 1, self->trees_len,
+			     reserve_tree_and_get, &args);
 		if (res.error != LLFREE_ERR_MEMORY)
 			return res;
 	}
@@ -328,7 +330,44 @@ static llfree_result_t reserve_and_get(llfree_t *self, size_t core,
 	args.free = (p_range_t){ 0, LLFREE_TREE_SIZE };
 	res = search(self, start, 0, self->trees_len, reserve_tree_and_get,
 		     &args);
+#else
+	const size_t cl_trees = 32;
 
+	llfree_result_t res;
+
+	assert(start < self->trees_len);
+	start = align_down(start, cl_trees);
+
+	size_t near = (self->trees_len / llfree_cores(self)) / 4;
+	near = LL_MIN(LL_MAX(near, cl_trees / 4), cl_trees * 2);
+
+	reserve_args_t args = { .core = core,
+				.flags = flags,
+				.free = { 0, 0 } };
+	// Over half filled trees
+	args.free = (p_range_t){ LLFREE_TREE_SIZE / 16, LLFREE_TREE_SIZE / 2 };
+	res = search(self, start, 1, near, reserve_tree_and_get, &args);
+	if (res.error != LLFREE_ERR_MEMORY)
+		return res;
+
+	// Partially filled tree
+	args.free = (p_range_t){ LLFREE_TREE_SIZE / 64,
+				 LLFREE_TREE_SIZE - LLFREE_TREE_SIZE / 16 };
+	res = search(self, start, 1, 2 * near, reserve_tree_and_get, &args);
+	if (res.error != LLFREE_ERR_MEMORY)
+		return res;
+
+	// Not free tree
+	args.free = (p_range_t){ 0, LLFREE_TREE_SIZE - 1 };
+	res = search(self, start, 1, near, reserve_tree_and_get, &args);
+	if (res.error != LLFREE_ERR_MEMORY)
+		return res;
+
+	// Any tree
+	args.free = (p_range_t){ 0, LLFREE_TREE_SIZE };
+	res = search(self, start, 0, self->trees_len, reserve_tree_and_get,
+		     &args);
+#endif
 	return res;
 }
 
@@ -922,14 +961,20 @@ void llfree_print_debug(const llfree_t *self,
 {
 	assert(self != NULL);
 
+	size_t fixed_trees = 0;
 	size_t movable_trees = 0;
+	size_t long_living_trees = 0;
 	size_t free_trees = 0;
 	for (size_t i = 0; i < self->trees_len; i++) {
 		tree_t tree = atom_load(&self->trees[i]);
 		if (tree.free == LLFREE_TREE_SIZE)
 			free_trees += 1;
+		else if (tree.kind == TREE_FIXED.id)
+			fixed_trees += 1;
 		else if (tree.kind == TREE_MOVABLE.id)
 			movable_trees += 1;
+		else if (tree.kind == TREE_LONG_LIVING.id)
+			long_living_trees += 1;
 	}
 
 	char msg[256];
@@ -938,10 +983,10 @@ void llfree_print_debug(const llfree_t *self,
 	snprintf(msg, sizeof(msg),
 		 "LLC { cores: %" PRIuS ", frames: %" PRIuS "/%" PRIuS
 		 ", huge: %" PRIuS "/%" PRIuS "/%" PRIuS ", trees: %" PRIuS
-		 "/%" PRIuS " m=%" PRIuS " }\n",
+		 "/%" PRIuS " f=%" PRIuS " m=%" PRIuS " l=%" PRIuS " }\n",
 		 llfree_cores(self), stats.free_frames, stats.frames,
 		 stats.zeroed_huge, stats.free_huge, stats.huge, free_trees,
-		 self->trees_len, movable_trees);
+		 self->trees_len, fixed_trees, movable_trees, long_living_trees);
 	writer(arg, msg);
 }
 

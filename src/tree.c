@@ -7,9 +7,6 @@ bool tree_put(tree_t *self, tree_change_t change)
 	treeF_t zeroed = self->zeroed;
 	tree_kind_t kind = tree_kind(self->kind);
 
-	if ((!self->reserved && free == 0) || change.kind.id < kind.id)
-		kind = change.kind;
-
 	if (change.kind.id == TREE_HUGE.id) {
 		free += change.huge << LLFREE_CHILD_ORDER;
 		zeroed += change.zeroed;
