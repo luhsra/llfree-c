@@ -38,7 +38,7 @@
 #define LLFREE_TREE_SIZE (1u << LLFREE_TREE_ORDER)
 
 /// Enable reserve on free heuristic
-#define LLFREE_ENABLE_FREE_RESERVE true
+#define LLFREE_ENABLE_FREE_RESERVE false
 /// Allocate first from already install huge frames, before falling back to evicted ones
 #define LLFREE_PREFER_INSTALLED false
 

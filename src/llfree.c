@@ -154,7 +154,7 @@ static inline size_t tree_prio(tree_t tree)
 	return 2; // few free pages -> prevent frequent re-reservations
 }
 
-#define SEARCH_BEST 3
+#define SEARCH_BEST 2
 __attribute((unused)) static llfree_result_t
 search_best(llfree_t *self, uint64_t start, uint64_t offset, uint64_t len,
 	    search_fn callback, void *args)
@@ -225,7 +225,7 @@ static void swap_reserved(llfree_t *self, size_t core, size_t new_idx,
 {
 	llfree_debug("swap c=%zu idx=%zu: c_kind=%s kind=%s free=%" PRIu64,
 		     core, new_idx, tree_kind_name(previous_change.kind),
-		     tree_kind_name(tree_kind(new.kind)), (uint64_t)new.free);
+		     tree_kind_name(tree_kind(new.kind)), (uint64_t) new.free);
 	local_result_t res =
 		ll_local_swap(self->local, core, previous_change, new_idx, new);
 	assert(res.success);
@@ -302,7 +302,7 @@ static llfree_result_t reserve_and_get(llfree_t *self, size_t core,
 	// 16 starting points seam to work well
 	size_t near = LL_MAX(self->trees_len / 16, cl_trees / 4);
 	// Align start to twice the near distance, so we have a gap between starting points
-	start = align_down(start, 1 << log2(2 * near));
+	start = align_down(start, next_pow2(2 * near));
 
 	reserve_args_t args = { .core = core,
 				.flags = flags,
@@ -986,7 +986,8 @@ void llfree_print_debug(const llfree_t *self,
 		 "/%" PRIuS " f=%" PRIuS " m=%" PRIuS " l=%" PRIuS " }\n",
 		 llfree_cores(self), stats.free_frames, stats.frames,
 		 stats.zeroed_huge, stats.free_huge, stats.huge, free_trees,
-		 self->trees_len, fixed_trees, movable_trees, long_living_trees);
+		 self->trees_len, fixed_trees, movable_trees,
+		 long_living_trees);
 	writer(arg, msg);
 }
 

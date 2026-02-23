@@ -35,10 +35,10 @@ static inline optional_size_t optional_size_none(void)
 /// Loop will end after len iterations.
 /// code will be executed in each loop.
 /// The current loop value can accessed by current_i
-#define for_offsetted(start, len, current_i)                              \
-	for (size_t _i = 0, _offset = (start) % (len),                    \
-		    _base_idx = (start) - _offset, (current_i) = (start); \
-	     _i < (len);                                                  \
+#define for_offsetted(start, len, current_i)                            \
+	for (size_t _i = 0, _offset = (start) % (len),                  \
+		    _base_idx = (start)-_offset, (current_i) = (start); \
+	     _i < (len);                                                \
 	     _i = _i + 1, (current_i) = _base_idx + ((_i + _offset) % (len)))
 
 // conversion functions
@@ -129,6 +129,13 @@ static inline ll_unused size_t log2(uint64_t val)
 {
 	assert(val > 0);
 	return (size_t)(63 - leading_zeros(val));
+}
+
+static inline ll_unused size_t next_pow2(size_t val)
+{
+	if (val <= 1)
+		return 1;
+	return (size_t)1 << (log2(val - 1) + 1);
 }
 
 /// Pause CPU for polling
