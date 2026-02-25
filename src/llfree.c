@@ -139,25 +139,12 @@ static llfree_result_t search(llfree_t *self, uint64_t start, uint64_t offset,
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
-typedef bool (*filter_fn)(tree_t tree);
+typedef size_t (*prio_fn)(llflags_t flags, tree_t tree, void *args);
 
-static inline size_t tree_prio(tree_t tree)
-{
-	if (tree.free == 0)
-		return 0; // entirely allocated
-	if (tree.free == LLFREE_TREE_SIZE)
-		return 1; // entirely free
-	if (tree.free >= LLFREE_TREE_SIZE / 2)
-		return 3; // many free pages
-	if (tree.free >= LLFREE_TREE_SIZE / 64)
-		return 4; // some free pages
-	return 2; // few free pages -> prevent frequent re-reservations
-}
-
-#define SEARCH_BEST 2
+#define SEARCH_BEST 3
 __attribute((unused)) static llfree_result_t
-search_best(llfree_t *self, uint64_t start, uint64_t offset, uint64_t len,
-	    search_fn callback, void *args)
+search_best(llfree_t *self, llflags_t flags, uint64_t start, uint64_t offset,
+	    uint64_t len, prio_fn tree_prio, search_fn callback, void *args)
 {
 	assert(self != NULL && callback != NULL);
 
@@ -176,12 +163,12 @@ search_best(llfree_t *self, uint64_t start, uint64_t offset, uint64_t len,
 		uint64_t idx = (uint64_t)(base + off) % self->trees_len;
 
 		tree_t tree = atom_load(&self->trees[idx]);
-		size_t prio = tree_prio(tree);
+		size_t prio = (tree_prio)(flags, tree, args);
 		if (prio == 0)
 			continue;
 
 		// Using highest prio directly
-		if (prio == 4) {
+		if (prio >= 100) {
 			llfree_result_t res = callback(self, idx, args);
 
 			if (res.error != LLFREE_ERR_MEMORY)
@@ -288,6 +275,31 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, size_t idx,
 	return res;
 }
 
+static inline size_t tree_prio(llflags_t flags, tree_t tree, void *args)
+{
+	(void)args;
+	if (tree.free == 0)
+		return 0; // entirely allocated
+	if (tree.free == LLFREE_TREE_SIZE)
+		return 0; // entirely free (dont fragment free trees!)
+
+	tree_kind_t kind = tree_kind_flags(flags);
+	if (kind.id != tree.kind)
+		return 0;
+
+	// perfect match -> highest prio
+	if (kind.id == TREE_HUGE.id)
+		return 100;
+	if (kind.id == TREE_MOVABLE.id && tree.free >= 64)
+		return 100;
+	if (kind.id == TREE_FIXED.id && tree.free >= 64)
+		return 100;
+	if (kind.id == TREE_LONG_LIVING.id) // should be as compact as possible
+		return 100;
+
+	return 2; // fallback
+}
+
 /// Reserves a new tree and allocates from it.
 ///
 /// The search for a new tree aims to be both fast and avoid fragmentation.
@@ -312,11 +324,11 @@ static llfree_result_t reserve_and_get(llfree_t *self, size_t core,
 		     tree_kind_name(tree_kind_flags(flags)), flags.zeroed);
 
 	if (flags.order < LLFREE_HUGE_ORDER) {
-		// Not free tree
+		// Here we do not want to fragment free trees!
 		args.free = (p_range_t){ 0, LLFREE_TREE_SIZE - 1 };
 
-		res = search_best(self, start, 1, near, reserve_tree_and_get,
-				  &args);
+		res = search_best(self, flags, start, 1, 2 * near, tree_prio,
+				  reserve_tree_and_get, &args);
 		if (res.error != LLFREE_ERR_MEMORY)
 			return res;
 
