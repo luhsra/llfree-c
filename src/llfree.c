@@ -290,10 +290,18 @@ static inline size_t tree_prio(llflags_t flags, tree_t tree, void *args)
 	// perfect match -> highest prio
 	if (kind.id == TREE_HUGE.id)
 		return 100;
-	if (kind.id == TREE_MOVABLE.id && tree.free >= 64)
-		return 100;
-	if (kind.id == TREE_FIXED.id && tree.free >= 64)
-		return 100;
+	if (kind.id == TREE_MOVABLE.id) {
+		if (tree.free >= LLFREE_TREE_SIZE / 2) return 100;
+		if (tree.free <= 8) return 1;
+		// if (tree.free >= LLFREE_TREE_SIZE / 128) return 3;
+		// if (tree.free >= LLFREE_TREE_SIZE / 32) return 4;
+	}
+	if (kind.id == TREE_FIXED.id) {
+		if (tree.free >= LLFREE_TREE_SIZE / 2) return 100;
+		// if (tree.free <= 8) return 1;
+		// if (tree.free >= LLFREE_TREE_SIZE / 128) return 3;
+		// if (tree.free >= LLFREE_TREE_SIZE / 32) return 4;
+	}
 	if (kind.id == TREE_LONG_LIVING.id) // should be as compact as possible
 		return 100;
 
