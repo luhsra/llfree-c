@@ -169,9 +169,6 @@ typedef struct llfree_meta_size {
 llfree_meta_size_t llfree_metadata_size(const llfree_tiering_t *tiering,
 					size_t frames);
 
-/// Returns the metadata size of an already-initialized allocator.
-/// Useful for cleanup without needing the original tiering struct.
-llfree_meta_size_t llfree_metadata_size_of(const llfree_t *self);
 
 /// Size of the required metadata
 typedef struct llfree_meta {
@@ -196,6 +193,9 @@ llfree_result_t llfree_init(llfree_t *self, size_t frames, uint8_t init,
 
 /// Returns the metadata
 llfree_meta_t llfree_metadata(const llfree_t *self);
+/// Returns the metadata size of an already-initialized allocator.
+/// Useful for cleanup without needing the original tiering struct.
+llfree_meta_size_t llfree_metadata_size_of(const llfree_t *self);
 
 /// Allocates a frame. Returns the frame and its actual tier in the result.
 /// The actual tier may differ from request.tier if demotion occurred.
@@ -208,16 +208,13 @@ llfree_result_t llfree_get(llfree_t *self, ll_optional_t frame,
 llfree_result_t llfree_put(llfree_t *self, uint64_t frame,
 			   llfree_request_t request);
 
-/// Unreserves the cpu-local reservation for the given local slot index.
-/// Matches the Rust `drain(local: usize)` semantics.
+/// Unreserves the local reservation for the given local slot index.
 llfree_result_t llfree_drain(llfree_t *self, size_t local);
 
 /// Returns the total number of local slots (sum of all tier slot counts).
-/// Replaces llfree_cores(): in the new API there is no concept of "cores",
-/// the caller provides local slot indices directly via llfree_request_t.
 size_t llfree_locals(const llfree_t *self);
 
-/// Returns the total number of frames the allocator can allocate
+/// Returns the total number of frames the allocator can allocate.
 size_t llfree_frames(const llfree_t *self);
 
 /// LLFree statistics
@@ -262,23 +259,6 @@ void llfree_validate(const llfree_t *self);
 
 // == Example Tiering ==
 
-/// Simple movable policy (3 tiers: immovable=0, movable=1, huge=2)
-static inline llfree_policy_t ll_unused llfree_movable_policy(uint8_t requested,
-							      uint8_t target,
-							      size_t free)
-{
-	if (requested < target)
-		return (llfree_policy_t){ LLFREE_POLICY_STEAL, 0 };
-	if (requested > target)
-		return (llfree_policy_t){ LLFREE_POLICY_DEMOTE, 0 };
-	/* same tier */
-	if (free >= LLFREE_TREE_SIZE / 2)
-		return (llfree_policy_t){ LLFREE_POLICY_MATCH, 1 };
-	if (free >= LLFREE_TREE_SIZE / 64)
-		return (llfree_policy_t){ LLFREE_POLICY_MATCH, UINT8_MAX };
-	return (llfree_policy_t){ LLFREE_POLICY_MATCH, 2 };
-}
-
 /// Simple 2-tier policy (small=0, huge=1)
 static inline llfree_policy_t ll_unused llfree_simple_policy(uint8_t requested,
 							     uint8_t target,
@@ -308,6 +288,36 @@ static inline llfree_tiering_t ll_unused llfree_tiering_simple(size_t cores)
 	return t;
 }
 
+/// Build a request for simple 2-tier tiering.
+/// Maps (order, core) to the correct tier and local slot index.
+static inline llfree_request_t ll_unused llfree_simple_request(size_t cores,
+							       uint8_t order,
+							       size_t core)
+{
+	if (order >= LLFREE_HUGE_ORDER)
+		return llreq(order, 1, (core % cores) + cores);
+	return llreq(order, 0, core % cores);
+}
+
+// == More complex movable tiering example ==
+
+/// Simple movable policy (3 tiers: immovable=0, movable=1, huge=2)
+static inline llfree_policy_t ll_unused llfree_movable_policy(uint8_t requested,
+							      uint8_t target,
+							      size_t free)
+{
+	if (requested < target)
+		return (llfree_policy_t){ LLFREE_POLICY_STEAL, 0 };
+	if (requested > target)
+		return (llfree_policy_t){ LLFREE_POLICY_DEMOTE, 0 };
+	/* same tier */
+	if (free >= LLFREE_TREE_SIZE / 2)
+		return (llfree_policy_t){ LLFREE_POLICY_MATCH, 1 };
+	if (free >= LLFREE_TREE_SIZE / 64)
+		return (llfree_policy_t){ LLFREE_POLICY_MATCH, UINT8_MAX };
+	return (llfree_policy_t){ LLFREE_POLICY_MATCH, 2 };
+}
+
 /// Create a 3-tier movable tiering: tier 0 immovable, tier 1 movable, tier 2 huge.
 /// Each tier gets `cores` local slots.
 static inline llfree_tiering_t ll_unused llfree_tiering_movable(size_t cores)
@@ -319,17 +329,6 @@ static inline llfree_tiering_t ll_unused llfree_tiering_movable(size_t cores)
 	t.tiers[1] = (llfree_tier_conf_t){ .tier = 1, .count = cores };
 	t.tiers[2] = (llfree_tier_conf_t){ .tier = 2, .count = cores };
 	return t;
-}
-
-/// Build a request for simple 2-tier tiering.
-/// Maps (order, core) to the correct tier and local slot index.
-static inline llfree_request_t ll_unused llfree_simple_request(size_t cores,
-							       uint8_t order,
-							       size_t core)
-{
-	if (order >= LLFREE_HUGE_ORDER)
-		return llreq(order, 1, (core % cores) + cores);
-	return llreq(order, 0, core % cores);
 }
 
 /// Build a request for movable 3-tier tiering.

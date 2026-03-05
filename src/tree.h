@@ -41,9 +41,6 @@ static inline ll_unused tree_t tree_new(bool reserved, uint8_t tier,
 /// Return frames to a tree (increment free counter).
 bool tree_put(tree_t *self, treeF_t frames);
 
-/// Allocate frames from a tree if tier matches and enough free frames.
-bool tree_get(tree_t *self, uint8_t tier, treeF_t frames);
-
 /// Allocate frames, possibly demoting the tier via policy.
 bool tree_get_demote(tree_t *self, uint8_t tier, treeF_t frames,
 		     llfree_policy_fn policy);

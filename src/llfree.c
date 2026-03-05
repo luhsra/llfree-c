@@ -545,8 +545,8 @@ static llfree_result_t llfree_get_at(llfree_t *self, size_t frame,
 
 		// Decrement global tree counter
 		tree_t old_t;
-		if (atom_update(&self->trees[tree_idx], old_t, tree_get,
-				request.tier, frames)) {
+		if (atom_update(&self->trees[tree_idx], old_t, tree_get_demote,
+				request.tier, frames, self->policy)) {
 			result_tier = old_t.tier;
 			goto search_found;
 		}

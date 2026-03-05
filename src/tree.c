@@ -9,14 +9,6 @@ bool tree_put(tree_t *self, treeF_t frames)
 	return true;
 }
 
-bool tree_get(tree_t *self, uint8_t tier, treeF_t frames)
-{
-	if (self->reserved || self->free < frames || self->tier != tier)
-		return false;
-	self->free -= frames;
-	return true;
-}
-
 bool tree_get_demote(tree_t *self, uint8_t tier, treeF_t frames,
 		     llfree_policy_fn policy)
 {
