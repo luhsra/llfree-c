@@ -3,20 +3,6 @@
 #include "llfree.h"
 #include "llfree_platform.h"
 
-/// Optional size_t type
-typedef struct optional_size_t {
-	bool present : 1;
-	size_t value : (sizeof(size_t) * 8) - 1;
-} optional_size_t;
-static inline optional_size_t optional_size(size_t value)
-{
-	return (optional_size_t){ .present = true, .value = value };
-}
-static inline optional_size_t optional_size_none(void)
-{
-	return (optional_size_t){ .present = false, .value = 0 };
-}
-
 /// Minimal size the LLFree can manage
 #define MIN_PAGES (1ul << LLFREE_MAX_ORDER)
 /// 64 Bit Addresses - 12 Bit needed for offset inside the Page

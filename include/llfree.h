@@ -11,7 +11,49 @@
 #define ll_warn_unused
 #endif
 
-enum: uint8_t {
+/// Optional size_t type
+typedef struct ll_optional {
+	bool present : 1;
+	size_t value : (sizeof(size_t) * 8) - 1;
+} ll_optional_t;
+static inline ll_unused ll_optional_t ll_some(size_t value)
+{
+	return (ll_optional_t){ .present = true, .value = value };
+}
+static inline ll_unused ll_optional_t ll_none(void)
+{
+	return (ll_optional_t){ .present = false, .value = 0 };
+}
+
+#define LLKIND_BITS 3
+
+/// Opaque kind of a tree
+typedef struct llkind {
+	uint8_t id : LLKIND_BITS;
+} llkind_t;
+
+/// Create a new kind
+llkind_t llkind(uint8_t id);
+
+/// Kind id used for huge frames
+#define LLKIND_HUGE llkind((1 << LLKIND_BITS) - 2)
+/// Maximum kind id (e.g., usable for zeroed or long-living huge pages)
+#define LLKIND_ZERO llkind((1 << LLKIND_BITS) - 1)
+
+/// Specifies how many reservations of each kind the allocator should maintain
+typedef struct llkind_desc {
+	llkind_t kind;
+	uint8_t count;
+} llkind_desc_t;
+
+/// Create a new kind descriptor
+llkind_desc_t llkind_desc(llkind_t kind, uint8_t count);
+static inline ll_unused llkind_desc_t llkind_desc_zero(void)
+{
+	return (llkind_desc_t){ .kind = llkind(0), .count = 0 };
+}
+
+enum : uint8_t {
 	/// Success
 	LLFREE_ERR_OK = 0,
 	/// Not enough memory
@@ -27,31 +69,28 @@ enum: uint8_t {
 /// Result type, to distinguish between normal integers
 typedef struct ll_warn_unused llfree_result {
 	/// Usually only valid if error == LLFREE_ERR_OK
-	uint64_t frame : 54;
+	uint64_t frame : 58;
 	/// If the frame was reclaimed, e.g. by ballooning
-	bool reclaimed : 1;
-	/// If the frame is already zeroed
-	bool zeroed : 1;
+	uint8_t kind : LLKIND_BITS;
 	/// Error code, 0 if no error
-	uint8_t error : 8;
+	uint8_t error : 3;
 } llfree_result_t;
+
+_Static_assert(sizeof(llfree_result_t) == sizeof(uint64_t),
+	       "result size mismatch");
 
 typedef struct llfree llfree_t;
 
 /// Create a new result
-static inline llfree_result_t ll_unused llfree_ok(uint64_t frame,
-						  bool reclaimed, bool zeroed)
+static inline llfree_result_t ll_unused llfree_ok(uint64_t frame, llkind_t kind)
 {
 	return (llfree_result_t){ .frame = frame,
-				  .reclaimed = reclaimed,
-				  .zeroed = zeroed,
+				  .kind = kind.id,
 				  .error = LLFREE_ERR_OK };
 }
 static inline llfree_result_t ll_unused llfree_err(uint8_t err)
 {
-	return (llfree_result_t){
-		.frame = 0, .reclaimed = false, .zeroed = false, .error = err
-	};
+	return (llfree_result_t){ .frame = 0, .kind = 0, .error = err };
 }
 
 /// Check if the result is ok (no error)
@@ -61,7 +100,7 @@ static inline bool ll_unused llfree_is_ok(llfree_result_t r)
 }
 
 /// Init modes
-enum: uint8_t {
+enum : uint8_t {
 	/// Clear the allocator marking all frames as free
 	LLFREE_INIT_FREE = 0,
 	/// Clear the allocator marking all frames as allocated
@@ -80,23 +119,16 @@ enum: uint8_t {
 /// Allocation flags
 typedef struct llflags {
 	/// Allocation size: n-th power of two.
-	uint8_t order : 8;
-	/// Is this alloation movable: LLFree tries to separete movable and immovable allocations.
-	bool movable : 1;
-	/// If the frame should be zeroed.
-	bool zeroed : 1;
-	/// Long-living allocation: try separating long-living and short-living allocations.
-	bool long_living : 1;
-	// ... Reserved for future use
+	uint8_t order : 4;
+	/// Local tree index (local trees are configured during initialization)
+	///
+	/// The policy for mapping locals to cores has to be provided by the user,
+	/// but a common approach is to have one local tree per core.
+	uint16_t local : 12;
 } llflags_t;
 
-static inline llflags_t ll_unused llflags(size_t order)
-{
-	return (llflags_t){ .order = (uint8_t)order,
-			    .movable = false,
-			    .zeroed = false,
-			    .long_living = false };
-}
+/// Create new flags
+llflags_t llflags(size_t order, size_t local);
 
 /// Size of the required metadata
 typedef struct llfree_meta_size {
@@ -111,7 +143,8 @@ typedef struct llfree_meta_size {
 } llfree_meta_size_t;
 
 /// Returns the size of the metadata buffers required for initialization
-llfree_meta_size_t llfree_metadata_size(size_t cores, size_t frames);
+llfree_meta_size_t llfree_metadata_size(const llkind_desc_t *kinds,
+					size_t frames);
 
 /// Size of the required metadata
 typedef struct llfree_meta {
@@ -125,37 +158,30 @@ typedef struct llfree_meta {
 
 /// Allocate and initialize the data structures of the allocator.
 ///
-/// `offset` is the number of the first page to be managed and `len` determins
-/// the size of the region in the number of pages.
+/// The zero-terminated `kinds` array specifies how many reservations of each
+/// kind the allocator should maintain.
 ///
 /// The `init` parameter is expected to be one of the `LLFREE_INIT_<..>` modes.
 ///
 /// The `meta` buffers are used to store the allocator state
-/// and must be at least as large as reported by llfree_metadata_size.
-llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
-			    uint8_t init, llfree_meta_t meta);
+/// and must be at least as large as reported by `llfree_metadata_size`.
+llfree_result_t llfree_init(llfree_t *self, const llkind_desc_t *kinds,
+			    size_t frames, uint8_t init, llfree_meta_t meta);
 
 /// Returns the metadata
 llfree_meta_t llfree_metadata(const llfree_t *self);
 
-/// Allocates a frame
-llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags);
-/// Try allocating this frame
-llfree_result_t llfree_get_at(llfree_t *self, size_t core, uint64_t frame,
-			      llflags_t flags);
-/// Frees this frame
-llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
+/// Allocates a frame, optionally at a specific frame index.
+llfree_result_t llfree_get(llfree_t *self, ll_optional_t frame,
 			   llflags_t flags);
+/// Frees this frame
+llfree_result_t llfree_put(llfree_t *self, uint64_t frame, llflags_t flags);
 
 /// Unreserves all cpu-local reservations
-llfree_result_t llfree_drain(llfree_t *self, size_t core);
+llfree_result_t llfree_drain(llfree_t *self, size_t local);
 
-/// Returns the number of cores this allocator was initialized with
-size_t llfree_cores(const llfree_t *self);
 /// Returns the total number of frames the allocator can allocate
 size_t llfree_frames(const llfree_t *self);
-/// Returns the total number of huge frames the allocator can allocate
-size_t llfree_huge(const llfree_t *self);
 
 /// LLFree statistics
 typedef struct ll_stats {
@@ -183,13 +209,15 @@ ll_stats_t llfree_full_stats_at(const llfree_t *self, uint64_t frame,
 
 // == Ballooning ==
 
+#if 0
 /// Search for a free and not reclaimed huge page and mark it reclaimed (and optionally allocated)
-llfree_result_t llfree_reclaim(llfree_t *self, size_t core, bool alloc,
+llfree_result_t llfree_reclaim(llfree_t *self, size_t local, bool alloc,
 			       bool not_reclaimed, bool not_zeroed);
 /// Mark the reclaimed huge page as free, but keep it reclaimed
 llfree_result_t llfree_return(llfree_t *self, uint64_t frame, bool install);
 /// Clear the reclaimed state of the given huge page
 llfree_result_t llfree_install(llfree_t *self, uint64_t frame);
+#endif
 
 // == Debugging ==
 

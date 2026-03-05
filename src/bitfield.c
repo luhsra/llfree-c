@@ -92,8 +92,8 @@ bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos)
 	// NOLINTEND(readability-magic-numbers)
 }
 
-llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
-			       size_t order)
+lower_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
+			      size_t order)
 {
 	size_t num_frames = 1 << order;
 	assert(num_frames < LLFREE_CHILD_SIZE);
@@ -106,13 +106,12 @@ llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
 			uint64_t old;
 			if (atom_update(&field->rows[current_i], old,
 					first_zeros_aligned, order, &pos)) {
-				return llfree_ok(
+				return lower_ok(
 					((current_i * LLFREE_ATOMIC_SIZE) +
-					 pos),
-					false, false);
+					 pos));
 			}
 		}
-		return llfree_err(LLFREE_ERR_MEMORY);
+		return lower_err(LLFREE_ERR_MEMORY);
 	}
 
 	size_t entries = num_frames / LLFREE_ATOMIC_SIZE;
@@ -141,13 +140,12 @@ llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
 		}
 		if (!failed) {
 			// Success, we have updated all rows
-			return llfree_ok(current_i * entries *
-						 LLFREE_ATOMIC_SIZE,
-					 false, false);
+			return lower_ok(current_i * entries *
+					LLFREE_ATOMIC_SIZE);
 		}
 	}
 
-	return llfree_err(LLFREE_ERR_MEMORY);
+	return lower_err(LLFREE_ERR_MEMORY);
 }
 
 static bool row_toggle(uint64_t *row, uint64_t mask, bool expected)
@@ -166,8 +164,8 @@ static bool row_toggle(uint64_t *row, uint64_t mask, bool expected)
 	return false;
 }
 
-llfree_result_t field_toggle(bitfield_t *field, size_t index, size_t order,
-			     bool expected)
+lower_result_t field_toggle(bitfield_t *field, size_t index, size_t order,
+			    bool expected)
 {
 	assert(index < LLFREE_CHILD_SIZE);
 
@@ -183,9 +181,9 @@ llfree_result_t field_toggle(bitfield_t *field, size_t index, size_t order,
 					      ~mask)) {
 				continue;
 			}
-			return llfree_err(LLFREE_ERR_ADDRESS);
+			return lower_err(LLFREE_ERR_ADDRESS);
 		}
-		return llfree_err(LLFREE_ERR_OK);
+		return lower_err(LLFREE_ERR_OK);
 	}
 
 	uint64_t mask =
@@ -193,9 +191,9 @@ llfree_result_t field_toggle(bitfield_t *field, size_t index, size_t order,
 	uint64_t old;
 	if (atom_update(&field->rows[pos.row], old, row_toggle, mask,
 			expected)) {
-		return llfree_err(LLFREE_ERR_OK);
+		return lower_err(LLFREE_ERR_OK);
 	}
-	return llfree_err(LLFREE_ERR_ADDRESS);
+	return lower_err(LLFREE_ERR_ADDRESS);
 }
 
 size_t field_count_ones(bitfield_t *field)

@@ -14,8 +14,10 @@ declare_test(local_last_free_inc)
 {
 	bool success = true;
 
-	local_t *local = llfree_ext_alloc(LLFREE_CACHE_SIZE, ll_local_size(1));
-	ll_local_init(local, 1);
+	llkind_desc_t kinds[2] = { llkind_desc(llkind(0), 1), llkind_desc_zero() };
+
+	local_t *local = llfree_ext_alloc(LLFREE_CACHE_SIZE, ll_local_size(kinds));
+	ll_local_init(local, kinds);
 
 	for (size_t i = 0; i < LAST_FREES; i++) {
 		check(!ll_local_free_inc(local, 0, 0));

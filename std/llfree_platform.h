@@ -61,7 +61,7 @@
 	fprintf(stderr, "\x1b[90m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
 	       ##__VA_ARGS__)
 #else
-#define llfree_debug(str, ...)
+#define llfree_debug(str, ...) (void)0
 #endif
 
 static const int ATOM_LOAD_ORDER = memory_order_acquire;

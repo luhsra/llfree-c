@@ -1,10 +1,10 @@
 #pragma once
 
+#include "llfree.h"
 #include "utils.h"
 
 typedef uint32_t treeF_t;
-#define LLFREE_TREE_FREE_BITS \
-	((sizeof(treeF_t) * 8) - 1 - 3 - (LLFREE_TREE_CHILDREN_ORDER + 1))
+#define LLFREE_TREE_FREE_BITS ((sizeof(treeF_t) * 8) - 1 - LLKIND_BITS)
 _Static_assert(LLFREE_TREE_FREE_BITS > LLFREE_TREE_ORDER, "Tree free counter");
 
 /// Tree entry
@@ -12,110 +12,12 @@ typedef struct tree {
 	/// Whether this tree has been reserved.
 	bool reserved : 1;
 	/// The kind of pages this tree contains.
-	uint8_t kind : 3;
+	uint8_t kind : LLKIND_BITS;
 	/// Number of free frames in this tree.
 	/// If TREE_HUGE, this has to be a multiple of LLFREE_CHILD_SIZE.
 	treeF_t free : LLFREE_TREE_FREE_BITS;
-	/// The number of zeroed huge pages in this tree.
-	/// This requires kind == TREE_HUGE.
-	treeF_t zeroed : LLFREE_TREE_CHILDREN_ORDER + 1;
 } tree_t;
 _Static_assert(sizeof(tree_t) == sizeof(treeF_t), "tree size mismatch");
-
-/// The tree kinds track if a tree contains at least one page of the given kind.
-/// Trees can be demoted to a lower kind if memory runs out.
-/// They are promoted if all corresponding pages are freed.
-typedef struct tree_kind {
-	uint8_t id;
-} tree_kind_t;
-/// Number of tree kinds
-#define TREE_KINDS (size_t)(4u)
-static inline ll_unused tree_kind_t tree_kind(uint8_t id)
-{
-	assert(id < TREE_KINDS);
-	return (tree_kind_t){ id };
-}
-/// Contains immovable pages
-#define TREE_FIXED tree_kind(0u)
-/// Contains movable pages
-#define TREE_MOVABLE tree_kind(1u)
-/// Contains long-lived pages
-#define TREE_LONG_LIVING tree_kind(2u)
-/// Contains huge pages (movability is irrelevant)
-#define TREE_HUGE tree_kind(3u)
-
-static inline ll_unused const char *tree_kind_name(tree_kind_t kind)
-{
-	assert(kind.id < TREE_KINDS);
-	return ((const char *[]){ "fixed", "movable", "long-lived",
-				  "huge" })[kind.id];
-}
-
-/// Tree change transaction
-typedef struct tree_change {
-	/// The requested tree kind
-	tree_kind_t kind;
-	union {
-		/// Movable/Fixed
-		/// The number of base frames
-		treeF_t frames;
-		/// Huge (and potentially Zeroed)
-		struct {
-			/// The number of huge frames
-			treeF_t huge;
-			/// The number of zeroed huge frames
-			treeF_t zeroed;
-		};
-	};
-} tree_change_t;
-
-static inline tree_change_t tree_change_huge(treeF_t huge, treeF_t zeroed)
-{
-	assert(huge <= LLFREE_TREE_CHILDREN);
-	assert(zeroed <= LLFREE_TREE_CHILDREN);
-	assert(zeroed <= huge);
-	return (tree_change_t){ .kind = TREE_HUGE,
-				.huge = huge,
-				.zeroed = zeroed };
-}
-static inline tree_change_t tree_change_small(treeF_t frames, tree_kind_t kind)
-{
-	assert(frames <= LLFREE_TREE_SIZE);
-	assert(kind.id < TREE_HUGE.id);
-	return (tree_change_t){ .kind = kind, .frames = frames };
-}
-static inline tree_change_t tree_change(tree_kind_t kind, treeF_t frames,
-					treeF_t zeroed)
-{
-	assert(kind.id < TREE_KINDS);
-	assert(frames <= LLFREE_TREE_SIZE);
-	assert(zeroed <= LLFREE_TREE_CHILDREN);
-	if (kind.id == TREE_HUGE.id) {
-		assert(frames % LLFREE_CHILD_SIZE == 0);
-		return tree_change_huge(frames >> LLFREE_CHILD_ORDER, zeroed);
-	}
-	return tree_change_small(frames, kind);
-}
-
-static inline tree_kind_t tree_kind_flags(llflags_t flags)
-{
-	if (flags.order >= LLFREE_HUGE_ORDER)
-		return TREE_HUGE;
-	if (flags.movable)
-		return flags.long_living ? TREE_LONG_LIVING : TREE_MOVABLE;
-	return TREE_FIXED;
-}
-static inline tree_change_t tree_change_flags(llflags_t flags)
-{
-	size_t frames = 1 << flags.order;
-	if (frames >= LLFREE_HUGE_ORDER) {
-		size_t huge = huge_from_frame(frames);
-		assert(huge <= LLFREE_TREE_CHILDREN);
-		return tree_change_huge(huge,
-					(flags.zeroed && huge == 1) ? huge : 0);
-	}
-	return tree_change_small(frames, tree_kind_flags(flags));
-}
 
 typedef struct p_range {
 	treeF_t min, max;
@@ -125,51 +27,40 @@ typedef struct p_range {
 #define TREE_LOWER_LIM (LLFREE_TREE_SIZE / 16)
 
 /// Create a new tree entry
-static inline ll_unused tree_t tree_new(bool reserved, tree_kind_t kind,
-					treeF_t free, treeF_t zeroed)
+static inline ll_unused tree_t tree_new(bool reserved, llkind_t kind,
+					treeF_t free)
 {
 	assert(free <= LLFREE_TREE_SIZE);
-	assert(zeroed <= LLFREE_TREE_CHILDREN);
-	assert(kind.id != TREE_HUGE.id || (free % LLFREE_CHILD_SIZE) == 0);
-	assert(kind.id < TREE_KINDS);
+	assert(kind.id < LLKIND_HUGE.id || (free % LLFREE_CHILD_SIZE) == 0);
+	assert(kind.id <= LLKIND_ZERO.id);
 	// Correct zeroed count
-	if (kind.id != TREE_HUGE.id)
-		zeroed = 0;
-	else if (zeroed > (free >> LLFREE_CHILD_ORDER))
-		zeroed = free >> LLFREE_CHILD_ORDER;
-	return (tree_t){ .reserved = reserved,
-			 .kind = kind.id,
-			 .free = free,
-			 .zeroed = zeroed };
+	return (tree_t){ .reserved = reserved, .kind = kind.id, .free = free };
 }
 
 /// Return frames to a tree.
 /// - This might promote the tree to a higher kind.
-bool tree_put(tree_t *self, tree_change_t change);
+bool tree_put(tree_t *self, treeF_t free);
 
-/// Allocate frames from a tree.
-/// - If zeroed, only succeeds if the tree has enough zeroed children.
-/// - If huge, might fallback to decrement zeroed pages.
-/// - Demotes the tree from Huge/Zeroed to Movable/Fixed.
-bool tree_get(tree_t *self, tree_change_t change);
+/// Allocate frames from a tree if the kind matches.
+bool tree_get(tree_t *self, treeF_t free, llkind_t kind);
 
-/// No fallback from huge to zeroed.
-bool tree_get_exact(tree_t *self, tree_change_t change);
+/// Allocate frames from a tree, demoting it if the kind does not match.
+bool tree_get_demote(tree_t *self, treeF_t free, llkind_t kind);
 
 /// Reserves a tree if the change would succeed.
-bool tree_reserve(tree_t *self, tree_change_t change, treeF_t max);
+bool tree_reserve(tree_t *self, treeF_t free, treeF_t max, llkind_t kind);
 
 /// Adds the given counter and clears reserved
-bool tree_unreserve(tree_t *self, tree_change_t change);
+bool tree_unreserve(tree_t *self, treeF_t free, llkind_t kind);
 
 // Steals the counter of a reserved tree
-bool tree_steal_counter(tree_t *self, tree_change_t change);
+bool tree_steal_counter(tree_t *self, treeF_t free);
 
 /// Increment the free counter or reserve if specified
-bool tree_put_or_reserve(tree_t *self, tree_change_t change, bool *reserve,
-			 treeF_t min);
+bool tree_put_or_reserve(tree_t *self, treeF_t free, llkind_t kind,
+			 bool *reserve, treeF_t min);
 
-bool tree_demote(tree_t *self, tree_kind_t kind);
+bool tree_demote(tree_t *self, llkind_t kind);
 
 /// Try reclaiming a huge page from the tree.
 bool tree_reclaim(tree_t *self, bool *success, bool not_zeroed, bool alloc);

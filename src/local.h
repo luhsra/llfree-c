@@ -1,5 +1,6 @@
 #pragma once
 
+#include "llfree.h"
 #include "tree.h"
 #include "utils.h"
 
@@ -8,13 +9,15 @@
 
 typedef struct local local_t;
 
-/// Size of a single CPU-local entry
-size_t ll_local_size(size_t cores);
+/// Size of the local data for the given configuration
+size_t ll_local_size(const llkind_desc_t *kinds);
 
 /// Initialize the per-cpu data
-void ll_local_init(local_t *self, size_t cores);
-/// Get the number of cores
-size_t ll_local_cores(const local_t *self);
+void ll_local_init(local_t *self, const llkind_desc_t *kinds);
+/// Get the number of entries
+size_t ll_local_len(const local_t *self);
+/// Get the kind of an entry
+llkind_t ll_local_kind(const local_t *self, size_t local);
 
 /// Result of a local get/put operation, usually the previous value
 typedef struct local_result {
@@ -23,58 +26,52 @@ typedef struct local_result {
 	tree_t tree;
 	size_t start_row;
 } local_result_t;
-static inline local_result_t local_result(bool success, bool present,
-					  size_t start_row, tree_t tree)
+static inline local_result_t ll_unused local_result(bool success, bool present,
+						    size_t start_row,
+						    tree_t tree)
 {
 	return (local_result_t){ success, present, tree, start_row };
 }
 
 /// Decrement the number of free frames
 /// - Optionally check if the tree index matches
-local_result_t ll_local_get(local_t *self, size_t core, tree_change_t change,
-			    optional_size_t tree_idx);
+local_result_t ll_local_get(local_t *self, size_t local, ll_optional_t tree_idx,
+			    treeF_t free);
+bool ll_local_can_get(local_t *self, size_t local, ll_optional_t tree_idx,
+		      treeF_t free);
 
 /// Increment the number of free frames
-bool ll_local_put(local_t *self, size_t core, tree_change_t change,
-		  size_t tree_idx);
+bool ll_local_put(local_t *self, size_t local, size_t tree_idx, treeF_t free);
 
 /// Set the starting row index
-local_result_t ll_local_set_start(local_t *self, size_t core,
-				  tree_change_t previous_change,
-				  uint64_t start_row);
+void ll_local_set_start(local_t *self, size_t local, uint64_t row);
 
-/// Try stealing from another tree kind
-/// If not demote, steal from a lower kind, else from a higher kind
-/// TODO: Here we have a short period where the tree kind might not be accurate!
-local_result_t ll_local_steal(local_t *self, size_t core, tree_change_t change,
-			      bool demote, optional_size_t tree_idx);
+/// Steal from another compatible local tree (no downgrade necessary)
+local_result_t ll_local_steal(local_t *self, size_t local,
+			      ll_optional_t tree_idx, treeF_t free);
+/// Find higher kind and steal and downgrade it to the current kind
+local_result_t ll_local_steal_downgrade(local_t *self, size_t local,
+					ll_optional_t tree_idx, treeF_t free);
 
 /// Try to swap the local tree with a new one
-local_result_t ll_local_swap(local_t *self, size_t core,
-			     tree_change_t previous_change, size_t new_idx,
-			     tree_t new_tree);
-
-/// Demote the tree to a lower kind according to the previous change
-/// This tries to also take the reservation, returns if successful
-/// Otherwise, the global tree has to be demoted!
-local_result_t ll_local_demote(local_t *self, size_t core,
-			       tree_change_t previous_change, size_t tree_idx);
+local_result_t ll_local_swap(local_t *self, size_t local, size_t tree_idx,
+			     treeF_t free);
 
 /// Updates the last-frees heuristic, returning true if the corresponding
 /// tree should be reserved
-bool ll_local_free_inc(local_t *self, size_t core, size_t tree_idx);
+bool ll_local_free_inc(local_t *self, size_t local, size_t tree_idx);
 
-/// Unreserve all local trees for a core
-void ll_local_drain(local_t *self, size_t core);
+/// Unreserve all local trees for an entry
+local_result_t ll_local_drain(local_t *self, size_t local);
 
-/// Return the number of free frames for all core
+/// Return the number of free frames for all entries
 ll_stats_t ll_local_stats(const local_t *self);
-/// Return the number of free frames for all core
+/// Return the number of free frames for all entries
 ll_stats_t ll_local_stats_at(const local_t *self, size_t tree_idx);
 
-/// Get the index of the last reclaimed tree for a core
-size_t ll_local_reclaimed(const local_t *self, size_t core);
-void ll_local_set_reclaimed(local_t *self, size_t core, size_t reclaimed_idx);
+/// Get the index of the last reclaimed tree for an entry
+size_t ll_local_reclaimed(const local_t *self, size_t local);
+void ll_local_set_reclaimed(local_t *self, size_t local, size_t reclaimed_idx);
 
 /// Debug print the local data
 void ll_local_print(const local_t *self, size_t indent);

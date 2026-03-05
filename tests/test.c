@@ -68,13 +68,14 @@ void add_test(char *name, bool (*f)(void))
 
 void *llfree_ext_alloc(size_t align, size_t size)
 {
-	llfree_info("alloc a=%zu %zu", align, size);
 	void *ret = aligned_alloc(align, align_up(size, align));
+	llfree_info("alloc a=%zu %zu %p", align, size, ret);
 	assert(ret != NULL);
 	return ret;
 }
 
-void llfree_ext_free(ll_unused size_t align, ll_unused size_t size, void *addr)
+void llfree_ext_free(void *addr)
 {
+	llfree_info("free %p", addr);
 	return free(addr);
 }

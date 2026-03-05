@@ -3,6 +3,24 @@
 #include "llfree_platform.h"
 #include "utils.h"
 
+typedef struct lower_result {
+	uint64_t frame : 61;
+	uint8_t error : 3;
+} lower_result_t;
+
+static inline ll_unused lower_result_t lower_ok(size_t frame)
+{
+	return (lower_result_t){ .frame = frame, .error = 0 };
+}
+static inline ll_unused lower_result_t lower_err(uint8_t error)
+{
+	return (lower_result_t){ .frame = 0, .error = error };
+}
+static inline ll_unused bool lower_is_ok(lower_result_t res)
+{
+	return res.error == 0;
+}
+
 #define FIELD_N (LLFREE_CHILD_SIZE / LLFREE_ATOMIC_SIZE)
 
 /// Atomic bitfield
@@ -17,11 +35,11 @@ typedef struct bitfield {
 void field_init(bitfield_t *self);
 
 /// Atomic search for the first unset bit and set it to 1.
-llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
+lower_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
 			       size_t order);
 
 /// Atomically resets the bit at index position
-llfree_result_t field_toggle(bitfield_t *field, size_t index, size_t order,
+lower_result_t field_toggle(bitfield_t *field, size_t index, size_t order,
 			     bool expected);
 
 /// Count the number of bits
