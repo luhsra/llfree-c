@@ -1,3 +1,4 @@
+#if 0
 #include "linux/types.h"
 #include "llfree.h"
 #include "llfree_inner.h"
@@ -135,3 +136,4 @@ declare_test(zeroed_all)
 
 	return success;
 }
+#endif

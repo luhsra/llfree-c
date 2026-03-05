@@ -109,7 +109,7 @@ llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
 				return llfree_ok(
 					((current_i * LLFREE_ATOMIC_SIZE) +
 					 pos),
-					false, false);
+					0);
 			}
 		}
 		return llfree_err(LLFREE_ERR_MEMORY);
@@ -141,9 +141,8 @@ llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
 		}
 		if (!failed) {
 			// Success, we have updated all rows
-			return llfree_ok(current_i * entries *
-						 LLFREE_ATOMIC_SIZE,
-					 false, false);
+			return llfree_ok(
+				current_i * entries * LLFREE_ATOMIC_SIZE, 0);
 		}
 	}
 

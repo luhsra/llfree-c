@@ -3,20 +3,6 @@
 #include "llfree.h"
 #include "llfree_platform.h"
 
-/// Optional size_t type
-typedef struct optional_size_t {
-	bool present : 1;
-	size_t value : (sizeof(size_t) * 8) - 1;
-} optional_size_t;
-static inline optional_size_t optional_size(size_t value)
-{
-	return (optional_size_t){ .present = true, .value = value };
-}
-static inline optional_size_t optional_size_none(void)
-{
-	return (optional_size_t){ .present = false, .value = 0 };
-}
-
 /// Minimal size the LLFree can manage
 #define MIN_PAGES (1ul << LLFREE_MAX_ORDER)
 /// 64 Bit Addresses - 12 Bit needed for offset inside the Page
@@ -35,10 +21,10 @@ static inline optional_size_t optional_size_none(void)
 /// Loop will end after len iterations.
 /// code will be executed in each loop.
 /// The current loop value can accessed by current_i
-#define for_offsetted(start, len, current_i)                            \
-	for (size_t _i = 0, _offset = (start) % (len),                  \
-		    _base_idx = (start)-_offset, (current_i) = (start); \
-	     _i < (len);                                                \
+#define for_offsetted(start, len, current_i)                              \
+	for (size_t _i = 0, _offset = (start) % (len),                    \
+		    _base_idx = (start) - _offset, (current_i) = (start); \
+	     _i < (len);                                                  \
 	     _i = _i + 1, (current_i) = _base_idx + ((_i + _offset) % (len)))
 
 // conversion functions

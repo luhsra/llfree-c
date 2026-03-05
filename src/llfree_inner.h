@@ -16,8 +16,10 @@ typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) llfree {
 	_Atomic(tree_t) *trees;
 	size_t trees_len;
 
-	/// false means there are no zeroed pages or we should search for non-zeroed pages
-	_Atomic(uint8_t) contains_zeroed;
-	/// false means there are no huge pages or we should look for zero pages
-	_Atomic(uint8_t) contains_huge;
+	/// Policy function for tier-based allocation
+	llfree_policy_fn policy;
+	/// Default tier for allocations
+	uint8_t default_tier;
+	/// Number of tiers
+	uint8_t num_tiers;
 } llfree_t;

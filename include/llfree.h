@@ -11,7 +11,24 @@
 #define ll_warn_unused
 #endif
 
-enum: uint8_t {
+/// Optional size_t type
+typedef struct ll_optional {
+	bool present : 1;
+	size_t value : (sizeof(size_t) * 8) - 1;
+} ll_optional_t;
+static inline ll_optional_t ll_some(size_t value)
+{
+	return (ll_optional_t){ .present = true, .value = value };
+}
+static inline ll_optional_t ll_none(void)
+{
+	return (ll_optional_t){ .present = false, .value = 0 };
+}
+
+/// Opaque llfree allocator type
+typedef struct llfree llfree_t;
+
+enum : uint8_t {
 	/// Success
 	LLFREE_ERR_OK = 0,
 	/// Not enough memory
@@ -24,34 +41,27 @@ enum: uint8_t {
 	LLFREE_ERR_INIT = 4,
 };
 
-/// Result type, to distinguish between normal integers
+/// Result type for llfree_get: includes the tier of the allocated frame
 typedef struct ll_warn_unused llfree_result {
-	/// Usually only valid if error == LLFREE_ERR_OK
-	uint64_t frame : 54;
-	/// If the frame was reclaimed, e.g. by ballooning
-	bool reclaimed : 1;
-	/// If the frame is already zeroed
-	bool zeroed : 1;
+	/// Frame number, usually only valid if error == LLFREE_ERR_OK
+	uint64_t frame : (sizeof(uint64_t) * 8) - LLFREE_TIER_BITS - 3;
+	/// Tier of the allocated frame (may differ from requested due to demotion)
+	uint8_t tier : LLFREE_TIER_BITS;
 	/// Error code, 0 if no error
-	uint8_t error : 8;
+	uint8_t error : 3;
 } llfree_result_t;
+_Static_assert(sizeof(llfree_result_t) == sizeof(uint64_t), "result size");
 
-typedef struct llfree llfree_t;
-
-/// Create a new result
-static inline llfree_result_t ll_unused llfree_ok(uint64_t frame,
-						  bool reclaimed, bool zeroed)
+/// Create a successful result with the given frame and tier
+static inline llfree_result_t ll_unused llfree_ok(uint64_t frame, uint8_t tier)
 {
 	return (llfree_result_t){ .frame = frame,
-				  .reclaimed = reclaimed,
-				  .zeroed = zeroed,
+				  .tier = tier,
 				  .error = LLFREE_ERR_OK };
 }
 static inline llfree_result_t ll_unused llfree_err(uint8_t err)
 {
-	return (llfree_result_t){
-		.frame = 0, .reclaimed = false, .zeroed = false, .error = err
-	};
+	return (llfree_result_t){ .frame = 0, .tier = 0, .error = err };
 }
 
 /// Check if the result is ok (no error)
@@ -61,42 +71,86 @@ static inline bool ll_unused llfree_is_ok(llfree_result_t r)
 }
 
 /// Init modes
-enum: uint8_t {
+enum : uint8_t {
 	/// Clear the allocator marking all frames as free
 	LLFREE_INIT_FREE = 0,
 	/// Clear the allocator marking all frames as allocated
 	LLFREE_INIT_ALLOC = 1,
 	/// Try recovering all frames from persistent memory
 	LLFREE_INIT_RECOVER = 2,
-	/// Try recovering all frames from persistent memory after a crash,
-	/// correcting invalid counters
-	LLFREE_INIT_RECOVER_CRASH = 3,
 	/// Assume the allocator is already initialized
 	LLFREE_INIT_NONE = 4,
 	/// The number of initialization modes
 	LLFREE_INIT_MAX = 5,
 };
 
-/// Allocation flags
-typedef struct llflags {
-	/// Allocation size: n-th power of two.
-	uint8_t order : 8;
-	/// Is this alloation movable: LLFree tries to separete movable and immovable allocations.
-	bool movable : 1;
-	/// If the frame should be zeroed.
-	bool zeroed : 1;
-	/// Long-living allocation: try separating long-living and short-living allocations.
-	bool long_living : 1;
-	// ... Reserved for future use
-} llflags_t;
+#define LLFREE_LOCAL_NONE SIZE_MAX
 
-static inline llflags_t ll_unused llflags(size_t order)
+/// Request for memory allocation, matching the Rust `Request` struct.
+typedef struct llfree_request {
+	/// Allocation order (frames = 1 << order)
+	uint8_t order;
+	/// Requested tier
+	uint8_t tier;
+	/// Local slot index (direct index into the locals array),
+	/// or LLFREE_LOCAL_NONE for global-only allocation.
+	size_t local;
+} llfree_request_t;
+
+static inline llfree_request_t ll_unused llreq(uint8_t order, uint8_t tier,
+					       size_t local)
 {
-	return (llflags_t){ .order = (uint8_t)order,
-			    .movable = false,
-			    .zeroed = false,
-			    .long_living = false };
+	return (llfree_request_t){ .order = order,
+				   .tier = tier,
+				   .local = local };
 }
+
+/// Policy result for tree tier access
+typedef enum {
+	/// Trees of the requested tier can be used (higher = better fit)
+	LLFREE_POLICY_MATCH = 0,
+	/// Can steal from target tier without demoting it
+	LLFREE_POLICY_STEAL = 1,
+	/// Would demote the target tree to the requested tier
+	LLFREE_POLICY_DEMOTE = 2,
+	/// Cannot use target tier
+	LLFREE_POLICY_INVALID = 3,
+} llfree_policy_type_t;
+
+typedef struct {
+	llfree_policy_type_t type;
+	/// Priority for MATCH: 0 = worst, UINT8_MAX = perfect/immediate
+	uint8_t priority;
+} llfree_policy_t;
+
+/// Policy function: given requested and target tier with free frames,
+/// returns how the target tree can be used.
+typedef llfree_policy_t (*llfree_policy_fn)(uint8_t requested, uint8_t target,
+					    size_t free);
+
+/// Per-tier configuration: tier identifier and local slot count.
+/// Matches the Rust `(Tier, usize)` entry in `Tiering::tiers`.
+typedef struct llfree_tier_conf {
+	/// Tier identifier
+	uint8_t tier;
+	/// Number of local slots for this tier (typically one per core)
+	size_t count;
+} llfree_tier_conf_t;
+
+/// Tiering configuration for the allocator.
+/// Matches the Rust `Tiering` struct: each tier has an independent local slot count.
+typedef struct llfree_tiering {
+	/// Per-tier configuration (tier id + local slot count).
+	/// tiers[0..num_tiers) are valid; slots are laid out flat:
+	/// [tier0_slot0..tier0_slot(count0-1), tier1_slot0..]
+	llfree_tier_conf_t tiers[LLFREE_MAX_TIERS];
+	/// Number of valid entries in tiers[]
+	size_t num_tiers;
+	/// Default tier for entirely free/new trees
+	uint8_t default_tier;
+	/// Policy function for tier matching
+	llfree_policy_fn policy;
+} llfree_tiering_t;
 
 /// Size of the required metadata
 typedef struct llfree_meta_size {
@@ -110,8 +164,14 @@ typedef struct llfree_meta_size {
 	size_t lower;
 } llfree_meta_size_t;
 
-/// Returns the size of the metadata buffers required for initialization
-llfree_meta_size_t llfree_metadata_size(size_t cores, size_t frames);
+/// Returns the size of the metadata buffers required for initialization.
+/// Matches the Rust `metadata_size(tiering, frames)` signature.
+llfree_meta_size_t llfree_metadata_size(const llfree_tiering_t *tiering,
+					size_t frames);
+
+/// Returns the metadata size of an already-initialized allocator.
+/// Useful for cleanup without needing the original tiering struct.
+llfree_meta_size_t llfree_metadata_size_of(const llfree_t *self);
 
 /// Size of the required metadata
 typedef struct llfree_meta {
@@ -125,71 +185,69 @@ typedef struct llfree_meta {
 
 /// Allocate and initialize the data structures of the allocator.
 ///
-/// `offset` is the number of the first page to be managed and `len` determins
-/// the size of the region in the number of pages.
-///
+/// `frames` is the number of frames to manage.
 /// The `init` parameter is expected to be one of the `LLFREE_INIT_<..>` modes.
-///
-/// The `meta` buffers are used to store the allocator state
-/// and must be at least as large as reported by llfree_metadata_size.
-llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
-			    uint8_t init, llfree_meta_t meta);
+/// The `meta` buffers store the allocator state and must be at least as large
+/// as reported by `llfree_metadata_size`.
+/// The `tiering` parameter configures tier counts and the policy function.
+llfree_result_t llfree_init(llfree_t *self, size_t frames, uint8_t init,
+			    llfree_meta_t meta,
+			    const llfree_tiering_t *tiering);
 
 /// Returns the metadata
 llfree_meta_t llfree_metadata(const llfree_t *self);
 
-/// Allocates a frame
-llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags);
-/// Try allocating this frame
-llfree_result_t llfree_get_at(llfree_t *self, size_t core, uint64_t frame,
-			      llflags_t flags);
-/// Frees this frame
-llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
-			   llflags_t flags);
+/// Allocates a frame. Returns the frame and its actual tier in the result.
+/// The actual tier may differ from request.tier if demotion occurred.
+/// If frame is present, allocates that specific frame (get_at behavior);
+/// otherwise allocates any frame near the local slot's preferred location.
+/// Set request.local to LLFREE_LOCAL_NONE for global-only allocation.
+llfree_result_t llfree_get(llfree_t *self, ll_optional_t frame,
+			   llfree_request_t request);
+/// Frees a frame
+llfree_result_t llfree_put(llfree_t *self, uint64_t frame,
+			   llfree_request_t request);
 
-/// Unreserves all cpu-local reservations
-llfree_result_t llfree_drain(llfree_t *self, size_t core);
+/// Unreserves the cpu-local reservation for the given local slot index.
+/// Matches the Rust `drain(local: usize)` semantics.
+llfree_result_t llfree_drain(llfree_t *self, size_t local);
 
-/// Returns the number of cores this allocator was initialized with
-size_t llfree_cores(const llfree_t *self);
+/// Returns the total number of local slots (sum of all tier slot counts).
+/// Replaces llfree_cores(): in the new API there is no concept of "cores",
+/// the caller provides local slot indices directly via llfree_request_t.
+size_t llfree_locals(const llfree_t *self);
+
 /// Returns the total number of frames the allocator can allocate
 size_t llfree_frames(const llfree_t *self);
-/// Returns the total number of huge frames the allocator can allocate
-size_t llfree_huge(const llfree_t *self);
 
 /// LLFree statistics
 typedef struct ll_stats {
-	size_t frames;
-	size_t huge;
 	size_t free_frames;
 	size_t free_huge;
-	size_t zeroed_huge;
-	size_t reclaimed_huge;
+	size_t free_trees;
 } ll_stats_t;
 
-/// Returns number of currently free/huge/zeroed frames.
-/// Does not include reclaimed frames and huge/zeroed can be inaccurate.
-ll_stats_t llfree_stats(const llfree_t *self);
-/// Counts free/huge/zeroed/reclaimed frames.
+/// Tree statistics
+typedef struct ll_tree_stats {
+	size_t free_frames;
+	size_t free_trees;
+} ll_tree_stats_t;
+/// Per-tier tree statistics
+typedef struct ll_tier_stats {
+	size_t free_frames;
+	size_t alloc_frames;
+} ll_tier_stats_t;
+
+/// Returns the tree-level stats.
+/// This is faster than llfree_full_stats as it doesn't scan the lower allocator, but may be less accurate.
+ll_tree_stats_t llfree_tree_stats(const llfree_t *self, ll_tier_stats_t *tiers,
+				  size_t tier_len);
+
+/// Counts free frames accurately by scanning the lower allocator.
 ll_stats_t llfree_full_stats(const llfree_t *self);
-/// Returns the stats for the frame (order == 0), huge frame (order == LLFREE_HUGE_ORDER),
-/// or tree (order == LLFREE_TREE_ORDER).
-/// Might not include reclaimed frames and huge/zeroed can be inaccurate.
-ll_stats_t llfree_stats_at(const llfree_t *self, uint64_t frame, size_t order);
-/// Returns the stats for the frame (order == 0), huge frame (order == LLFREE_HUGE_ORDER),
-/// or tree (order == LLFREE_TREE_ORDER).
+/// Returns the full stats for a frame at a given order.
 ll_stats_t llfree_full_stats_at(const llfree_t *self, uint64_t frame,
 				size_t order);
-
-// == Ballooning ==
-
-/// Search for a free and not reclaimed huge page and mark it reclaimed (and optionally allocated)
-llfree_result_t llfree_reclaim(llfree_t *self, size_t core, bool alloc,
-			       bool not_reclaimed, bool not_zeroed);
-/// Mark the reclaimed huge page as free, but keep it reclaimed
-llfree_result_t llfree_return(llfree_t *self, uint64_t frame, bool install);
-/// Clear the reclaimed state of the given huge page
-llfree_result_t llfree_install(llfree_t *self, uint64_t frame);
 
 // == Debugging ==
 
@@ -201,3 +259,89 @@ void llfree_print_debug(const llfree_t *self,
 void llfree_print(const llfree_t *self);
 /// Validate the internal data structures
 void llfree_validate(const llfree_t *self);
+
+// == Example Tiering ==
+
+/// Simple movable policy (3 tiers: immovable=0, movable=1, huge=2)
+static inline llfree_policy_t ll_unused llfree_movable_policy(uint8_t requested,
+							      uint8_t target,
+							      size_t free)
+{
+	if (requested < target)
+		return (llfree_policy_t){ LLFREE_POLICY_STEAL, 0 };
+	if (requested > target)
+		return (llfree_policy_t){ LLFREE_POLICY_DEMOTE, 0 };
+	/* same tier */
+	if (free >= LLFREE_TREE_SIZE / 2)
+		return (llfree_policy_t){ LLFREE_POLICY_MATCH, 1 };
+	if (free >= LLFREE_TREE_SIZE / 64)
+		return (llfree_policy_t){ LLFREE_POLICY_MATCH, UINT8_MAX };
+	return (llfree_policy_t){ LLFREE_POLICY_MATCH, 2 };
+}
+
+/// Simple 2-tier policy (small=0, huge=1)
+static inline llfree_policy_t ll_unused llfree_simple_policy(uint8_t requested,
+							     uint8_t target,
+							     size_t free)
+{
+	if (requested < target)
+		return (llfree_policy_t){ LLFREE_POLICY_STEAL, 0 };
+	if (requested > target)
+		return (llfree_policy_t){ LLFREE_POLICY_DEMOTE, 0 };
+	/* same tier */
+	if (free >= LLFREE_TREE_SIZE / 2)
+		return (llfree_policy_t){ LLFREE_POLICY_MATCH, 1 };
+	if (free >= LLFREE_TREE_SIZE / 64)
+		return (llfree_policy_t){ LLFREE_POLICY_MATCH, UINT8_MAX };
+	return (llfree_policy_t){ LLFREE_POLICY_MATCH, 0 };
+}
+
+/// Create a simple 2-tier tiering: tier 0 for small frames, tier 1 for huge.
+/// Each tier gets `cores` local slots (one per core).
+static inline llfree_tiering_t ll_unused llfree_tiering_simple(size_t cores)
+{
+	llfree_tiering_t t = { .num_tiers = 2,
+			       .default_tier = 0,
+			       .policy = llfree_simple_policy };
+	t.tiers[0] = (llfree_tier_conf_t){ .tier = 0, .count = cores };
+	t.tiers[1] = (llfree_tier_conf_t){ .tier = 1, .count = cores };
+	return t;
+}
+
+/// Create a 3-tier movable tiering: tier 0 immovable, tier 1 movable, tier 2 huge.
+/// Each tier gets `cores` local slots.
+static inline llfree_tiering_t ll_unused llfree_tiering_movable(size_t cores)
+{
+	llfree_tiering_t t = { .num_tiers = 3,
+			       .default_tier = 0,
+			       .policy = llfree_movable_policy };
+	t.tiers[0] = (llfree_tier_conf_t){ .tier = 0, .count = cores };
+	t.tiers[1] = (llfree_tier_conf_t){ .tier = 1, .count = cores };
+	t.tiers[2] = (llfree_tier_conf_t){ .tier = 2, .count = cores };
+	return t;
+}
+
+/// Build a request for simple 2-tier tiering.
+/// Maps (order, core) to the correct tier and local slot index.
+static inline llfree_request_t ll_unused llfree_simple_request(size_t cores,
+							       uint8_t order,
+							       size_t core)
+{
+	if (order >= LLFREE_HUGE_ORDER)
+		return llreq(order, 1, (core % cores) + cores);
+	return llreq(order, 0, core % cores);
+}
+
+/// Build a request for movable 3-tier tiering.
+/// Maps (order, core, movable) to the correct tier and local slot index.
+static inline llfree_request_t ll_unused llfree_movable_request(size_t cores,
+								uint8_t order,
+								size_t core,
+								bool movable)
+{
+	if (order >= LLFREE_HUGE_ORDER)
+		return llreq(order, 2, (core % cores) + (2 * cores));
+	if (movable)
+		return llreq(order, 1, (core % cores) + cores);
+	return llreq(order, 0, core % cores);
+}

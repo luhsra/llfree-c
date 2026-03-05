@@ -7,6 +7,7 @@
 #include "local.h"
 #include "lower.h"
 #include "utils.h"
+#include <stdio.h>
 
 /// Initializes the Tree array by reading the child counters
 static void init_trees(llfree_t *self)
@@ -22,13 +23,14 @@ static void init_trees(llfree_t *self)
 						   .entries[child_idx]);
 			sum += child.free;
 		}
-		tree_kind_t kind = sum == LLFREE_TREE_SIZE ? TREE_HUGE :
-							     TREE_FIXED;
-		self->trees[tree_idx] = tree_new(false, kind, sum, 0);
+		// Entirely free trees use the default tier
+		uint8_t tier = self->default_tier;
+		self->trees[tree_idx] = tree_new(false, tier, sum);
 	}
 }
 
-llfree_meta_size_t llfree_metadata_size(size_t cores, size_t frames)
+llfree_meta_size_t llfree_metadata_size(const llfree_tiering_t *tiering,
+					size_t frames)
 {
 	size_t tree_len = div_ceil(frames, LLFREE_TREE_SIZE);
 	size_t tree_size =
@@ -36,16 +38,27 @@ llfree_meta_size_t llfree_metadata_size(size_t cores, size_t frames)
 	llfree_meta_size_t meta = {
 		.llfree = sizeof(llfree_t),
 		.trees = tree_size,
-		.local = ll_local_size(cores),
+		.local = ll_local_size(tiering),
 		.lower = lower_metadata_size(frames),
 	};
 	return meta;
 }
 
+llfree_meta_size_t llfree_metadata_size_of(const llfree_t *self)
+{
+	assert(self != NULL);
+	size_t tree_size =
+		align_up(sizeof(tree_t) * self->trees_len, LLFREE_CACHE_SIZE);
+	return (llfree_meta_size_t){
+		.llfree = sizeof(llfree_t),
+		.trees = tree_size,
+		.local = ll_local_mem_size(self->local),
+		.lower = lower_metadata_size(self->lower.frames),
+	};
+}
+
 static ll_unused bool check_meta(llfree_meta_t meta, llfree_meta_size_t sizes)
 {
-	if (meta.local == NULL || meta.trees == NULL || meta.lower == NULL)
-		return false;
 	if ((size_t)meta.local % LLFREE_CACHE_SIZE != 0 ||
 	    (size_t)meta.trees % LLFREE_CACHE_SIZE != 0 ||
 	    (size_t)meta.lower % LLFREE_CACHE_SIZE != 0)
@@ -59,11 +72,14 @@ static ll_unused bool check_meta(llfree_meta_t meta, llfree_meta_size_t sizes)
 		meta.trees + sizes.trees <= meta.lower);
 }
 
-llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
-			    uint8_t init, llfree_meta_t meta)
+llfree_result_t llfree_init(llfree_t *self, size_t frames, uint8_t init,
+			    llfree_meta_t meta, const llfree_tiering_t *tiering)
 {
 	assert(self != NULL);
-	assert(check_meta(meta, llfree_metadata_size(cores, frames)));
+	assert(tiering != NULL);
+	assert(tiering->num_tiers >= 1 &&
+	       tiering->num_tiers <= LLFREE_MAX_TIERS);
+	assert(check_meta(meta, llfree_metadata_size(tiering, frames)));
 
 	if (init >= LLFREE_INIT_MAX) {
 		llfree_info("Invalid init mode %d", init);
@@ -76,21 +92,21 @@ llfree_result_t llfree_init(llfree_t *self, size_t cores, size_t frames,
 
 	llfree_result_t res =
 		lower_init(&self->lower, frames, init, meta.lower);
-	if (!llfree_is_ok(res)) {
+	if (!llfree_is_ok(res))
 		return res;
-	}
 
-	// check if more cores than trees -> if not shared locale data
 	self->trees_len = div_ceil(frames, LLFREE_TREE_SIZE);
 	self->trees = (_Atomic(tree_t) *)(meta.trees);
 	self->local = (local_t *)meta.local;
-	ll_local_init(self->local, LL_MIN(cores, self->trees_len));
+	ll_local_init(self->local, tiering);
 
-	self->contains_huge = init != LLFREE_INIT_ALLOC;
+	self->policy = tiering->policy;
+	self->default_tier = tiering->default_tier;
+	self->num_tiers = (uint8_t)tiering->num_tiers;
 
 	if (init != LLFREE_INIT_NONE)
 		init_trees(self);
-	return llfree_ok(0, false, false);
+	return llfree_ok(0, 0);
 }
 
 llfree_meta_t llfree_metadata(const llfree_t *self)
@@ -107,8 +123,8 @@ llfree_meta_t llfree_metadata(const llfree_t *self)
 /// Search function callback
 typedef llfree_result_t (*search_fn)(llfree_t *self, size_t idx, void *args);
 
-/// Searches the tree array for a tree with a free counter in the provided range,
-/// and executes the callback for it until it stops returning ERR_MEMORY.
+/// Searches the tree array for a tree and executes the callback for it
+/// until it stops returning ERR_MEMORY.
 static llfree_result_t search(llfree_t *self, uint64_t start, uint64_t offset,
 			      uint64_t len, search_fn callback, void *args)
 {
@@ -139,12 +155,13 @@ static llfree_result_t search(llfree_t *self, uint64_t start, uint64_t offset,
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
-typedef size_t (*prio_fn)(llflags_t flags, tree_t tree, void *args);
+typedef size_t (*prio_fn)(uint8_t tier, uint8_t order, tree_t tree, void *args);
 
 #define SEARCH_BEST 3
 __attribute((unused)) static llfree_result_t
-search_best(llfree_t *self, llflags_t flags, uint64_t start, uint64_t offset,
-	    uint64_t len, prio_fn tree_prio, search_fn callback, void *args)
+search_best(llfree_t *self, uint8_t tier, uint8_t order, uint64_t start,
+	    uint64_t offset, uint64_t len, prio_fn tree_prio_fn,
+	    search_fn callback, void *args)
 {
 	assert(self != NULL && callback != NULL);
 
@@ -163,14 +180,13 @@ search_best(llfree_t *self, llflags_t flags, uint64_t start, uint64_t offset,
 		uint64_t idx = (uint64_t)(base + off) % self->trees_len;
 
 		tree_t tree = atom_load(&self->trees[idx]);
-		size_t prio = (tree_prio)(flags, tree, args);
+		size_t prio = (tree_prio_fn)(tier, order, tree, args);
 		if (prio == 0)
 			continue;
 
-		// Using highest prio directly
+		// Use highest prio directly
 		if (prio >= 100) {
 			llfree_result_t res = callback(self, idx, args);
-
 			if (res.error != LLFREE_ERR_MEMORY)
 				return res;
 			continue;
@@ -178,7 +194,7 @@ search_best(llfree_t *self, llflags_t flags, uint64_t start, uint64_t offset,
 
 		size_t pos = 0;
 		for (; pos < SEARCH_BEST; ++pos) {
-			//  Only replace if better -> prefer trees near the start
+			// Only replace if better -> prefer trees near the start
 			if (prio > best[pos].prio)
 				break;
 		}
@@ -202,141 +218,118 @@ search_best(llfree_t *self, llflags_t flags, uint64_t start, uint64_t offset,
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
-/// Swap out the currently reserved tree for a new one and writes back the free
-/// counter to the previously reserved global tree.
-///
-/// This checks first if the reserving flag has the expected value
-/// returning false if not.
-static void swap_reserved(llfree_t *self, size_t core, size_t new_idx,
-			  tree_t new, tree_change_t previous_change)
+/// Swap out the currently reserved tree for a new one and write back the
+/// free counter to the formerly reserved global tree.
+static void swap_reserved(llfree_t *self, size_t slot, size_t new_idx,
+			  treeF_t new_free)
 {
-	llfree_debug("swap c=%zu idx=%zu: c_kind=%s kind=%s free=%" PRIu64,
-		     core, new_idx, tree_kind_name(previous_change.kind),
-		     tree_kind_name(tree_kind(new.kind)), (uint64_t) new.free);
-	local_result_t res =
-		ll_local_swap(self->local, core, previous_change, new_idx, new);
-	assert(res.success);
-	if (res.present) {
-		tree_change_t change = tree_change(
-			previous_change.kind, res.tree.free, res.tree.zeroed);
+	llfree_debug("swap slot=%zu idx=%zu tier=%u free=%" PRIuS, slot,
+		     new_idx, ll_local_tier(self->local, slot),
+		     (size_t)new_free);
+	local_result_t old =
+		ll_local_swap(self->local, slot, new_idx, new_free);
+	assert(old.success);
+	if (old.present) {
 		tree_t tree;
-		atom_update(&self->trees[tree_from_row(res.start_row)], tree,
-			    tree_unreserve, change);
+		// Return old frames to global; policy may adjust tier
+		atom_update(&self->trees[tree_from_row(old.start_row)], tree,
+			    tree_unreserve_add, old.free, old.tier,
+			    self->policy);
 	}
 }
 
 typedef struct reserve_args {
-	size_t core;
-	llflags_t flags;
+	size_t slot;
+	uint8_t tier;
+	uint8_t order;
 	p_range_t free;
 } reserve_args_t;
 
-/// Reserves a new tree and allocates with it.
+/// Reserves a new tree and allocates from it.
 /// Only if the allocation succeeds, the tree is fully reserved.
-/// Otherwise the reservation is reverted.
 static llfree_result_t reserve_tree_and_get(llfree_t *self, size_t idx,
 					    void *args)
 {
 	assert(idx < self->trees_len);
 
 	reserve_args_t *rargs = (reserve_args_t *)args;
-	llflags_t flags = rargs->flags;
+	uint8_t tier = rargs->tier;
+	treeF_t needed = (treeF_t)(1u << rargs->order);
 	treeF_t max = rargs->free.max;
-	treeF_t min =
-		LL_MAX(rargs->free.min, (treeF_t)(1 << rargs->flags.order));
+	treeF_t min = LL_MAX(rargs->free.min, needed);
 	if (max < min)
 		return llfree_err(LLFREE_ERR_MEMORY);
 
-	tree_kind_t kind = tree_kind_flags(flags);
-	tree_change_t change = tree_change(kind, min, rargs->flags.zeroed);
-
 	tree_t old;
-	if (!atom_update(&self->trees[idx], old, tree_reserve, change, max))
+	if (!atom_update(&self->trees[idx], old, tree_reserve, tier, min, max))
 		return llfree_err(LLFREE_ERR_MEMORY);
 	assert(!old.reserved && old.free >= min);
 
-	llfree_result_t res =
-		lower_get(&self->lower, frame_from_tree(idx), flags);
+	llfree_result_t res = lower_get(&self->lower, frame_from_tree(idx),
+					rargs->order, ll_none());
 
 	if (llfree_is_ok(res)) {
-		tree_t new = old;
-		bool success = tree_get(&new, tree_change_flags(flags));
-		assert(success);
-		new.reserved = true;
-		swap_reserved(self, rargs->core, idx, new, change);
+		// old.free moved into local reservation; subtract what we used
+		treeF_t new_free = old.free - needed;
+		swap_reserved(self, rargs->slot, idx, new_free);
+		res.tier = tier; // set actual tier in result
 	} else {
-		llfree_debug("reserve failed c=%zu idx=%zu kind=%s",
-			     rargs->core, idx, tree_kind_name(kind));
-		// undo reservation
+		llfree_debug("reserve failed slot=%zu idx=%zu tier=%u",
+			     rargs->slot, idx, tier);
+		// undo: restore free counter and unreserve
 		tree_t tree;
-		atom_update(&self->trees[idx], tree, tree_unreserve,
-			    tree_change(kind, old.free, old.zeroed));
+		atom_update(&self->trees[idx], tree, tree_unreserve_add,
+			    old.free, old.tier, self->policy);
 	}
 	return res;
 }
 
-static inline size_t tree_prio(llflags_t flags, tree_t tree, void *args)
+static inline size_t tree_prio(uint8_t tier, uint8_t order, tree_t tree,
+			       void *args)
 {
 	(void)args;
 	if (tree.free == 0)
 		return 0; // entirely allocated
 	if (tree.free == LLFREE_TREE_SIZE)
-		return 0; // entirely free (dont fragment free trees!)
+		return 0; // entirely free (avoid fragmenting empty trees)
 
-	tree_kind_t kind = tree_kind_flags(flags);
-	if (kind.id != tree.kind)
-		return 0;
+	if (tree.tier != tier)
+		return 0; // wrong tier
 
-	// perfect match -> highest prio
-	if (kind.id == TREE_HUGE.id)
+	// huge tier: perfect match
+	if (order >= LLFREE_HUGE_ORDER)
 		return 100;
-	if (kind.id == TREE_MOVABLE.id) {
-		if (tree.free >= LLFREE_TREE_SIZE / 2) return 100;
-		if (tree.free <= 8) return 1;
-		// if (tree.free >= LLFREE_TREE_SIZE / 128) return 3;
-		// if (tree.free >= LLFREE_TREE_SIZE / 32) return 4;
-	}
-	if (kind.id == TREE_FIXED.id) {
-		if (tree.free >= LLFREE_TREE_SIZE / 2) return 100;
-		// if (tree.free <= 8) return 1;
-		// if (tree.free >= LLFREE_TREE_SIZE / 128) return 3;
-		// if (tree.free >= LLFREE_TREE_SIZE / 32) return 4;
-	}
-	if (kind.id == TREE_LONG_LIVING.id) // should be as compact as possible
+
+	if (tree.free >= LLFREE_TREE_SIZE / 2)
 		return 100;
 
 	return 2; // fallback
 }
 
-/// Reserves a new tree and allocates from it.
-///
-/// The search for a new tree aims to be both fast and avoid fragmentation.
-static llfree_result_t reserve_and_get(llfree_t *self, size_t core,
-				       llflags_t flags, uint64_t start)
+/// Reserves and allocates from a new tree, searching near `start`.
+static llfree_result_t reserve_and_get(llfree_t *self, size_t slot,
+				       uint8_t tier, uint8_t order,
+				       uint64_t start)
 {
-#if 1
 	assert(start < self->trees_len);
 
 	llfree_result_t res;
 	const size_t cl_trees = LLFREE_CACHE_SIZE / sizeof(tree_t);
-	// 16 starting points seam to work well
 	size_t near = LL_MAX(self->trees_len / 16, cl_trees / 4);
-	// Align start to twice the near distance, so we have a gap between starting points
 	start = align_down(start, next_pow2(2 * near));
 
-	reserve_args_t args = { .core = core,
-				.flags = flags,
-				.free = { 0, 0 } };
+	reserve_args_t args = {
+		.slot = slot, .tier = tier, .order = order, .free = { 0, 0 }
+	};
 
-	llfree_debug("reserve c=%zu o=%d kind=%s (z=%d)", core, flags.order,
-		     tree_kind_name(tree_kind_flags(flags)), flags.zeroed);
+	llfree_debug("reserve slot=%zu o=%d tier=%u", slot, order, tier);
 
-	if (flags.order < LLFREE_HUGE_ORDER) {
-		// Here we do not want to fragment free trees!
+	if (order < LLFREE_HUGE_ORDER) {
+		// Avoid fragmenting fully free trees
 		args.free = (p_range_t){ 0, LLFREE_TREE_SIZE - 1 };
 
-		res = search_best(self, flags, start, 1, 2 * near, tree_prio,
-				  reserve_tree_and_get, &args);
+		res = search_best(self, tier, order, start, 1, 2 * near,
+				  tree_prio, reserve_tree_and_get, &args);
 		if (res.error != LLFREE_ERR_MEMORY)
 			return res;
 
@@ -346,131 +339,74 @@ static llfree_result_t reserve_and_get(llfree_t *self, size_t core,
 			return res;
 	}
 
-	// Any tree
+	// Any tree (including fully free ones)
 	args.free = (p_range_t){ 0, LLFREE_TREE_SIZE };
 	res = search(self, start, 0, self->trees_len, reserve_tree_and_get,
 		     &args);
-#else
-	const size_t cl_trees = 32;
-
-	llfree_result_t res;
-
-	assert(start < self->trees_len);
-	start = align_down(start, cl_trees);
-
-	size_t near = (self->trees_len / llfree_cores(self)) / 4;
-	near = LL_MIN(LL_MAX(near, cl_trees / 4), cl_trees * 2);
-
-	reserve_args_t args = { .core = core,
-				.flags = flags,
-				.free = { 0, 0 } };
-	// Over half filled trees
-	args.free = (p_range_t){ LLFREE_TREE_SIZE / 16, LLFREE_TREE_SIZE / 2 };
-	res = search(self, start, 1, near, reserve_tree_and_get, &args);
-	if (res.error != LLFREE_ERR_MEMORY)
-		return res;
-
-	// Partially filled tree
-	args.free = (p_range_t){ LLFREE_TREE_SIZE / 64,
-				 LLFREE_TREE_SIZE - LLFREE_TREE_SIZE / 16 };
-	res = search(self, start, 1, 2 * near, reserve_tree_and_get, &args);
-	if (res.error != LLFREE_ERR_MEMORY)
-		return res;
-
-	// Not free tree
-	args.free = (p_range_t){ 0, LLFREE_TREE_SIZE - 1 };
-	res = search(self, start, 1, near, reserve_tree_and_get, &args);
-	if (res.error != LLFREE_ERR_MEMORY)
-		return res;
-
-	// Any tree
-	args.free = (p_range_t){ 0, LLFREE_TREE_SIZE };
-	res = search(self, start, 0, self->trees_len, reserve_tree_and_get,
-		     &args);
-#endif
 	return res;
 }
 
-/// Synchronizes the free_counter of given local with the global counter.
-static bool ll_unused sync_with_global(llfree_t *self, size_t core,
-				       tree_change_t change, local_result_t old)
+/// Synchronize local free counter with the global counter (steal from global).
+static bool sync_with_global(llfree_t *self, size_t slot, treeF_t needed,
+			     local_result_t old)
 {
 	assert(self != NULL);
 	assert(old.present);
-	assert(old.tree.kind == change.kind.id);
 
-	/// Subtract local free counters
-	tree_change_t steal_change;
-	if (change.kind.id == TREE_HUGE.id) {
-		if (huge_from_frame(old.tree.free) >= change.huge)
-			return false;
-		steal_change = tree_change_huge(
-			change.huge - huge_from_frame(old.tree.free),
-			change.zeroed > old.tree.zeroed ?
-				change.zeroed - old.tree.zeroed :
-				0);
-	} else {
-		if (old.tree.free >= change.frames)
-			return false;
-		steal_change = tree_change_small(change.frames - old.tree.free,
-						 change.kind);
-	}
+	if (old.free >= needed)
+		return false;
 
 	size_t tree_idx = tree_from_row(old.start_row);
+	treeF_t steal_min = needed - old.free;
 
 	tree_t old_tree;
-	if (!atom_update(&self->trees[tree_idx], old_tree, tree_steal_counter,
-			 steal_change))
+	if (!atom_update(&self->trees[tree_idx], old_tree, tree_sync_steal,
+			 steal_min))
 		return false;
 
-	assert(old_tree.kind == old.tree.kind ||
-	       old_tree.free == LLFREE_TREE_SIZE);
-	assert(old_tree.zeroed == 0 || old_tree.kind == TREE_HUGE.id);
-
-	tree_change_t stolen_change = tree_change(
-		tree_kind(old_tree.kind), old_tree.free, old_tree.zeroed);
-	if (!ll_local_put(self->local, core, stolen_change, tree_idx)) {
-		llfree_warn("sync local failed c=%zu idx=%zu", core, tree_idx);
+	// old_tree.free = frames that were available (now stolen from global)
+	if (!ll_local_put(self->local, slot, tree_idx, old_tree.free)) {
+		llfree_warn("sync local failed slot=%zu idx=%zu", slot,
+			    tree_idx);
 		// Revert the steal
-		atom_update(&self->trees[tree_idx], old_tree, tree_put,
-			    stolen_change);
+		tree_t t;
+		atom_update(&self->trees[tree_idx], t, tree_put, old_tree.free);
 		return false;
 	}
-	llfree_debug("sync success c=%zu kind=%s free=%" PRIu64, core,
-		     tree_kind_name(change.kind), (uint64_t)old_tree.free);
+	llfree_debug("sync success slot=%zu free=%" PRIuS, slot,
+		     (size_t)old_tree.free);
 	return true;
 }
 
-static llfree_result_t get_from_local(llfree_t *self, size_t core,
-				      llflags_t flags, local_result_t *old)
+static llfree_result_t get_from_local(llfree_t *self, size_t slot,
+				      uint8_t order, treeF_t frames,
+				      local_result_t *old)
 {
+	uint8_t slot_tier = ll_local_tier(self->local, slot);
 	// Try decrementing the local counter
-	tree_change_t change = tree_change_flags(flags);
-	*old = ll_local_get(self->local, core, change, optional_size_none());
+	*old = ll_local_get(self->local, slot, ll_none(), frames);
 	if (old->success) {
-		llfree_result_t res = lower_get(
-			&self->lower, frame_from_row(old->start_row), flags);
+		llfree_result_t res = lower_get(&self->lower,
+						frame_from_row(old->start_row),
+						order, ll_none());
 		if (llfree_is_ok(res)) {
-			size_t start_row = row_from_frame(res.frame);
-			// Update local start index
+			uint64_t start_row = row_from_frame(res.frame);
 			if (old->start_row != start_row) {
-				*old = ll_local_set_start(self->local, core,
-							  change, start_row);
+				*old = ll_local_set_start(self->local, slot,
+							  start_row);
 			}
-			return res;
+			return llfree_ok(res.frame, slot_tier);
 		}
 
-		// Undo decrement (inc global tree)
+		// Undo decrement: put frames back to global tree
 		tree_t tree;
-		size_t tree_idx = tree_from_row(old->start_row);
-		atom_update(&self->trees[tree_idx], tree, tree_put, change);
-
+		atom_update(&self->trees[tree_from_row(old->start_row)], tree,
+			    tree_put, frames);
 		return res;
 	}
 
 	// Try synchronizing with global counter
-	if (old->present && sync_with_global(self, core, change, *old)) {
-		// Success -> Retry allocation
+	if (old->present && sync_with_global(self, slot, frames, *old)) {
 		return llfree_err(LLFREE_ERR_RETRY);
 	}
 
@@ -478,76 +414,70 @@ static llfree_result_t get_from_local(llfree_t *self, size_t core,
 }
 
 /// Search and steal from any reserved tree
-static llfree_result_t steal_from_reserved(llfree_t *self, size_t core,
-					   llflags_t flags,
-					   optional_size_t tree_idx)
+static llfree_result_t steal_from_reserved(llfree_t *self, size_t slot,
+					   treeF_t frames, uint8_t order,
+					   ll_optional_t tree_idx)
 {
-	local_result_t res;
-	tree_change_t change = tree_change_flags(flags);
+	llfree_debug("steal slot=%zu o=%d tier=%u", slot, order,
+		     ll_local_tier(self->local, slot));
 
-	llfree_debug("steal c=%zu o=%d kind=%s", core, flags.order,
-		     tree_kind_name(tree_kind_flags(flags)));
-
-	// Try stealing from lower tree first (they do not have to be demoted)
-	res = ll_local_steal(self->local, core, change, false, tree_idx);
+	// Try Match/Steal: allocate from another slot without tier change
+	local_result_t res = ll_local_steal(self->local, slot, tree_idx, frames,
+					    self->policy);
 	if (res.success) {
-		llfree_result_t res2 = lower_get(
-			&self->lower, frame_from_row(res.start_row), flags);
-		if (llfree_is_ok(res2) || res2.error != LLFREE_ERR_MEMORY)
+		llfree_result_t res2 = lower_get(&self->lower,
+						 frame_from_row(res.start_row),
+						 order, ll_none());
+		if (llfree_is_ok(res2))
+			return llfree_ok(res2.frame, res.tier);
+		if (res2.error != LLFREE_ERR_MEMORY)
 			return res2;
 
-		// Undo decrement (inc global tree)
+		// Undo decrement
 		tree_t tree;
 		atom_update(&self->trees[tree_from_row(res.start_row)], tree,
-			    tree_put, change);
+			    tree_put, frames);
 	}
 
-	llfree_debug("steal c=%zu o=%d kind=%s: no lower tree found", core,
-		     flags.order, tree_kind_name(tree_kind_flags(flags)));
+	llfree_debug("steal slot=%zu: no match/steal slot found", slot);
 
-	// Fallback to higher trees, which have to be demoted
-	res = ll_local_steal(self->local, core, change, true, tree_idx);
+	// Fallback: Demote — change global tree tier and capture the slot
+	local_result_t old_slot;
+	res = ll_local_steal_demote(self->local, slot, self->policy, &old_slot);
 	if (res.success) {
-		llfree_debug("steal c=%zu o=%d kind=%s: found higher tree",
-			     core, flags.order,
-			     tree_kind_name(tree_kind_flags(flags)));
+		llfree_debug("steal slot=%zu: found demote target", slot);
 
-		// Try to get the tree from the global trees
-		llfree_result_t res2 = lower_get(
-			&self->lower, frame_from_row(res.start_row), flags);
+		llfree_result_t res2 = lower_get(&self->lower,
+						 frame_from_row(res.start_row),
+						 order, ll_none());
 		if (llfree_is_ok(res2) || res2.error != LLFREE_ERR_MEMORY) {
-			llfree_debug("Local demote...");
-			local_result_t stolen =
-				ll_local_demote(self->local, core, change,
-						tree_from_row(res.start_row));
-			if (!stolen.success)
-				llfree_warn("Local demote failed!");
-
-			if (stolen.success && stolen.present) {
-				swap_reserved(self, core,
-					      tree_from_row(stolen.start_row),
-					      stolen.tree, change);
-			}
-
-			// Also demote global tree
+			// Change the global tree's tier and keep it reserved
+			size_t tgt_idx = tree_from_row(res.start_row);
 			tree_t tree;
-			atom_update(
-				&self->trees[tree_from_row(stolen.start_row)],
-				tree, tree_demote, tree_kind(stolen.tree.kind));
+			atom_update(&self->trees[tgt_idx], tree,
+				    tree_change_tier, old_slot.tier, res.tier);
+			// Set up local slot with demoted tree
+			treeF_t new_free =
+				res.free - (llfree_is_ok(res2) ? frames : 0);
+			swap_reserved(self, slot, tgt_idx, new_free);
+			if (llfree_is_ok(res2))
+				return llfree_ok(res2.frame, res.tier);
 			return res2;
 		}
 
-		// Undo decrement (inc global tree)
+		// Undo: put frames back and clear reservation
 		tree_t tree;
 		atom_update(&self->trees[tree_from_row(res.start_row)], tree,
-			    tree_put, change);
+			    tree_put, frames);
 	}
 
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
 typedef struct alloc_global_args {
-	llflags_t flags;
+	uint8_t tier;
+	uint8_t order;
+	llfree_policy_fn policy;
 } alloc_global_args_t;
 
 static llfree_result_t alloc_global_tree(llfree_t *self, size_t idx, void *args)
@@ -555,248 +485,222 @@ static llfree_result_t alloc_global_tree(llfree_t *self, size_t idx, void *args)
 	assert(idx < self->trees_len);
 
 	alloc_global_args_t *rargs = args;
-	llflags_t flags = rargs->flags;
+	treeF_t frames = (treeF_t)(1u << rargs->order);
 
+	// Use get_demote: allows tier demotion via policy (matches Rust get_any_global)
 	tree_t old;
-	tree_change_t change = tree_change_flags(flags);
-	if (!atom_update(&self->trees[idx], old, tree_get, change))
+	if (!atom_update(&self->trees[idx], old, tree_get_demote, rargs->tier,
+			 frames, rargs->policy))
 		return llfree_err(LLFREE_ERR_MEMORY);
 
-	assert(old.free >= (1 << flags.order));
+	assert(old.free >= frames);
 
-	llfree_result_t res =
-		lower_get(&self->lower, frame_from_tree(idx), flags);
+	// Determine actual tier: requested if demoted, else original tree tier
+	llfree_policy_t p = rargs->policy(rargs->tier, old.tier, old.free);
+	uint8_t result_tier = (p.type == LLFREE_POLICY_DEMOTE) ? rargs->tier :
+								 old.tier;
+
+	llfree_result_t res = lower_get(&self->lower, frame_from_tree(idx),
+					rargs->order, ll_none());
 
 	if (!llfree_is_ok(res)) {
-		// undo reservation
-		tree_t expected = old;
-		tree_get(&expected, change);
-		// first try to also reset the tree kind if nothing has changed
-		if (!atom_cmp_exchange(&self->trees[idx], &expected, old)) {
-			// keep tree kind as other cpu might have already used it
-			atom_update(&self->trees[idx], expected, tree_put,
-				    change);
-		}
+		// Undo: simply put the frames back
+		tree_t t;
+		atom_update(&self->trees[idx], t, tree_put, frames);
+		return res;
 	}
-	return res;
+	return llfree_ok(res.frame, result_tier);
 }
 
 static llfree_result_t alloc_any_global(llfree_t *self, size_t start,
-					llflags_t flags)
+					uint8_t tier, uint8_t order)
 {
-	alloc_global_args_t args = { .flags = flags };
+	alloc_global_args_t args = { .tier = tier,
+				     .order = order,
+				     .policy = self->policy };
 	return search(self, start, 0, self->trees_len, alloc_global_tree,
 		      &args);
 }
 
-llfree_result_t llfree_get(llfree_t *self, size_t core, llflags_t flags)
+static llfree_result_t llfree_get_at(llfree_t *self, size_t frame,
+				     llfree_request_t request)
 {
-	assert(self != NULL);
-	assert(flags.order <= LLFREE_MAX_ORDER);
-	flags.zeroed = flags.zeroed && flags.order == LLFREE_CHILD_ORDER;
-	core = core % llfree_cores(self);
-
-	bool contains_zeroed = false;
-	bool contains_huge = false;
-	// Skip search for non-existing trees
-	if (flags.order >= LLFREE_CHILD_ORDER) {
-		contains_zeroed = atom_load(&self->contains_zeroed);
-		contains_huge = atom_load(&self->contains_huge);
-		if (!contains_zeroed) {
-			flags.zeroed = false;
-		} else if (!contains_huge) {
-			flags.zeroed = true;
-		}
-	}
-
-	uint64_t start = self->trees_len / llfree_cores(self) * core;
-	llfree_result_t res;
-
-	bool has_locals = self->trees_len >
-			  ((TREE_KINDS + 1) * llfree_cores(self));
-	if (has_locals && (flags.order != LLFREE_HUGE_ORDER ||
-			   contains_zeroed || contains_huge)) {
-retry:
-		for (size_t i = 0; i < RETRIES; i++) {
-			local_result_t old;
-			res = get_from_local(self, core, flags, &old);
-			if (res.error == LLFREE_ERR_MEMORY && old.present)
-				start = tree_from_row(old.start_row);
-			if (res.error != LLFREE_ERR_RETRY)
-				break;
-		}
-		if (res.error != LLFREE_ERR_MEMORY &&
-		    res.error != LLFREE_ERR_RETRY)
-			return res;
-
-		// reserve new tree
-		res = reserve_and_get(self, core, flags, start);
-		if (res.error != LLFREE_ERR_MEMORY)
-			return res;
-
-		// take a huge frame from the other reserved trees
-		for (size_t i = 0; i < RETRIES; i++) {
-			res = steal_from_reserved(self, core, flags,
-						  optional_size_none());
-			if (res.error != LLFREE_ERR_RETRY)
-				break;
-		}
-		if (res.error != LLFREE_ERR_MEMORY &&
-		    res.error != LLFREE_ERR_RETRY)
-			return res;
-	}
-
-	// just take from any tree
-	res = alloc_any_global(self, start, flags);
-
-	// Update search flags and maybe retry
-	if (res.error == LLFREE_ERR_MEMORY &&
-	    flags.order == LLFREE_CHILD_ORDER &&
-	    (contains_zeroed || contains_huge)) {
-		llfree_debug("retry kind=%s",
-			     tree_kind_name(tree_kind_flags(flags)));
-		// The next allocations should skip searching
-		if (flags.zeroed) {
-			contains_zeroed = false;
-			atom_store(&self->contains_zeroed, contains_zeroed);
-		} else {
-			contains_huge = false;
-			atom_store(&self->contains_huge, contains_huge);
-		}
-		flags.zeroed = !flags.zeroed;
-
-		if (flags.zeroed ? contains_zeroed : contains_huge)
-			goto retry;
-	}
-	return res;
-}
-
-llfree_result_t llfree_get_at(llfree_t *self, size_t core, uint64_t frame,
-			      llflags_t flags)
-{
-	llfree_result_t res;
-
-	assert(self != NULL);
-	assert(flags.order <= LLFREE_MAX_ORDER);
+	// Fixed-frame allocation (get_at): allocate a specific frame
 	assert(frame < self->lower.frames);
-	core = core % llfree_cores(self);
-
 	size_t tree_idx = tree_from_frame(frame);
-
-	tree_change_t change = tree_change_flags(flags);
-
-	bool has_locals = self->trees_len >
-			  ((TREE_KINDS + 1) * llfree_cores(self));
+	uint8_t result_tier = request.tier;
+	treeF_t frames = (treeF_t)(1u << request.order);
 
 	for (size_t r = 0; r < RETRIES; r++) {
-		// Decrement reserved
-		if (has_locals) {
-			local_result_t old_r;
-			old_r = ll_local_get(self->local, core, change,
-					     optional_size(tree_idx));
-			if (old_r.success)
+		// Decrement local reservation
+		if (request.local != LLFREE_LOCAL_NONE) {
+			size_t slot = request.local;
+			local_result_t old = ll_local_get(
+				self->local, slot, ll_some(tree_idx), frames);
+			if (old.success) {
+				result_tier = old.tier;
 				goto search_found;
+			}
 		}
 
-		// Decrement global
+		// Decrement global tree counter
 		tree_t old_t;
 		if (atom_update(&self->trees[tree_idx], old_t, tree_get,
-				change)) {
-			flags.zeroed = flags.zeroed && old_t.zeroed;
+				request.tier, frames)) {
+			result_tier = old_t.tier;
 			goto search_found;
 		}
 
-		if (!has_locals)
+		if (request.local == LLFREE_LOCAL_NONE)
 			continue;
 
-		res = steal_from_reserved(self, core, flags,
-					  optional_size(tree_idx));
-		if (llfree_is_ok(res))
-			return res;
-
-		if (res.error == LLFREE_ERR_MEMORY)
+		llfree_result_t sres =
+			steal_from_reserved(self, request.local, frames,
+					    request.order, ll_some(tree_idx));
+		if (llfree_is_ok(sres))
+			return sres;
+		if (sres.error == LLFREE_ERR_MEMORY)
 			break;
-		if (res.error != LLFREE_ERR_RETRY)
-			return res;
+		if (sres.error != LLFREE_ERR_RETRY)
+			return sres;
 	}
-	// Search failed...
 	llfree_info("get_at dec failed %" PRIu64, frame);
 	return llfree_err(LLFREE_ERR_MEMORY);
 
-search_found:
-	res = lower_get_at(&self->lower, frame, flags);
-	if (!llfree_is_ok(res)) {
-		// Increment global to prevent race conditions
-		tree_t tree;
-		atom_update(&self->trees[tree_idx], tree, tree_put, change);
-	}
+search_found:;
+	llfree_result_t res =
+		lower_get(&self->lower, frame, request.order, ll_some(frame));
+	if (llfree_is_ok(res))
+		return llfree_ok(res.frame, result_tier);
+	tree_t tree;
+	atom_update(&self->trees[tree_idx], tree, tree_put, frames);
 	return res;
 }
 
-llfree_result_t llfree_put(llfree_t *self, size_t core, uint64_t frame,
-			   llflags_t flags)
+llfree_result_t llfree_get(llfree_t *self, ll_optional_t frame,
+			   llfree_request_t request)
 {
 	assert(self != NULL);
-	assert(flags.order <= LLFREE_MAX_ORDER);
-	assert(frame < self->lower.frames);
-	core = core % llfree_cores(self);
+	assert(request.order <= LLFREE_MAX_ORDER);
 
-	llfree_result_t res = lower_put(&self->lower, frame, flags);
+	uint8_t tier = request.tier;
+	treeF_t frames = (treeF_t)(1u << request.order);
+
+	if (frame.present) {
+		// Fixed-frame allocation (get_at): allocate a specific frame
+		return llfree_get_at(self, frame.value, request);
+	}
+
+	// Normal allocation: find any frame near the local slot's preference
+	// start_idx: spread locals evenly across trees
+	uint64_t start = self->trees_len > 0 &&
+					 request.local != LLFREE_LOCAL_NONE ?
+				 (self->trees_len / ll_local_len(self->local) *
+				  request.local) :
+				 0;
+
+	// Only do local search if we have enough trees to prevent high contention
+	if (request.local != LLFREE_LOCAL_NONE &&
+	    self->trees_len >= ll_local_len(self->local)) {
+		size_t slot = request.local;
+		for (size_t i = 0; i < RETRIES; i++) {
+			local_result_t old;
+			llfree_result_t res = get_from_local(
+				self, slot, request.order, frames, &old);
+			if (llfree_is_ok(res))
+				return res;
+			if (res.error == LLFREE_ERR_RETRY)
+				continue;
+
+			// Memory: update start hint, then try to reserve a tree
+			if (old.present)
+				start = tree_from_row(old.start_row);
+
+			res = reserve_and_get(self, slot, tier, request.order,
+					      start);
+			if (res.error != LLFREE_ERR_MEMORY)
+				return res;
+		}
+
+		// Steal from other reserved trees
+		llfree_result_t res = llfree_err(LLFREE_ERR_MEMORY);
+		for (size_t i = 0; i < RETRIES; i++) {
+			res = steal_from_reserved(self, slot, frames,
+						  request.order, ll_none());
+			if (res.error != LLFREE_ERR_RETRY)
+				break;
+		}
+		if (res.error != LLFREE_ERR_MEMORY)
+			return res;
+	}
+
+	// Fall back to global allocation from any tree
+	return alloc_any_global(self, start, tier, request.order);
+}
+
+llfree_result_t llfree_put(llfree_t *self, uint64_t frame,
+			   llfree_request_t request)
+{
+	assert(self != NULL);
+	assert(request.order <= LLFREE_MAX_ORDER);
+	assert(frame < self->lower.frames);
+
+	llfree_result_t res = lower_put(&self->lower, frame, request.order);
 	if (!llfree_is_ok(res)) {
 		llfree_info("lower err %" PRIu64, (uint64_t)res.error);
 		return res;
 	}
 
-	// Frame is successfully freed in lower allocator
-
 	size_t tree_idx = tree_from_frame(frame);
+	uint8_t tier = request.tier;
+	treeF_t frames = (treeF_t)(1u << request.order);
 
-	// Update free-reserve heuristic
-	bool reserve = LLFREE_ENABLE_FREE_RESERVE &&
-		       ll_local_free_inc(self->local, core, tree_idx);
+	if (request.local != LLFREE_LOCAL_NONE) {
+		size_t slot = request.local;
 
-	tree_t old;
-	tree_change_t change = tree_change_flags(flags);
+		// Update free-reserve heuristic
+		bool reserve = LLFREE_ENABLE_FREE_RESERVE &&
+			       ll_local_free_inc(self->local, slot, tree_idx);
 
-	// Update reservation if present
-	if (ll_local_put(self->local, core, change, tree_idx)) {
-		reserve = false;
+		tree_t old;
+
+		// Increment local reservation if tree matches
+		if (ll_local_put(self->local, slot, tree_idx, frames)) {
+			reserve = false;
+		} else {
+			// Update global tree or reserve for next time
+			atom_update(&self->trees[tree_idx], old,
+				    tree_put_or_reserve, frames, tier, &reserve,
+				    TREE_LOWER_LIM);
+		}
+
+		// Free-reserve heuristic: reserve trees with lots of frees
+		if (reserve) {
+			tree_t new = old;
+			bool success = tree_put(&new, frames);
+			assert(success);
+			new.reserved = true;
+			swap_reserved(self, slot, tree_idx, new.free);
+		}
 	} else {
-		// Update global tree or reserve
-		atom_update(&self->trees[tree_idx], old, tree_put_or_reserve,
-			    change, &reserve, TREE_LOWER_LIM);
+		// No local slot: update global tree directly
+		tree_t t;
+		atom_update(&self->trees[tree_idx], t, tree_put, frames);
 	}
-
-	if (flags.order >= LLFREE_CHILD_ORDER) {
-		if (flags.zeroed && !atom_load(&self->contains_zeroed))
-			atom_store(&self->contains_zeroed, true);
-		if (!flags.zeroed && !atom_load(&self->contains_huge))
-			atom_store(&self->contains_huge, true);
-	}
-
-	// Free-reserve heuristic:
-	// Reserve trees where a lot of frees happen, assuming locality
-	if (reserve) {
-		tree_t new = old;
-		bool success = tree_put(&new, change);
-		assert(success);
-		// fully reserve the new tree
-		new.reserved = true;
-		swap_reserved(self, core, tree_idx, new, change);
-	}
-	return llfree_err(LLFREE_ERR_OK);
+	return llfree_ok(0, 0);
 }
 
-llfree_result_t llfree_drain(llfree_t *self, size_t core)
+llfree_result_t llfree_drain(llfree_t *self, size_t local)
 {
-	ll_local_drain(self->local, core);
-	return llfree_err(LLFREE_ERR_OK);
+	assert(local < ll_local_len(self->local));
+	ll_local_drain(self->local, local);
+	return llfree_ok(0, 0);
 }
 
-size_t llfree_cores(const llfree_t *self)
+size_t llfree_locals(const llfree_t *self)
 {
 	assert(self != NULL);
-	return ll_local_cores(self->local);
+	return ll_local_len(self->local);
 }
 
 size_t llfree_frames(const llfree_t *self)
@@ -805,29 +709,19 @@ size_t llfree_frames(const llfree_t *self)
 	return self->lower.frames;
 }
 
-size_t llfree_huge(const llfree_t *self)
-{
-	assert(self != NULL);
-	return div_ceil(self->lower.frames, 1 << LLFREE_HUGE_ORDER);
-}
-
-ll_stats_t llfree_stats(const llfree_t *self)
+ll_tree_stats_t llfree_tree_stats(const llfree_t *self, ll_tier_stats_t *tiers,
+				  size_t tier_len)
 {
 	assert(self != NULL);
 
 	// Local counters
-	ll_stats_t stats = ll_local_stats(self->local);
-	stats.frames = self->lower.frames;
-	stats.huge = div_ceil(self->lower.frames, 1 << LLFREE_HUGE_ORDER);
+	ll_tree_stats_t stats = ll_local_stats(self->local, tiers, tier_len);
 
 	// Global counters
 	for (size_t i = 0; i < self->trees_len; i++) {
 		tree_t t = atom_load(&self->trees[i]);
 		stats.free_frames += t.free;
-		if (t.kind == TREE_HUGE.id) {
-			stats.free_huge += t.free >> LLFREE_HUGE_ORDER;
-			stats.zeroed_huge += t.zeroed;
-		}
+		stats.free_trees += t.free == LLFREE_TREE_SIZE;
 	}
 	return stats;
 }
@@ -838,31 +732,6 @@ ll_stats_t llfree_full_stats(const llfree_t *self)
 	return lower_stats(&self->lower);
 }
 
-ll_stats_t llfree_stats_at(const llfree_t *self, uint64_t frame, size_t order)
-{
-	assert(self != NULL);
-	if (order == LLFREE_TREE_ORDER) {
-		ll_stats_t stats = {
-			LLFREE_TREE_SIZE, LLFREE_TREE_CHILDREN, 0, 0, 0, 0
-		};
-		tree_t tree = atom_load(&self->trees[tree_from_frame(frame)]);
-		stats.free_frames = tree.free;
-		if (tree.kind == TREE_HUGE.id) {
-			stats.free_huge = tree.free >> LLFREE_HUGE_ORDER;
-			stats.zeroed_huge = tree.zeroed;
-		}
-		if (tree.reserved) {
-			ll_stats_t local_stats =
-				ll_local_stats_at(self->local, frame);
-			stats.free_frames += local_stats.free_frames;
-			stats.free_huge += local_stats.free_huge;
-			stats.zeroed_huge += local_stats.zeroed_huge;
-		}
-		return stats;
-	}
-	return lower_stats_at(&self->lower, frame, order);
-}
-
 ll_stats_t llfree_full_stats_at(const llfree_t *self, uint64_t frame,
 				size_t order)
 {
@@ -870,144 +739,24 @@ ll_stats_t llfree_full_stats_at(const llfree_t *self, uint64_t frame,
 	return lower_stats_at(&self->lower, frame, order);
 }
 
-struct try_reclaim_args {
-	/// Mark the reclaimed frame as allocated
-	bool alloc;
-	/// Only reclaim frames that are not reclaimed yet
-	bool not_reclaimed;
-	/// Only reclaim non-zeroed frames
-	bool not_zeroed;
-};
-
-static llfree_result_t try_reclaim(llfree_t *self, size_t idx, void *args)
-{
-	assert(idx < self->trees_len);
-	assert(args != NULL);
-	struct try_reclaim_args *rargs = (struct try_reclaim_args *)args;
-	bool alloc = rargs->alloc;
-	bool not_zeroed = rargs->not_zeroed;
-	bool not_reclaimed = rargs->not_reclaimed;
-
-	bool success = false;
-	tree_t old;
-	atom_update(&self->trees[idx], old, tree_reclaim, &success, not_zeroed,
-		    alloc);
-	if (!success)
-		return llfree_err(LLFREE_ERR_MEMORY);
-
-	if (alloc) {
-		tree_t tmp = atom_load(&self->trees[idx]);
-		assert(tmp.free < old.free);
-		assert(tmp.zeroed <= old.zeroed);
-	}
-
-	llfree_result_t res = lower_reclaim(&self->lower,
-					    idx << LLFREE_TREE_ORDER, alloc,
-					    not_reclaimed, not_zeroed);
-
-	if (!llfree_is_ok(res)) {
-		// If we changed the tree, undo this transaction
-		if (alloc || (not_zeroed && old.kind == TREE_HUGE.id)) {
-			bool changed = atom_update(&self->trees[idx], old,
-						   tree_undo_reclaim,
-						   not_zeroed, alloc);
-			assert(!alloc || changed);
-		}
-	}
-	return res;
-}
-
-llfree_result_t llfree_reclaim(llfree_t *self, size_t core, bool alloc,
-			       bool not_reclaimed, bool not_zeroed)
-{
-	core = core % llfree_cores(self);
-	size_t start_idx = ll_local_reclaimed(self->local, core);
-
-	// Search and allocate
-	llfree_result_t ret = llfree_err(LLFREE_ERR_MEMORY);
-	// First try to reclaim non-zeroed frames
-	struct try_reclaim_args args = { .alloc = alloc,
-					 .not_reclaimed = not_reclaimed,
-					 .not_zeroed = true };
-
-	// Search for non-zeroed first
-	ret = search(self, start_idx, 0, self->trees_len, try_reclaim, &args);
-
-	// Fallback to any frame
-	if (!not_zeroed && !llfree_is_ok(ret) &&
-	    ret.error == LLFREE_ERR_MEMORY) {
-		args.not_zeroed = false;
-		ret = search(self, start_idx, 0, self->trees_len, try_reclaim,
-			     &args);
-	}
-
-	// Update the local reclaim index
-	if (llfree_is_ok(ret) && start_idx != tree_from_frame(ret.frame)) {
-		llfree_debug("Set reclaim_idx %" PRIuS " -> %" PRIuS, start_idx,
-			     tree_from_frame(ret.frame));
-		ll_local_set_reclaimed(self->local, core,
-				       tree_from_frame(ret.frame));
-	}
-	return ret;
-}
-
-llfree_result_t llfree_return(llfree_t *self, uint64_t frame, bool install)
-{
-	llfree_result_t res = lower_return(&self->lower, frame, install);
-	if (llfree_is_ok(res)) {
-		tree_t old;
-		size_t idx = tree_from_frame(frame);
-		tree_change_t change = tree_change_huge(1, 1);
-		atom_update(&self->trees[idx], old, tree_put, change);
-
-		tree_put(&old, change);
-		if (old.zeroed > 0 && !atom_load(&self->contains_zeroed))
-			atom_store(&self->contains_zeroed, true);
-		if (old.kind == TREE_HUGE.id &&
-		    old.free >> LLFREE_CHILD_ORDER > old.zeroed &&
-		    !atom_load(&self->contains_huge))
-			atom_store(&self->contains_huge, true);
-	}
-	return res;
-}
-
-llfree_result_t llfree_install(llfree_t *self, uint64_t frame)
-{
-	return lower_install(&self->lower, frame);
-}
-
 void llfree_print_debug(const llfree_t *self,
 			void (*writer)(void *, const char *), void *arg)
 {
 	assert(self != NULL);
 
-	size_t fixed_trees = 0;
-	size_t movable_trees = 0;
-	size_t long_living_trees = 0;
-	size_t free_trees = 0;
-	for (size_t i = 0; i < self->trees_len; i++) {
-		tree_t tree = atom_load(&self->trees[i]);
-		if (tree.free == LLFREE_TREE_SIZE)
-			free_trees += 1;
-		else if (tree.kind == TREE_FIXED.id)
-			fixed_trees += 1;
-		else if (tree.kind == TREE_MOVABLE.id)
-			movable_trees += 1;
-		else if (tree.kind == TREE_LONG_LIVING.id)
-			long_living_trees += 1;
-	}
+	ll_tree_stats_t tree_stats = llfree_tree_stats(self, NULL, 0);
 
 	char msg[256];
-
-	ll_stats_t stats = llfree_stats(self);
+	ll_stats_t stats = llfree_full_stats(self);
+	size_t frames = llfree_frames(self);
+	size_t huge = div_ceil(frames, 1 << LLFREE_HUGE_ORDER);
 	snprintf(msg, sizeof(msg),
-		 "LLC { cores: %" PRIuS ", frames: %" PRIuS "/%" PRIuS
-		 ", huge: %" PRIuS "/%" PRIuS "/%" PRIuS ", trees: %" PRIuS
-		 "/%" PRIuS " f=%" PRIuS " m=%" PRIuS " l=%" PRIuS " }\n",
-		 llfree_cores(self), stats.free_frames, stats.frames,
-		 stats.zeroed_huge, stats.free_huge, stats.huge, free_trees,
-		 self->trees_len, fixed_trees, movable_trees,
-		 long_living_trees);
+		 "LLC { locals: %" PRIuS ", tiers: %u, frames: %" PRIuS
+		 "/%" PRIuS ", huge: %" PRIuS "/%" PRIuS ", trees: %" PRIuS
+		 "/%" PRIuS " }\n",
+		 llfree_locals(self), self->num_tiers, stats.free_frames,
+		 frames, stats.free_huge, huge, tree_stats.free_trees,
+		 self->trees_len);
 	writer(arg, msg);
 }
 
@@ -1015,21 +764,18 @@ void llfree_print(const llfree_t *self)
 {
 	llfree_info_start();
 	llfree_info_cont("llfree_t {\n");
-	ll_stats_t stats = llfree_stats(self);
+	ll_stats_t stats = llfree_full_stats(self);
+	size_t frames = llfree_frames(self);
+	size_t huge = div_ceil(frames, 1 << LLFREE_HUGE_ORDER);
 
 	llfree_info_cont("%sframes: %" PRIuS ", huge: %" PRIuS "\n", INDENT(1),
-			 stats.frames, stats.huge);
+			 frames, huge);
 
-	size_t free_trees = 0;
-	for (size_t i = 0; i < self->trees_len; i++) {
-		tree_t tree = atom_load(&self->trees[i]);
-		if (tree.free == LLFREE_TREE_SIZE)
-			free_trees += 1;
-	}
+	ll_tree_stats_t tree_stats = llfree_tree_stats(self, NULL, 0);
 	llfree_info_cont("%sfree: { frames: %" PRIuS ", huge: %" PRIuS
 			 ", trees: %" PRIuS " }\n",
 			 INDENT(1), stats.free_frames, stats.free_huge,
-			 free_trees);
+			 tree_stats.free_trees);
 
 	ll_local_print(self->local, 1);
 
@@ -1074,19 +820,17 @@ void llfree_print(const llfree_t *self)
 static void validate_tree(const llfree_t *self, local_result_t res)
 {
 	assert(res.present);
-	assert(tree_from_row(res.start_row) < self->trees_len);
-	tree_t tree = atom_load(&self->trees[tree_from_row(res.start_row)]);
+	size_t tree_idx = tree_from_row(res.start_row);
+	assert(tree_idx < self->trees_len);
+	tree_t tree = atom_load(&self->trees[tree_idx]);
 
 	check(tree.reserved);
-	check(tree.kind < TREE_KINDS);
-	check(tree.kind <= res.tree.kind);
-	treeF_t free = tree.free + res.tree.free;
+	check(tree.tier < self->num_tiers);
+	treeF_t free = tree.free + res.free;
 	check(free <= LLFREE_TREE_SIZE);
-	check(tree.zeroed + res.tree.zeroed <= LLFREE_TREE_SIZE);
-	if (tree.kind == TREE_HUGE.id) {
-		check(res.tree.free % (1 << LLFREE_HUGE_ORDER) == 0);
-		check(tree.free % (1 << LLFREE_HUGE_ORDER) == 0);
-		check(tree.zeroed <= free >> LLFREE_CHILD_ORDER);
+	if (tree.tier == self->num_tiers - 1) {
+		check(res.free % (1u << LLFREE_HUGE_ORDER) == 0);
+		check(tree.free % (1u << LLFREE_HUGE_ORDER) == 0);
 	}
 	ll_stats_t tree_stats = lower_stats_at(
 		&self->lower, frame_from_row(res.start_row), LLFREE_TREE_ORDER);
@@ -1096,48 +840,26 @@ static void validate_tree(const llfree_t *self, local_result_t res)
 void llfree_validate(const llfree_t *self)
 {
 	ll_stats_t stats = lower_stats(&self->lower);
-	// llfree free is computed differently
-	ll_stats_t fast_stats = llfree_stats(self);
-	check_equal(PRIuS, stats.frames, fast_stats.frames);
-	check_equal(PRIuS, stats.huge, fast_stats.huge);
+	ll_tree_stats_t fast_stats = llfree_tree_stats(self, NULL, 0);
 	check_equal(PRIuS, stats.free_frames, fast_stats.free_frames);
-	check(stats.free_huge >= fast_stats.free_huge); // fast might count less
-	check(stats.zeroed_huge >= fast_stats.zeroed_huge);
 
 	for (size_t tree_idx = 0; tree_idx < self->trees_len; tree_idx++) {
 		tree_t tree = atom_load(&self->trees[tree_idx]);
 		check(tree.free <= LLFREE_TREE_SIZE);
-		check(tree.kind < TREE_KINDS);
+		check(tree.tier < self->num_tiers);
 		if (!tree.reserved) {
 			ll_stats_t tree_stats = lower_stats_at(
 				&self->lower, frame_from_tree(tree_idx),
 				LLFREE_TREE_ORDER);
-			ll_stats_t fast_tree_stats =
-				llfree_stats_at(self, frame_from_tree(tree_idx),
-						LLFREE_TREE_ORDER);
 			check_equal(PRIuS, tree_stats.free_frames,
 				    (size_t)tree.free);
-			check_equal(PRIuS, fast_tree_stats.free_frames,
-				    (size_t)tree.free);
 
-			if (tree.kind == TREE_HUGE.id) {
-				check(tree.free % (1 << LLFREE_HUGE_ORDER) ==
+			if (tree.tier == self->num_tiers - 1) {
+				check(tree.free % (1u << LLFREE_HUGE_ORDER) ==
 				      0);
-				check(tree.zeroed <= tree.free >>
-				      LLFREE_CHILD_ORDER);
-				check_equal(PRIuS, fast_tree_stats.free_huge,
-					    (size_t)tree.free >>
-						    LLFREE_HUGE_ORDER);
 				check_equal(PRIuS, tree_stats.free_huge,
 					    (size_t)tree.free >>
 						    LLFREE_HUGE_ORDER);
-
-				check_equal(PRIuS, tree_stats.zeroed_huge,
-					    (size_t)tree.zeroed);
-				check_equal(PRIuS, fast_tree_stats.zeroed_huge,
-					    (size_t)tree.zeroed);
-			} else {
-				check(tree.zeroed == 0);
 			}
 		}
 	}

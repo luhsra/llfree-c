@@ -7,8 +7,7 @@
 
 /// Atomic bitfield
 typedef struct bitfield {
-	_Atomic(uint64_t) rows[FIELD_N]
-		ll_align(LLFREE_CACHE_SIZE);
+	_Atomic(uint64_t) rows[FIELD_N] ll_align(LLFREE_CACHE_SIZE);
 } bitfield_t;
 
 /// Initializes the Bitfield of 512 Bit size with all 0
