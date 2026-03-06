@@ -154,23 +154,18 @@ static llfree_result_t search(llfree_t *self, uint64_t start, uint64_t offset,
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
-typedef size_t (*prio_fn)(uint8_t tier, uint8_t order, tree_t tree, void *args);
-
 #define SEARCH_BEST 3
 __attribute((unused)) static llfree_result_t
-search_best(llfree_t *self, uint8_t tier, uint8_t order, uint64_t start,
-	    uint64_t offset, uint64_t len, prio_fn tree_prio_fn,
-	    search_fn callback, void *args)
+search_best(llfree_t *self, uint8_t tier, uint64_t start, uint64_t offset,
+	    uint64_t len, treeF_t min_free, search_fn callback, void *args)
 {
 	assert(self != NULL && callback != NULL);
 
 	struct best {
-		size_t prio; // present if > 0
+		uint8_t prio; // present if > 0
 		uint64_t idx;
 	};
 	struct best best[SEARCH_BEST] = { 0 };
-	for (size_t i = 0; i < SEARCH_BEST; ++i)
-		best[i].prio = 0;
 
 	for (int64_t i = (int64_t)offset; i < (int64_t)len; ++i) {
 		// Search alternating left and right from start
@@ -179,29 +174,36 @@ search_best(llfree_t *self, uint8_t tier, uint8_t order, uint64_t start,
 		uint64_t idx = (uint64_t)(base + off) % self->trees_len;
 
 		tree_t tree = atom_load(&self->trees[idx]);
-		size_t prio = (tree_prio_fn)(tier, order, tree, args);
-		if (prio == 0)
+		if (tree.reserved || tree.free < min_free ||
+		    tree.free == LLFREE_TREE_SIZE)
 			continue;
 
-		// Use highest prio directly
-		if (prio >= 100) {
+		llfree_policy_t p = self->policy(tier, tree.tier, tree.free);
+		if (p.type != LLFREE_POLICY_MATCH)
+			continue;
+
+		// Use highest prio directly (match Rust's Match(u8::MAX))
+		if (p.priority == UINT8_MAX) {
 			llfree_result_t res = callback(self, idx, args);
 			if (res.error != LLFREE_ERR_MEMORY)
 				return res;
 			continue;
 		}
 
+		// Priority > 0 means it's a candidate for allocation, higher is better.
+		p.priority += 1;
+
 		size_t pos = 0;
 		for (; pos < SEARCH_BEST; ++pos) {
 			// Only replace if better -> prefer trees near the start
-			if (prio > best[pos].prio)
+			if (p.priority > best[pos].prio)
 				break;
 		}
 		if (pos < SEARCH_BEST) {
 			for (size_t j = pos; j < SEARCH_BEST - 1; ++j) {
 				best[j + 1] = best[j];
 			}
-			best[pos].prio = prio;
+			best[pos].prio = p.priority;
 			best[pos].idx = idx;
 		}
 	}
@@ -283,28 +285,6 @@ static llfree_result_t reserve_tree_and_get(llfree_t *self, size_t idx,
 	return res;
 }
 
-static inline size_t tree_prio(uint8_t tier, uint8_t order, tree_t tree,
-			       void *args)
-{
-	(void)args;
-	if (tree.free == 0)
-		return 0; // entirely allocated
-	if (tree.free == LLFREE_TREE_SIZE)
-		return 0; // entirely free (avoid fragmenting empty trees)
-
-	if (tree.tier != tier)
-		return 0; // wrong tier
-
-	// huge tier: perfect match
-	if (order >= LLFREE_HUGE_ORDER)
-		return 100;
-
-	if (tree.free >= LLFREE_TREE_SIZE / 2)
-		return 100;
-
-	return 2; // fallback
-}
-
 /// Reserves and allocates from a new tree, searching near `start`.
 static llfree_result_t reserve_and_get(llfree_t *self, uint8_t tier,
 				       size_t index, uint8_t order,
@@ -327,8 +307,8 @@ static llfree_result_t reserve_and_get(llfree_t *self, uint8_t tier,
 		// Avoid fragmenting fully free trees
 		args.free = (p_range_t){ 0, LLFREE_TREE_SIZE - 1 };
 
-		res = search_best(self, tier, order, start, 1, 2 * near,
-				  tree_prio, reserve_tree_and_get, &args);
+		res = search_best(self, tier, start, 1, near, 1 << order,
+				  reserve_tree_and_get, &args);
 		if (res.error != LLFREE_ERR_MEMORY)
 			return res;
 
