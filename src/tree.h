@@ -39,31 +39,45 @@ static inline ll_unused tree_t tree_new(bool reserved, uint8_t tier,
 }
 
 /// Return frames to a tree (increment free counter).
-bool tree_put(tree_t *self, treeF_t frames);
+/// Resets tier to default_tier when tree becomes entirely free.
+bool tree_put(tree_t *self, treeF_t frames, uint8_t default_tier);
 
-/// Allocate frames, possibly demoting the tier via policy.
+/// Allocate frames, only if the policy returns Match or Steal.
+/// Does not allow demotion. Keeps the original tier.
+bool tree_get_match(tree_t *self, uint8_t tier, treeF_t frames,
+		    llfree_policy_fn policy);
+
+/// Allocate frames, allowing demotion via policy.
+/// Rejects Invalid policy. On Demote, changes tier to requested.
 bool tree_get_demote(tree_t *self, uint8_t tier, treeF_t frames,
 		     llfree_policy_fn policy);
+
+/// Allocate frames, only if the policy returns Demote.
+bool tree_get_demote_only(tree_t *self, uint8_t tier, treeF_t frames,
+			  llfree_policy_fn policy);
 
 /// Reserve a tree if its free counter is in [min, max] and tier matches
 /// (or tree is entirely free). Sets free=0, reserved=true.
 bool tree_reserve(tree_t *self, uint8_t tier, treeF_t min, treeF_t max);
 
+/// Reserve a tree only if the policy returns Demote.
+/// Sets free=0, reserved=true, tier=requested.
+bool tree_reserve_demote(tree_t *self, uint8_t tier, treeF_t min,
+			 llfree_policy_fn policy);
+
 /// Unreserve a tree and add frames back; optionally demotes tier via policy.
+/// Resets tier to default_tier when tree becomes entirely free.
 bool tree_unreserve_add(tree_t *self, treeF_t frames, uint8_t tier,
-			llfree_policy_fn policy);
+			llfree_policy_fn policy, uint8_t default_tier);
 
 /// Steal free counter from a reserved tree (sets free=0).
 /// Returns true if reserved and free > min.
 bool tree_sync_steal(tree_t *self, treeF_t min);
 
 /// Increment free counter or reserve for free-reserve heuristic.
+/// Resets tier to default_tier when tree becomes entirely free.
 bool tree_put_or_reserve(tree_t *self, treeF_t frames, uint8_t tier,
-			 bool *reserve, treeF_t min);
-
-/// Atomically change a reserved tree's tier (for steal-demote).
-/// Returns true if the tree is reserved and its tier matches from_tier.
-bool tree_change_tier(tree_t *self, uint8_t from_tier, uint8_t to_tier);
+			 bool *reserve, treeF_t min, uint8_t default_tier);
 
 /// Debug print the tree
 void tree_print(tree_t *self, size_t idx, size_t indent);

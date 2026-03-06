@@ -7,7 +7,7 @@
 #include <stdlib.h>
 
 // Helper macros for movable tiering requests
-#define ll_cores(self) (llfree_locals(self) / 3)
+#define ll_cores(self) ll_local_tier_locals((self)->local, 0)
 #define llreq(self, core, order) \
 	llfree_movable_request(ll_cores(self), (uint8_t)(order), core, false)
 #define llreq_mov(self, core, order) \
@@ -74,7 +74,7 @@ declare_test(alloc_movable)
 	// llfree_print_debug(&llfree, writer, NULL);
 	llfree_warn("freeing some");
 
-	check(llfree_tree_stats(&llfree, NULL, 0).free_frames ==
+	check(llfree_tree_stats(&llfree).free_frames ==
 	      (1 << 30) / LLFREE_FRAME_SIZE - len - 2);
 
 	llfree_result_t ret =
@@ -93,7 +93,7 @@ declare_test(alloc_movable)
 		check_m(llfree_is_ok(ret), "free allocation %zu failed", i);
 	}
 
-	check(llfree_tree_stats(&llfree, NULL, 0).free_frames ==
+	check(llfree_tree_stats(&llfree).free_frames ==
 	      (1 << 30) / LLFREE_FRAME_SIZE);
 
 	// llfree_print(&llfree);

@@ -1,11 +1,25 @@
 #include "tree.h"
 #include "llfree_platform.h"
 
-bool tree_put(tree_t *self, treeF_t frames)
+bool tree_put(tree_t *self, treeF_t frames, uint8_t default_tier)
 {
 	treeF_t free = self->free + frames;
 	assert(free <= LLFREE_TREE_SIZE);
 	self->free = free;
+	if (free == LLFREE_TREE_SIZE)
+		self->tier = default_tier;
+	return true;
+}
+
+bool tree_get_match(tree_t *self, uint8_t tier, treeF_t frames,
+		    llfree_policy_fn policy)
+{
+	if (self->free < frames)
+		return false;
+	llfree_policy_t p = policy(tier, self->tier, self->free);
+	if (p.type != LLFREE_POLICY_MATCH)
+		return false;
+	self->free -= frames;
 	return true;
 }
 
@@ -15,8 +29,29 @@ bool tree_get_demote(tree_t *self, uint8_t tier, treeF_t frames,
 	if (self->free < frames)
 		return false;
 	llfree_policy_t p = policy(tier, self->tier, self->free);
-	if (p.type == LLFREE_POLICY_DEMOTE)
+	switch (p.type) {
+	case LLFREE_POLICY_MATCH:
+	case LLFREE_POLICY_STEAL:
+		self->free -= frames;
+		return true;
+	case LLFREE_POLICY_DEMOTE:
 		self->tier = tier;
+		self->free -= frames;
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool tree_get_demote_only(tree_t *self, uint8_t tier, treeF_t frames,
+			  llfree_policy_fn policy)
+{
+	if (self->free < frames)
+		return false;
+	llfree_policy_t p = policy(tier, self->tier, self->free);
+	if (p.type != LLFREE_POLICY_DEMOTE)
+		return false;
+	self->tier = tier;
 	self->free -= frames;
 	return true;
 }
@@ -36,8 +71,24 @@ bool tree_reserve(tree_t *self, uint8_t tier, treeF_t min, treeF_t max)
 	return true;
 }
 
+bool tree_reserve_demote(tree_t *self, uint8_t tier, treeF_t min,
+			 llfree_policy_fn policy)
+{
+	if (self->reserved)
+		return false;
+	if (self->free < min)
+		return false;
+	llfree_policy_t p = policy(tier, self->tier, self->free);
+	if (p.type != LLFREE_POLICY_DEMOTE)
+		return false;
+	self->tier = tier;
+	self->reserved = true;
+	self->free = 0;
+	return true;
+}
+
 bool tree_unreserve_add(tree_t *self, treeF_t frames, uint8_t tier,
-			llfree_policy_fn policy)
+			llfree_policy_fn policy, uint8_t default_tier)
 {
 	if (!self->reserved)
 		return false;
@@ -48,6 +99,8 @@ bool tree_unreserve_add(tree_t *self, treeF_t frames, uint8_t tier,
 	treeF_t free = self->free + frames;
 	assert(free <= LLFREE_TREE_SIZE);
 	self->free = free;
+	if (free == LLFREE_TREE_SIZE)
+		self->tier = default_tier;
 	return true;
 }
 
@@ -61,11 +114,13 @@ bool tree_sync_steal(tree_t *self, treeF_t min)
 }
 
 bool tree_put_or_reserve(tree_t *self, treeF_t frames, uint8_t tier,
-			 bool *reserve, treeF_t min)
+			 bool *reserve, treeF_t min, uint8_t default_tier)
 {
 	treeF_t free = self->free + frames;
 	assert(free <= LLFREE_TREE_SIZE);
 	self->free = free;
+	if (free == LLFREE_TREE_SIZE)
+		self->tier = default_tier;
 
 	if (*reserve && !self->reserved && self->tier == tier &&
 	    self->free > min) {
@@ -75,14 +130,6 @@ bool tree_put_or_reserve(tree_t *self, treeF_t frames, uint8_t tier,
 	} else {
 		*reserve = false;
 	}
-	return true;
-}
-
-bool tree_change_tier(tree_t *self, uint8_t from_tier, uint8_t to_tier)
-{
-	if (!self->reserved || self->tier != from_tier)
-		return false;
-	self->tier = to_tier;
 	return true;
 }
 

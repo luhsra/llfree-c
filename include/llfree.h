@@ -16,11 +16,11 @@ typedef struct ll_optional {
 	bool present : 1;
 	size_t value : (sizeof(size_t) * 8) - 1;
 } ll_optional_t;
-static inline ll_optional_t ll_some(size_t value)
+static inline ll_unused ll_optional_t ll_some(size_t value)
 {
 	return (ll_optional_t){ .present = true, .value = value };
 }
-static inline ll_optional_t ll_none(void)
+static inline ll_unused ll_optional_t ll_none(void)
 {
 	return (ll_optional_t){ .present = false, .value = 0 };
 }
@@ -92,7 +92,7 @@ typedef struct llfree_request {
 	uint8_t order;
 	/// Requested tier
 	uint8_t tier;
-	/// Local slot index (direct index into the locals array),
+	/// Within-tier local index (e.g. core id),
 	/// or LLFREE_LOCAL_NONE for global-only allocation.
 	size_t local;
 } llfree_request_t;
@@ -208,11 +208,8 @@ llfree_result_t llfree_get(llfree_t *self, ll_optional_t frame,
 llfree_result_t llfree_put(llfree_t *self, uint64_t frame,
 			   llfree_request_t request);
 
-/// Unreserves the local reservation for the given local slot index.
-llfree_result_t llfree_drain(llfree_t *self, size_t local);
-
-/// Returns the total number of local slots (sum of all tier slot counts).
-size_t llfree_locals(const llfree_t *self);
+/// Unreserves all local reservations.
+void llfree_drain(llfree_t *self);
 
 /// Returns the total number of frames the allocator can allocate.
 size_t llfree_frames(const llfree_t *self);
@@ -224,27 +221,29 @@ typedef struct ll_stats {
 	size_t free_trees;
 } ll_stats_t;
 
-/// Tree statistics
-typedef struct ll_tree_stats {
-	size_t free_frames;
-	size_t free_trees;
-} ll_tree_stats_t;
 /// Per-tier tree statistics
 typedef struct ll_tier_stats {
 	size_t free_frames;
 	size_t alloc_frames;
 } ll_tier_stats_t;
 
+/// Tree statistics (matches Rust TreeStats)
+typedef struct ll_tree_stats {
+	size_t free_frames;
+	size_t free_trees;
+	/// Stats per tier
+	ll_tier_stats_t tiers[LLFREE_MAX_TIERS];
+} ll_tree_stats_t;
+
 /// Returns the tree-level stats.
-/// This is faster than llfree_full_stats as it doesn't scan the lower allocator, but may be less accurate.
-ll_tree_stats_t llfree_tree_stats(const llfree_t *self, ll_tier_stats_t *tiers,
-				  size_t tier_len);
+/// This is faster than llfree_stats as it doesn't scan the lower allocator, but may be less accurate.
+ll_tree_stats_t llfree_tree_stats(const llfree_t *self);
 
 /// Counts free frames accurately by scanning the lower allocator.
-ll_stats_t llfree_full_stats(const llfree_t *self);
+ll_stats_t llfree_stats(const llfree_t *self);
 /// Returns the full stats for a frame at a given order.
-ll_stats_t llfree_full_stats_at(const llfree_t *self, uint64_t frame,
-				size_t order);
+ll_stats_t llfree_stats_at(const llfree_t *self, uint64_t frame,
+			   size_t order);
 
 // == Debugging ==
 
@@ -281,7 +280,7 @@ static inline llfree_policy_t ll_unused llfree_simple_policy(uint8_t requested,
 static inline llfree_tiering_t ll_unused llfree_tiering_simple(size_t cores)
 {
 	llfree_tiering_t t = { .num_tiers = 2,
-			       .default_tier = 0,
+			       .default_tier = 1,
 			       .policy = llfree_simple_policy };
 	t.tiers[0] = (llfree_tier_conf_t){ .tier = 0, .count = cores };
 	t.tiers[1] = (llfree_tier_conf_t){ .tier = 1, .count = cores };
@@ -289,13 +288,13 @@ static inline llfree_tiering_t ll_unused llfree_tiering_simple(size_t cores)
 }
 
 /// Build a request for simple 2-tier tiering.
-/// Maps (order, core) to the correct tier and local slot index.
+/// Maps (order, core) to the correct tier and within-tier local index.
 static inline llfree_request_t ll_unused llfree_simple_request(size_t cores,
 							       uint8_t order,
 							       size_t core)
 {
 	if (order >= LLFREE_HUGE_ORDER)
-		return llreq(order, 1, (core % cores) + cores);
+		return llreq(order, 1, core % cores);
 	return llreq(order, 0, core % cores);
 }
 
@@ -323,7 +322,7 @@ static inline llfree_policy_t ll_unused llfree_movable_policy(uint8_t requested,
 static inline llfree_tiering_t ll_unused llfree_tiering_movable(size_t cores)
 {
 	llfree_tiering_t t = { .num_tiers = 3,
-			       .default_tier = 0,
+			       .default_tier = 2,
 			       .policy = llfree_movable_policy };
 	t.tiers[0] = (llfree_tier_conf_t){ .tier = 0, .count = cores };
 	t.tiers[1] = (llfree_tier_conf_t){ .tier = 1, .count = cores };
@@ -332,15 +331,15 @@ static inline llfree_tiering_t ll_unused llfree_tiering_movable(size_t cores)
 }
 
 /// Build a request for movable 3-tier tiering.
-/// Maps (order, core, movable) to the correct tier and local slot index.
+/// Maps (order, core, movable) to the correct tier and within-tier local index.
 static inline llfree_request_t ll_unused llfree_movable_request(size_t cores,
 								uint8_t order,
 								size_t core,
 								bool movable)
 {
 	if (order >= LLFREE_HUGE_ORDER)
-		return llreq(order, 2, (core % cores) + (2 * cores));
+		return llreq(order, 2, core % cores);
 	if (movable)
-		return llreq(order, 1, (core % cores) + cores);
+		return llreq(order, 1, core % cores);
 	return llreq(order, 0, core % cores);
 }

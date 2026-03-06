@@ -10,21 +10,21 @@
 typedef struct local local_t;
 
 /// Size of the local metadata for the given tiering.
-/// Total slots = sum(tiering->tiers[i].count).
 size_t ll_local_size(const llfree_tiering_t *tiering);
 
 /// Initialize the per-cpu data.
-/// Entries are laid out flat: [tier0_slot0..tier0_slot(count0-1), tier1_slot0..]
+/// The tiers array will contain slices pointing into the metadata buffer.
 void ll_local_init(local_t *self, const llfree_tiering_t *tiering);
 
-/// Get the total number of local slots
+/// Get the total number of local slots (sum across all tiers)
 size_t ll_local_len(const local_t *self);
 /// Returns the allocated byte size of an initialized local block (aligned)
 size_t ll_local_mem_size(const local_t *self);
 /// Get the number of tiers
 uint8_t ll_local_num_tiers(const local_t *self);
-/// Get the tier of a slot
-uint8_t ll_local_tier(const local_t *self, size_t slot);
+
+/// Returns the number of local slots for a given tier, or 0 if tier not configured.
+size_t ll_local_tier_locals(const local_t *self, uint8_t tier);
 
 /// Result of a local get/put operation
 typedef struct local_result {
@@ -35,7 +35,7 @@ typedef struct local_result {
 	uint64_t start_row; /// bitfield row index of reserved tree
 } local_result_t;
 
-static inline local_result_t local_ok(uint8_t tier, treeF_t free,
+static inline ll_unused local_result_t local_ok(uint8_t tier, treeF_t free,
 				      uint64_t start_row)
 {
 	return (local_result_t){ .success = true,
@@ -44,7 +44,7 @@ static inline local_result_t local_ok(uint8_t tier, treeF_t free,
 				 .free = free,
 				 .start_row = start_row };
 }
-static inline local_result_t local_fail(uint8_t tier, bool present,
+static inline ll_unused local_result_t local_fail(uint8_t tier, bool present,
 					treeF_t free, uint64_t start_row)
 {
 	return (local_result_t){ .success = false,
@@ -54,47 +54,60 @@ static inline local_result_t local_fail(uint8_t tier, bool present,
 				 .start_row = start_row };
 }
 
-/// Decrement the number of free frames from slot idx.
+/// Decrement the number of free frames for the given (tier, index).
 /// tree_idx: if present, only succeed if the reserved tree matches.
-local_result_t ll_local_get(local_t *self, size_t slot,
+local_result_t ll_local_get(local_t *self, uint8_t tier, size_t index,
 			    ll_optional_t tree_idx, treeF_t frames);
 
-/// Increment the number of free frames for slot idx.
-bool ll_local_put(local_t *self, size_t slot, size_t tree_idx, treeF_t frames);
+/// Increment the number of free frames for the given (tier, index).
+bool ll_local_put(local_t *self, uint8_t tier, size_t index, size_t tree_idx,
+		  treeF_t frames);
 
-/// Update the starting row for slot idx (keeping the same tree).
-local_result_t ll_local_set_start(local_t *self, size_t slot,
+/// Update the starting row for the given (tier, index).
+local_result_t ll_local_set_start(local_t *self, uint8_t tier, size_t index,
 				  uint64_t start_row);
 
-/// Swap slot idx with a new tree (returns the old reservation).
-local_result_t ll_local_swap(local_t *self, size_t slot, size_t new_tree_idx,
-			     treeF_t new_free);
+/// Swap (tier, index) with a new tree (returns the old reservation).
+local_result_t ll_local_swap(local_t *self, uint8_t tier, size_t index,
+			     size_t new_tree_idx, treeF_t new_free);
 
-/// Steal from another local slot using the given policy:
-/// - First tries to steal from a same-tier slot (Policy::MATCH)
-/// - Then from a compatible Steal slot
-/// - Returns success=false if nothing found.
+/// Steal without demoting: find a slot where policy returns MATCH or STEAL,
+/// decrement its free counter, allocate from there.
 /// On success, result.{tier, free, start_row} describe the stolen slot.
-local_result_t ll_local_steal(local_t *self, size_t slot,
+local_result_t ll_local_steal(local_t *self, uint8_t tier, size_t index,
 			      ll_optional_t tree_idx, treeF_t frames,
 			      llfree_policy_fn policy);
 
-/// Steal a slot where policy returns DEMOTE, atomically clearing it.
-/// Returns the taken slot's info so the caller can change the global tree tier.
-/// If old_out != NULL, it receives the taken slot as-is (original tier).
-local_result_t ll_local_steal_demote(local_t *self, size_t slot,
-				     llfree_policy_fn policy,
-				     local_result_t *old_out);
+/// Result of ll_local_demote_any.
+typedef struct demote_any_result {
+	bool found;
+	uint64_t row; /// row to allocate from
+	bool old_present; /// was there an old tree in the requesting local?
+	uint64_t old_row;
+	uint8_t old_tier; /// tier of old tree (= requesting tier)
+	treeF_t old_free;
+} demote_any_result_t;
+
+/// Demote from another tier's local slot (matches Rust demote_any).
+/// Finds a target slot where policy(tier, target_tier, frames) == DEMOTE,
+/// atomically clears it (checking it has enough free),
+/// swaps the decremented tree into the requesting local.
+/// Returns the row to allocate from and the old requesting local for unreservation.
+demote_any_result_t ll_local_demote_any(local_t *self, uint8_t tier,
+					size_t index, ll_optional_t tree_idx,
+					treeF_t frames,
+					llfree_policy_fn policy);
 
 /// Update the last-frees heuristic; returns true if the tree should be reserved
-bool ll_local_free_inc(local_t *self, size_t slot, size_t tree_idx);
+bool ll_local_free_inc(local_t *self, uint8_t tier, size_t index,
+		       size_t tree_idx);
 
-/// Drain a single local slot (clear reservation without updating global tree)
-void ll_local_drain(local_t *self, size_t slot);
+/// Drain a single local slot (clear reservation).
+/// Returns the old reservation for the caller to unreserve the global tree.
+local_result_t ll_local_drain(local_t *self, uint8_t tier, size_t index);
 
 /// Return stats summed over all slots
-ll_tree_stats_t ll_local_stats(const local_t *self, ll_tier_stats_t *tiers,
-			       size_t tier_len);
+ll_tree_stats_t ll_local_stats(const local_t *self);
 
 /// Return stats for the slot whose reserved tree matches tree_idx
 local_result_t ll_local_stats_at(const local_t *self, size_t tree_idx);

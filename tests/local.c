@@ -20,21 +20,22 @@ declare_test(local_last_free_inc)
 		llfree_ext_alloc(LLFREE_CACHE_SIZE, ll_local_size(&tiering));
 	ll_local_init(local, &tiering);
 
-	// slot 0 = tier 0, core 0 (offset 0 in simple tiering with 1 core)
-	size_t slot = 0;
+	// tier 0, index 0 (first slot of tier 0)
+	uint8_t tier = 0;
+	size_t index = 0;
 	for (size_t i = 0; i < LAST_FREES; i++) {
-		check(!ll_local_free_inc(local, slot, 0));
+		check(!ll_local_free_inc(local, tier, index, 0));
 	}
-	check(ll_local_free_inc(local, slot, 0));
-	check(ll_local_free_inc(local, slot, 0));
+	check(ll_local_free_inc(local, tier, index, 0));
+	check(ll_local_free_inc(local, tier, index, 0));
 
-	check(!ll_local_free_inc(local, slot, 1));
-	check(!ll_local_free_inc(local, slot, 0));
+	check(!ll_local_free_inc(local, tier, index, 1));
+	check(!ll_local_free_inc(local, tier, index, 0));
 
 	for (size_t i = 0; i < LAST_FREES; i++) {
-		check(!ll_local_free_inc(local, slot, 1));
+		check(!ll_local_free_inc(local, tier, index, 1));
 	}
-	check(ll_local_free_inc(local, slot, 1));
+	check(ll_local_free_inc(local, tier, index, 1));
 	llfree_ext_free(LLFREE_CACHE_SIZE, ll_local_size(&tiering), local);
 	return success;
 }
