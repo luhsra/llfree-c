@@ -263,9 +263,9 @@ static inline llfree_policy_t ll_unused llfree_simple_policy(uint8_t requested,
 							     uint8_t target,
 							     size_t free)
 {
-	if (requested < target)
-		return (llfree_policy_t){ LLFREE_POLICY_STEAL, 0 };
 	if (requested > target)
+		return (llfree_policy_t){ LLFREE_POLICY_STEAL, 0 };
+	if (requested < target)
 		return (llfree_policy_t){ LLFREE_POLICY_DEMOTE, 0 };
 	/* same tier */
 	if (free >= LLFREE_TREE_SIZE / 2)
@@ -305,9 +305,9 @@ static inline llfree_policy_t ll_unused llfree_movable_policy(uint8_t requested,
 							      uint8_t target,
 							      size_t free)
 {
-	if (requested < target)
-		return (llfree_policy_t){ LLFREE_POLICY_STEAL, 0 };
 	if (requested > target)
+		return (llfree_policy_t){ LLFREE_POLICY_STEAL, 0 };
+	if (requested < target)
 		return (llfree_policy_t){ LLFREE_POLICY_DEMOTE, 0 };
 	/* same tier */
 	if (free >= LLFREE_TREE_SIZE / 2)

@@ -21,10 +21,18 @@ typedef struct tree {
 } tree_t;
 _Static_assert(sizeof(tree_t) == sizeof(treeF_t), "tree size mismatch");
 
+/// Check function that returns the resulting tier if successful or LLFREE_TIER_NONE if not.
+typedef uint8_t (*tree_check_fn)(uint8_t tree_tier, treeF_t frames, void *args);
+
 /// Range for tree free-counter search
 typedef struct p_range {
 	treeF_t min, max;
 } p_range_t;
+static inline ll_unused p_range_t p_range(treeF_t min, treeF_t max)
+{
+	assert(min <= max);
+	return (p_range_t){ min, max };
+}
 
 /// Lower bound used by the tree search heuristics
 #define TREE_LOWER_LIM (LLFREE_TREE_SIZE / 16)
@@ -42,28 +50,12 @@ static inline ll_unused tree_t tree_new(bool reserved, uint8_t tier,
 /// Resets tier to default_tier when tree becomes entirely free.
 bool tree_put(tree_t *self, treeF_t frames, uint8_t default_tier);
 
-/// Allocate frames, only if the policy returns Match or Steal.
-/// Does not allow demotion. Keeps the original tier.
-bool tree_get_match(tree_t *self, uint8_t tier, treeF_t frames,
-		    llfree_policy_fn policy);
+bool tree_get(tree_t *self, treeF_t frames, uint8_t *result_tier,
+	      tree_check_fn check, void *args);
 
-/// Allocate frames, allowing demotion via policy.
-/// Rejects Invalid policy. On Demote, changes tier to requested.
-bool tree_get_demote(tree_t *self, uint8_t tier, treeF_t frames,
-		     llfree_policy_fn policy);
-
-/// Allocate frames, only if the policy returns Demote.
-bool tree_get_demote_only(tree_t *self, uint8_t tier, treeF_t frames,
-			  llfree_policy_fn policy);
-
-/// Reserve a tree if its free counter is in [min, max] and tier matches
-/// (or tree is entirely free). Sets free=0, reserved=true.
-bool tree_reserve(tree_t *self, uint8_t tier, treeF_t min, treeF_t max);
-
-/// Reserve a tree only if the policy returns Demote.
-/// Sets free=0, reserved=true, tier=requested.
-bool tree_reserve_demote(tree_t *self, uint8_t tier, treeF_t min,
-			 llfree_policy_fn policy);
+/// Reserve a tree if check returns a valid tier, and set it to that tier.
+bool tree_reserve(tree_t *self, uint8_t *result_tier, tree_check_fn check,
+		  void *args);
 
 /// Unreserve a tree and add frames back; optionally demotes tier via policy.
 /// Resets tier to default_tier when tree becomes entirely free.

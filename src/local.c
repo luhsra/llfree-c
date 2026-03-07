@@ -177,8 +177,8 @@ size_t ll_local_mem_size(const local_t *self)
 
 size_t ll_local_tier_locals(const local_t *self, uint8_t tier)
 {
-	if (tier >= LLFREE_MAX_TIERS)
-		return 0;
+	if (tier >= LLFREE_MAX_TIERS || self->tiers[tier].entries == NULL)
+		return LLFREE_LOCAL_NONE;
 	return self->tiers[tier].len;
 }
 

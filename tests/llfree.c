@@ -1,5 +1,6 @@
 #include "llfree.h"
 #include "llfree_inner.h"
+#include "trees.h"
 
 #include "test.h"
 #include "llfree_platform.h"
@@ -115,7 +116,7 @@ declare_test(llfree_alloc_s)
 	check_equal("zu", llfree_tree_stats(&upper).free_frames,
 		    lower_stats(&upper.lower).free_frames);
 
-	for (size_t i = 0; i < upper.trees_len; i++) {
+	for (size_t i = 0; i < upper.trees.len; i++) {
 		size_t free = 0;
 		size_t offset = i * LLFREE_TREE_SIZE;
 		for (size_t j = 0; j < LLFREE_TREE_CHILDREN; j++) {
@@ -125,7 +126,7 @@ declare_test(llfree_alloc_s)
 					.free_frames;
 		}
 
-		tree_t tree = atom_load(&upper.trees[i]);
+		tree_t tree = trees_load(&upper.trees, i);
 		if (!tree.reserved)
 			check_equal_m("zu", free, (size_t)tree.free, "tree %lu",
 				      i);
@@ -144,14 +145,14 @@ declare_test(llfree_general_function)
 
 	lldrop llfree_t upper = llfree_new(2, FRAMES, LLFREE_INIT_FREE);
 	llfree_validate(&upper);
-	check_equal("zu", upper.trees_len, div_ceil(FRAMES, LLFREE_TREE_SIZE));
+	check_equal("zu", upper.trees.len, div_ceil(FRAMES, LLFREE_TREE_SIZE));
 	// check(upper.cores == 4);
 	check(llfree_frames(&upper) == FRAMES);
 	check_m(llfree_tree_stats(&upper).free_frames == FRAMES,
 		"right number of free frames");
 
 	// check allignment
-	check_m((uint64_t)upper.trees % LLFREE_CACHE_SIZE == 0,
+	check_m((uint64_t)upper.trees.entries % LLFREE_CACHE_SIZE == 0,
 		"Alignment of trees");
 	check_equal_m(PRIu64, (uint64_t)upper.local % LLFREE_CACHE_SIZE,
 		      (uint64_t)0ul, "Alignment of local");
@@ -653,7 +654,7 @@ declare_test(llfree_less_mem)
 #undef CORES
 #define CORES 4lu
 #undef FRAMES
-#define FRAMES 4096lu
+#define FRAMES (4lu * LLFREE_TREE_SIZE)
 
 	lldrop llfree_t upper = llfree_new(CORES, FRAMES, LLFREE_INIT_FREE);
 

@@ -16,6 +16,15 @@ static llfree_policy_t test_policy(uint8_t req, uint8_t tgt, size_t free)
 	return (llfree_policy_t){ LLFREE_POLICY_DEMOTE, 0 };
 }
 
+/// Test check function for tree_reserve: always allows, returns tier 0
+static uint8_t check_always_allow(uint8_t tree_tier, treeF_t frames, void *args)
+{
+	(void)tree_tier;
+	(void)frames;
+	(void)args;
+	return 0;
+}
+
 declare_test(tree_atomic)
 {
 	bool success = true;
@@ -59,28 +68,28 @@ declare_test(tree_reserve)
 	tree_t actual = tree_new(false, 0, 764);
 	tree_t expect = tree_new(true, 0, 0);
 
-	ret = tree_reserve(&actual, 0, 0, LLFREE_TREE_SIZE);
+	ret = tree_reserve(&actual, NULL, check_always_allow, NULL);
 	check(ret);
 	equal_trees(actual, expect);
 
 	// already at minimum
 	actual = tree_new(false, 0, 0);
 	expect = tree_new(true, 0, 0);
-	ret = tree_reserve(&actual, 0, 0, LLFREE_TREE_SIZE);
+	ret = tree_reserve(&actual, NULL, check_always_allow, NULL);
 	check(ret);
 	equal_trees(actual, expect);
 
 	// if already reserved
 	actual = tree_new(true, 0, 456);
 	expect = actual;
-	ret = tree_reserve(&actual, 0, 0, LLFREE_TREE_SIZE);
+	ret = tree_reserve(&actual, NULL, check_always_allow, NULL);
 	check_m(!ret, "already reserved");
 	equal_trees(actual, expect);
 
 	// max counter value
 	actual = tree_new(false, 0, LLFREE_TREE_SIZE);
 	expect = tree_new(true, 0, 0);
-	ret = tree_reserve(&actual, 0, 0, LLFREE_TREE_SIZE);
+	ret = tree_reserve(&actual, NULL, check_always_allow, NULL);
 	check(ret);
 	equal_trees(actual, expect);
 

@@ -41,5 +41,6 @@
 
 /// Number of bits for the tier field in tree_t
 #define LLFREE_TIER_BITS 3u
+#define LLFREE_TIER_NONE UINT8_MAX
 /// Maximum number of tiers (limited by tree tier field width)
 #define LLFREE_MAX_TIERS (1u << LLFREE_TIER_BITS)
