@@ -72,6 +72,9 @@ void trees_put_or_reserve(trees_t *self, size_t idx, treeF_t frames,
 /// Return LLFREE_ERR_MEMORY to continue searching, anything else to stop.
 typedef llfree_result_t (*trees_access_fn)(size_t idx, void *ctx);
 
+/// Callback to fetch current free frames for online operation.
+typedef treeF_t (*trees_fetch_free_fn)(size_t idx, void *ctx);
+
 /// Linear alternating search from start.
 llfree_result_t trees_search(const trees_t *self, size_t start, size_t offset,
 			     size_t len, trees_access_fn cb, void *ctx);
@@ -89,6 +92,12 @@ ll_tree_stats_t trees_stats(const trees_t *self);
 /// Load stats for a specific tree entry
 void trees_stats_at(const trees_t *self, size_t idx, uint8_t *tier,
 		    treeF_t *free, bool *reserved);
+
+/// Change tree metadata according to matcher and change.
+/// Returns LLFREE_ERR_OK on success, LLFREE_ERR_MEMORY on no matching tree.
+llfree_result_t trees_change(trees_t *self, llfree_tree_match_t matcher,
+			     llfree_tree_change_t change,
+			     trees_fetch_free_fn fetch_free, void *fetch_ctx);
 
 /// Print all tree entries
 void trees_print(const trees_t *self, size_t indent);

@@ -97,6 +97,16 @@ typedef struct llfree_request {
 	size_t local;
 } llfree_request_t;
 
+/// Match conditions for llfree_change_tree.
+typedef struct llfree_tree_match {
+	/// Match a specific tree index (ll_none() for any tree).
+	ll_optional_t id;
+	/// Match a specific tier (LLFREE_TIER_NONE for any tier).
+	uint8_t tier;
+	/// Require at least this many free frames in the tree.
+	size_t free;
+} llfree_tree_match_t;
+
 static inline llfree_request_t ll_unused llreq(uint8_t order, uint8_t tier,
 					       size_t local)
 {
@@ -210,6 +220,29 @@ llfree_result_t llfree_put(llfree_t *self, uint64_t frame,
 
 /// Unreserves all local reservations.
 void llfree_drain(llfree_t *self);
+
+/// Tree operation for llfree_change_tree.
+typedef enum llfree_tree_operation {
+	/// Do not apply an operation.
+	LLFREE_TREE_OP_NONE = 0,
+	/// Online the tree and repopulate its free counter from lower stats.
+	LLFREE_TREE_OP_ONLINE = 1,
+	/// Offline the tree by setting its free counter to zero.
+	LLFREE_TREE_OP_OFFLINE = 2,
+} llfree_tree_operation_t;
+
+/// Tree change for llfree_change_tree.
+typedef struct llfree_tree_change {
+	/// Change the tier. Use LLFREE_TIER_NONE to leave unchanged.
+	uint8_t tier;
+	/// Operation to apply.
+	llfree_tree_operation_t operation;
+} llfree_tree_change_t;
+
+/// Change a tree matching `matcher` according to `change`.
+/// Fails if the tree does not match or is currently reserved.
+llfree_result_t llfree_change_tree(llfree_t *self, llfree_tree_match_t matcher,
+				   llfree_tree_change_t change);
 
 /// Returns the total number of frames the allocator can allocate.
 size_t llfree_frames(const llfree_t *self);

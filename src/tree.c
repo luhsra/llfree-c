@@ -93,6 +93,36 @@ bool tree_put_or_reserve(tree_t *self, treeF_t frames, uint8_t tier,
 	return true;
 }
 
+bool tree_change(tree_t *self, uint8_t match_tier, treeF_t min_free,
+		uint8_t change_tier, llfree_tree_operation_t operation,
+		treeF_t online_free)
+{
+	if (self->reserved)
+		return false;
+	if (match_tier != LLFREE_TIER_NONE && self->tier != match_tier)
+		return false;
+	if (self->free < min_free)
+		return false;
+
+	if (change_tier != LLFREE_TIER_NONE)
+		self->tier = change_tier;
+
+	switch (operation) {
+	case LLFREE_TREE_OP_NONE:
+		break;
+	case LLFREE_TREE_OP_OFFLINE:
+		self->free = 0;
+		break;
+	case LLFREE_TREE_OP_ONLINE:
+		if (self->free != 0)
+			return false;
+		self->free = online_free;
+		break;
+	}
+
+	return true;
+}
+
 void tree_print(tree_t *self, size_t idx, size_t indent)
 {
 	if (indent == 0)

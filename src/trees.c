@@ -228,6 +228,65 @@ void trees_stats_at(const trees_t *self, size_t idx, uint8_t *tier,
 		*reserved = t.reserved;
 }
 
+typedef struct change_at_args {
+	trees_t *trees;
+	llfree_tree_match_t matcher;
+	llfree_tree_change_t change;
+	trees_fetch_free_fn fetch_free;
+	void *fetch_ctx;
+} change_at_args_t;
+
+static llfree_result_t trees_change_at(size_t idx, void *ctx)
+{
+	change_at_args_t *args = (change_at_args_t *)ctx;
+	tree_t old = atom_load(&args->trees->entries[idx]);
+
+	while (true) {
+		treeF_t online_free = 0;
+		if (args->change.operation == LLFREE_TREE_OP_ONLINE) {
+			online_free = args->fetch_free(idx, args->fetch_ctx);
+		}
+
+		tree_t desired = old;
+		if (!tree_change(&desired, args->matcher.tier,
+				 (treeF_t)args->matcher.free,
+				 args->change.tier,
+				 args->change.operation,
+				 online_free)) {
+			return llfree_err(LLFREE_ERR_MEMORY);
+		}
+
+		if (atom_cmp_exchange_weak(&args->trees->entries[idx], &old,
+					   desired)) {
+			return llfree_ok(0, 0);
+		}
+	}
+}
+
+llfree_result_t trees_change(trees_t *self, llfree_tree_match_t matcher,
+			     llfree_tree_change_t change,
+			     trees_fetch_free_fn fetch_free, void *fetch_ctx)
+{
+	if (matcher.free > LLFREE_TREE_SIZE)
+		return llfree_err(LLFREE_ERR_MEMORY);
+
+	change_at_args_t args = {
+		.trees = self,
+		.matcher = matcher,
+		.change = change,
+		.fetch_free = fetch_free,
+		.fetch_ctx = fetch_ctx,
+	};
+
+	if (matcher.id.present) {
+		if (matcher.id.value >= self->len)
+			return llfree_err(LLFREE_ERR_MEMORY);
+		return trees_change_at(matcher.id.value, &args);
+	}
+
+	return trees_search(self, 0, 0, self->len, trees_change_at, &args);
+}
+
 void trees_print(const trees_t *self, size_t indent)
 {
 	llfree_info_cont("%strees: %zu (%u) {\n", INDENT(indent), self->len,

@@ -690,6 +690,22 @@ llfree_result_t llfree_put(llfree_t *self, uint64_t frame,
 	return llfree_ok(0, 0);
 }
 
+static treeF_t llfree_change_fetch_free(size_t idx, void *ctx)
+{
+	llfree_t *self = (llfree_t *)ctx;
+	ll_stats_t stats = llfree_stats_at(self, frame_from_tree(idx),
+				      LLFREE_TREE_ORDER);
+	return (treeF_t)stats.free_frames;
+}
+
+llfree_result_t llfree_change_tree(llfree_t *self, llfree_tree_match_t matcher,
+				   llfree_tree_change_t change)
+{
+	assert(self != NULL);
+	return trees_change(&self->trees, matcher, change, llfree_change_fetch_free,
+			   self);
+}
+
 void llfree_drain(llfree_t *self)
 {
 	for (uint8_t t = 0; t < LLFREE_MAX_TIERS; t++) {
