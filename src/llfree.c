@@ -5,7 +5,6 @@
 #include "llfree_platform.h"
 #include "llfree_types.h"
 #include "trees.h"
-#include "tree.h"
 #include "local.h"
 #include "lower.h"
 #include "utils.h"
@@ -693,8 +692,8 @@ llfree_result_t llfree_put(llfree_t *self, uint64_t frame,
 static treeF_t llfree_change_fetch_free(size_t idx, void *ctx)
 {
 	llfree_t *self = (llfree_t *)ctx;
-	ll_stats_t stats = llfree_stats_at(self, frame_from_tree(idx),
-				      LLFREE_TREE_ORDER);
+	ll_stats_t stats =
+		llfree_stats_at(self, frame_from_tree(idx), LLFREE_TREE_ORDER);
 	return (treeF_t)stats.free_frames;
 }
 
@@ -702,8 +701,8 @@ llfree_result_t llfree_change_tree(llfree_t *self, llfree_tree_match_t matcher,
 				   llfree_tree_change_t change)
 {
 	assert(self != NULL);
-	return trees_change(&self->trees, matcher, change, llfree_change_fetch_free,
-			   self);
+	return trees_change(&self->trees, matcher, change,
+			    llfree_change_fetch_free, self);
 }
 
 void llfree_drain(llfree_t *self)
@@ -801,7 +800,7 @@ void llfree_print(const llfree_t *self)
 
 #define check(x)                               \
 	({                                     \
-		if (!(x)) {                    \
+		if (unlikely(!(x))) {          \
 			llfree_warn("failed"); \
 			assert(false);         \
 		}                              \
@@ -809,7 +808,7 @@ void llfree_print(const llfree_t *self)
 
 #define check_m(x, fmt, ...)                                        \
 	({                                                          \
-		if (!(x)) {                                         \
+		if (unlikely((!(x)))) {                             \
 			llfree_warn("failed: " fmt, ##__VA_ARGS__); \
 			assert(false);                              \
 		}                                                   \
@@ -817,7 +816,7 @@ void llfree_print(const llfree_t *self)
 
 #define check_equal(fmt, actual, expected)                                   \
 	({                                                                   \
-		if ((actual) != (expected)) {                                \
+		if (unlikely(((actual) != (expected)))) {                    \
 			llfree_warn("failed: %%" fmt " == %%" fmt, (actual), \
 				    (expected));                             \
 			assert(false);                                       \

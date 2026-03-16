@@ -1,14 +1,16 @@
 #include "tree.h"
 #include "llfree_platform.h"
 #include "llfree_types.h"
-#include <stdbool.h>
 
-bool tree_put(tree_t *self, treeF_t frames, uint8_t default_tier)
+bool tree_put(tree_t *self, treeF_t frames, llfree_policy_fn policy,
+	      uint8_t default_tier)
 {
 	treeF_t free = self->free + frames;
 	assert(free <= LLFREE_TREE_SIZE);
 	self->free = free;
-	if (free == LLFREE_TREE_SIZE)
+	if (free == LLFREE_TREE_SIZE &&
+	    policy(self->tier, default_tier, self->free).type !=
+		    LLFREE_POLICY_INVALID)
 		self->tier = default_tier;
 	return true;
 }
@@ -56,12 +58,7 @@ bool tree_unreserve_add(tree_t *self, treeF_t frames, uint8_t tier,
 	llfree_policy_t p = policy(tier, self->tier, frames);
 	if (p.type == LLFREE_POLICY_DEMOTE)
 		self->tier = tier;
-	treeF_t free = self->free + frames;
-	assert(free <= LLFREE_TREE_SIZE);
-	self->free = free;
-	if (free == LLFREE_TREE_SIZE)
-		self->tier = default_tier;
-	return true;
+	return tree_put(self, frames, policy, default_tier);
 }
 
 bool tree_sync_steal(tree_t *self, treeF_t min)
@@ -94,8 +91,8 @@ bool tree_put_or_reserve(tree_t *self, treeF_t frames, uint8_t tier,
 }
 
 bool tree_change(tree_t *self, uint8_t match_tier, treeF_t min_free,
-		uint8_t change_tier, llfree_tree_operation_t operation,
-		treeF_t online_free)
+		 uint8_t change_tier, llfree_tree_operation_t operation,
+		 treeF_t online_free)
 {
 	if (self->reserved)
 		return false;

@@ -139,7 +139,7 @@ declare_test(tree_inc)
 	free = 0;
 	actual = tree_new(false, 0, free);
 	expect = tree_new(false, 0, free + (treeF_t)(1 << order));
-	ret = tree_put(&actual, (treeF_t)(1 << order), 0);
+	ret = tree_put(&actual, (treeF_t)(1 << order), test_policy, 0);
 	check(ret);
 	equal_trees(actual, expect);
 
@@ -147,7 +147,7 @@ declare_test(tree_inc)
 	free = LLFREE_TREE_SIZE - (treeF_t)(1 << order);
 	actual = tree_new(false, 0, free);
 	expect = tree_new(false, 0, free + (treeF_t)(1 << order));
-	ret = tree_put(&actual, (treeF_t)(1 << order), 0);
+	ret = tree_put(&actual, (treeF_t)(1 << order), test_policy, 0);
 	check(ret);
 	equal_trees(actual, expect);
 
@@ -156,7 +156,7 @@ declare_test(tree_inc)
 	// reserved flag should not matter for put
 	actual = tree_new(true, 0, free);
 	expect = tree_new(true, 0, free + (treeF_t)(1 << order));
-	ret = tree_put(&actual, (treeF_t)(1 << order), 0);
+	ret = tree_put(&actual, (treeF_t)(1 << order), test_policy, 0);
 	check(ret);
 	equal_trees(actual, expect);
 
@@ -164,7 +164,7 @@ declare_test(tree_inc)
 	free = 3456;
 	actual = tree_new(true, 0, free);
 	expect = tree_new(true, 0, free + (treeF_t)(1 << order));
-	ret = tree_put(&actual, (treeF_t)(1 << order), 0);
+	ret = tree_put(&actual, (treeF_t)(1 << order), test_policy, 0);
 	check(ret);
 	equal_trees(actual, expect);
 
@@ -173,7 +173,7 @@ declare_test(tree_inc)
 	actual = tree_new(true, 1, free); // tier 1 = huge
 	// When tree becomes entirely free, tier resets to default_tier (0)
 	expect = tree_new(true, 0, free + (treeF_t)(1 << order));
-	ret = tree_put(&actual, (treeF_t)(1 << order), 0);
+	ret = tree_put(&actual, (treeF_t)(1 << order), test_policy, 0);
 	check(ret);
 	equal_trees(actual, expect);
 

@@ -48,7 +48,8 @@ static inline ll_unused tree_t tree_new(bool reserved, uint8_t tier,
 
 /// Return frames to a tree (increment free counter).
 /// Resets tier to default_tier when tree becomes entirely free.
-bool tree_put(tree_t *self, treeF_t frames, uint8_t default_tier);
+bool tree_put(tree_t *self, treeF_t frames, llfree_policy_fn policy,
+	      uint8_t default_tier);
 
 bool tree_get(tree_t *self, treeF_t frames, uint8_t *result_tier,
 	      tree_check_fn check, void *args);

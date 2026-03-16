@@ -29,8 +29,8 @@ tree_t trees_load(const trees_t *self, size_t idx)
 	return atom_load(&self->entries[idx]);
 }
 
-bool trees_get(trees_t *self, size_t idx, treeF_t frames,
-	       tree_check_fn check, void *args, uint8_t *out_tier)
+bool trees_get(trees_t *self, size_t idx, treeF_t frames, tree_check_fn check,
+	       void *args, uint8_t *out_tier)
 {
 	assert(idx < self->len);
 	tree_t old;
@@ -45,7 +45,7 @@ void trees_put(trees_t *self, size_t idx, treeF_t frames,
 	assert(idx < self->len);
 	(void)policy; // reserved for future use (see Rust tree_put policy check)
 	tree_t old;
-	atom_update(&self->entries[idx], old, tree_put, frames,
+	atom_update(&self->entries[idx], old, tree_put, frames, policy,
 		    self->default_tier);
 }
 
@@ -98,9 +98,9 @@ void trees_put_or_reserve(trees_t *self, size_t idx, treeF_t frames,
 		if (new.free == LLFREE_TREE_SIZE)
 			new.tier = self->default_tier;
 
-		bool reserve_this = may_reserve && !new.reserved &&
-				    new.tier == tier &&
-				    new.free > TREES_MIN_FREE;
+		bool reserve_this = may_reserve &&
+				    !new.reserved &&new.tier ==
+					    tier &&new.free > TREES_MIN_FREE;
 		if (reserve_this) {
 			new.free = 0;
 			new.reserved = true;
@@ -249,10 +249,8 @@ static llfree_result_t trees_change_at(size_t idx, void *ctx)
 
 		tree_t desired = old;
 		if (!tree_change(&desired, args->matcher.tier,
-				 (treeF_t)args->matcher.free,
-				 args->change.tier,
-				 args->change.operation,
-				 online_free)) {
+				 (treeF_t)args->matcher.free, args->change.tier,
+				 args->change.operation, online_free)) {
 			return llfree_err(LLFREE_ERR_MEMORY);
 		}
 
