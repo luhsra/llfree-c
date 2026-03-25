@@ -12,7 +12,7 @@ typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) llfree {
 	lower_t lower;
 	/// Cpu-local data
 	local_t *local;
-	/// Manages the tree array (matches Rust Trees)
+	/// Manages the tree array
 	trees_t trees;
 
 	/// Policy function for tier-based allocation

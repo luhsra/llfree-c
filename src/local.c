@@ -7,7 +7,7 @@
 typedef struct reserved {
 	/// true if there is a reserved tree
 	bool present : 1;
-	/// Number of free frames in the tree (matches tree_t.free width)
+	/// Number of free frames in the tree
 	treeF_t free : LLFREE_TREE_FREE_BITS;
 	/// Bitfield row index of reserved tree,
 	/// used for identifying the reserved tree and as starting point
@@ -16,6 +16,7 @@ typedef struct reserved {
 } reserved_t;
 _Static_assert(sizeof(reserved_t) == sizeof(uint64_t), "size overflow");
 
+#if LLFREE_ENABLE_FREE_RESERVE
 /// Counts last frees in same tree
 typedef struct local_history {
 	/// Index of the last tree where a frame was freed
@@ -24,6 +25,7 @@ typedef struct local_history {
 	uint16_t frees : 16;
 } local_history_t;
 _Static_assert(sizeof(local_history_t) == sizeof(uint64_t), "size overflow");
+#endif // LLFREE_ENABLE_FREE_RESERVE
 
 static inline reserved_t ll_reserved_new(bool present, treeF_t free,
 					 uint64_t start_row)
@@ -82,30 +84,30 @@ static bool ll_reserved_take(reserved_t *self)
 
 // ----------------------------------------------------------------------------
 //
-// Local CPU data — matches Rust Locals with tiers array of slices
+// Local CPU data
 //
 // ----------------------------------------------------------------------------
 
-/// One local entry per core per tier (matches Rust Local)
+/// One local entry per core per tier
 typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) entry {
 	/// Currently reserved tree for this slot
 	_Atomic(reserved_t) preferred;
+#if LLFREE_ENABLE_FREE_RESERVE
 	/// Counts recent frees to the same tree (heuristic for reserving)
 	_Atomic(local_history_t) last;
+#endif
 } entry_t;
-_Static_assert(sizeof(entry_t) <= LLFREE_CACHE_SIZE,
+_Static_assert(sizeof(entry_t) == LLFREE_CACHE_SIZE,
 	       "entry_t exceeds cache line");
 
-/// Slice of entries for one tier (matches Rust Option<&[Local]>)
+/// Slice of entries for one tier
 typedef struct tier_locals {
-	entry_t *entries; // NULL if tier not present
-	size_t len;
+	entry_t *entries; // NULL if no locals for this tier
+	size_t len; // LLFREE_LOCAL_NONE if tier not configured
 } tier_locals_t;
 
-/// Locals struct — matches Rust Locals { tiers: [Option<&[Local]>; ...] }
+/// Locals struct
 typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) local {
-	/// Total number of entries across all tiers
-	size_t len;
 	/// Number of tiers
 	uint8_t num_tiers;
 	/// Per-tier slices into the metadata buffer, indexed by tier id
@@ -118,7 +120,7 @@ size_t ll_local_size(const llfree_tiering_t *tiering)
 	for (size_t i = 0; i < tiering->num_tiers; i++)
 		total += tiering->tiers[i].count;
 	return align_up(sizeof(local_t), LLFREE_CACHE_SIZE) +
-	       sizeof(entry_t) * total;
+	       (sizeof(entry_t) * total);
 }
 
 void ll_local_init(local_t *self, const llfree_tiering_t *tiering)
@@ -126,10 +128,6 @@ void ll_local_init(local_t *self, const llfree_tiering_t *tiering)
 	assert(self != NULL);
 	assert((size_t)self % LLFREE_CACHE_SIZE == 0);
 
-	size_t total = 0;
-	for (size_t i = 0; i < tiering->num_tiers; i++)
-		total += tiering->tiers[i].count;
-	self->len = total;
 	self->num_tiers = (uint8_t)tiering->num_tiers;
 
 	// Entries start after the local_t header, cache-line aligned
@@ -153,7 +151,9 @@ void ll_local_init(local_t *self, const llfree_tiering_t *tiering)
 			entry_t *entry = &base[offset + j];
 			atom_store(&entry->preferred,
 				   ll_reserved_new(false, 0, 0));
+#if LLFREE_ENABLE_FREE_RESERVE
 			atom_store(&entry->last, ((local_history_t){ 0, 0 }));
+#endif
 		}
 		offset += count;
 	}
@@ -164,15 +164,13 @@ uint8_t ll_local_num_tiers(const local_t *self)
 	return self->num_tiers;
 }
 
-size_t ll_local_len(const local_t *self)
-{
-	return self->len;
-}
-
 size_t ll_local_mem_size(const local_t *self)
 {
+	size_t total = 0;
+	for (size_t i = 0; i < self->num_tiers; i++)
+		total += self->tiers[i].len;
 	return align_up(sizeof(local_t), LLFREE_CACHE_SIZE) +
-	       sizeof(entry_t) * self->len;
+	       (sizeof(entry_t) * total);
 }
 
 size_t ll_local_tier_locals(const local_t *self, uint8_t tier)
@@ -243,7 +241,7 @@ local_result_t ll_local_swap(local_t *self, uint8_t tier, size_t index,
 }
 
 /// Steal frames from a slot where the policy allows Match or Steal.
-/// Iterates tier-by-tier, starting from the requested tier (matches Rust steal_any).
+/// Iterates tier-by-tier, starting from the requested tier
 local_result_t ll_local_steal(local_t *self, uint8_t tier, size_t index,
 			      ll_optional_t tree_idx, treeF_t frames,
 			      llfree_policy_fn policy)
@@ -274,10 +272,10 @@ local_result_t ll_local_steal(local_t *self, uint8_t tier, size_t index,
 
 /// Find a slot where the policy returns Demote, atomically take it, and
 /// swap the decremented tree into the requesting local.
-/// Matches Rust demote_any.
 demote_any_result_t ll_local_demote_any(local_t *self, uint8_t tier,
-					size_t index, ll_optional_t tree_idx,
-					treeF_t frames, llfree_policy_fn policy)
+					ll_optional_t index,
+					ll_optional_t tree_idx, treeF_t frames,
+					llfree_policy_fn policy)
 {
 	demote_any_result_t fail = { .found = false };
 
@@ -292,7 +290,8 @@ demote_any_result_t ll_local_demote_any(local_t *self, uint8_t tier,
 			continue;
 
 		for (size_t j = 0; j < target->len; j++) {
-			size_t jj = (index + j) % target->len;
+			size_t idx = index.present ? index.value : 0;
+			size_t jj = (idx + j) % target->len;
 
 			// Atomically take the slot if present
 			reserved_t old;
@@ -320,10 +319,10 @@ demote_any_result_t ll_local_demote_any(local_t *self, uint8_t tier,
 			demote_any_result_t result = { .found = true,
 						       .row = old.start_row };
 			tier_locals_t *req = &self->tiers[tier];
-			if (req->len > 0 && index < req->len) {
+			if (index.present && req->len > 0 && idx < req->len) {
 				reserved_t prev;
-				atom_update(&req->entries[index].preferred,
-					    prev, ll_reserved_swap, new_res);
+				atom_update(&req->entries[idx].preferred, prev,
+					    ll_reserved_swap, new_res);
 				result.old_present = prev.present;
 				result.old_row = prev.start_row;
 				result.old_tier = tier;
@@ -337,6 +336,7 @@ demote_any_result_t ll_local_demote_any(local_t *self, uint8_t tier,
 	return fail;
 }
 
+#if LLFREE_ENABLE_FREE_RESERVE
 static bool frees_inc(local_history_t *self, size_t tree_idx)
 {
 	if (self->idx != tree_idx) {
@@ -353,10 +353,12 @@ static bool frees_inc(local_history_t *self, size_t tree_idx)
 	// LAST_FREES threshold reached — signal caller to reserve
 	return false;
 }
+#endif
 
 bool ll_local_free_inc(local_t *self, uint8_t tier, size_t index,
 		       size_t tree_idx)
 {
+#if LLFREE_ENABLE_FREE_RESERVE
 	assert(tier < LLFREE_MAX_TIERS);
 	assert(index < self->tiers[tier].len);
 	entry_t *entry = &self->tiers[tier].entries[index];
@@ -364,6 +366,13 @@ bool ll_local_free_inc(local_t *self, uint8_t tier, size_t index,
 	bool updated = atom_update(&entry->last, frees, frees_inc, tree_idx);
 	// !updated means threshold was reached → caller should reserve
 	return !updated;
+#else
+	(void)self;
+	(void)tier;
+	(void)index;
+	(void)tree_idx;
+	return false;
+#endif
 }
 
 local_result_t ll_local_drain(local_t *self, uint8_t tier, size_t index)
@@ -417,8 +426,11 @@ void ll_local_print(const local_t *self, size_t indent)
 	if (indent == 0)
 		llfree_info_start();
 	llfree_info_cont("%sll_local_t {\n", INDENT(indent));
-	llfree_info_cont("%slen: %zu, num_tiers: %u\n", INDENT(indent + 1),
-			 self->len, self->num_tiers);
+	size_t total = 0;
+	for (size_t i = 0; i < self->num_tiers; i++)
+		total += self->tiers[i].len;
+	llfree_info_cont("%snum_tiers: %u, total: %zu\n", INDENT(indent + 1),
+			 self->num_tiers, total);
 
 	for (uint8_t t = 0; t < LLFREE_MAX_TIERS; t++) {
 		const tier_locals_t *tl = &self->tiers[t];
@@ -433,11 +445,13 @@ void ll_local_print(const local_t *self, size_t indent)
 					 INDENT(indent + 2), j, res.present,
 					 (uint64_t)res.free,
 					 tree_from_row(res.start_row));
+#if LLFREE_ENABLE_FREE_RESERVE
 			local_history_t last = atom_load(&tl->entries[j].last);
 			llfree_info_cont("%s  last: { idx: %" PRIu64
 					 ", frees: %" PRIuS " }\n",
 					 INDENT(indent + 2), last.idx,
 					 (size_t)last.frees);
+#endif
 		}
 	}
 

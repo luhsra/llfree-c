@@ -260,7 +260,7 @@ typedef struct ll_tier_stats {
 	size_t alloc_frames;
 } ll_tier_stats_t;
 
-/// Tree statistics (matches Rust TreeStats)
+/// Tree statistics
 typedef struct ll_tree_stats {
 	size_t free_frames;
 	size_t free_trees;

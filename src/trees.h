@@ -4,7 +4,7 @@
 #include "llfree.h"
 #include "utils.h"
 
-/// Manages the tree array (matches Rust's Trees struct).
+/// Manages the tree array
 /// Wraps the atomic tree entry array and provides operations on it.
 typedef struct trees {
 	_Atomic(tree_t) *entries;

@@ -10,6 +10,7 @@ declare_test(local_atomic)
 	return success;
 }
 
+#if LLFREE_ENABLE_FREE_RESERVE
 declare_test(local_last_free_inc)
 {
 	bool success = true;
@@ -39,3 +40,4 @@ declare_test(local_last_free_inc)
 	llfree_ext_free(LLFREE_CACHE_SIZE, ll_local_size(&tiering), local);
 	return success;
 }
+#endif

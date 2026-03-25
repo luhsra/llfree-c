@@ -15,6 +15,7 @@
 	fprintf(stderr, "\x1b[93m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
 		##__VA_ARGS__)
 
+#ifndef NO_LOG
 #define llfree_info_start() \
 	fprintf(stderr, "\x1b[90m%s:%d: ", __FILE__, __LINE__)
 #define llfree_info_cont(str, ...) fprintf(stderr, str, ##__VA_ARGS__)
@@ -22,6 +23,12 @@
 #define llfree_info(str, ...)                                                  \
 	fprintf(stderr, "\x1b[90m%s:%d: " str "\x1b[0m\n", __FILE__, __LINE__, \
 		##__VA_ARGS__)
+#else
+#define llfree_info_start() (void)0
+#define llfree_info_cont(str, ...) (void)0
+#define llfree_info_end() (void)0
+#define llfree_info(str, ...) (void)0
+#endif
 
 #ifdef DEBUG
 #define llfree_debug(str, ...)                                                 \

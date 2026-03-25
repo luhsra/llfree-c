@@ -8,7 +8,7 @@
 /// 64 Bit Addresses - 12 Bit needed for offset inside the Page
 #define MAX_PAGES (1ul << (64 - LLFREE_FRAME_BITS))
 /// Number of retries
-#define RETRIES 8
+#define RETRIES 4
 
 #define LL_MAX(a, b) ((a) > (b) ? (a) : (b))
 #define LL_MIN(a, b) ((a) > (b) ? (b) : (a))
@@ -141,6 +141,7 @@ static inline ll_unused const char *INDENT(size_t indent)
 {
 	size_t const max_indent = 32;
 	const char *spaces = "                                ";
-	assert(indent < max_indent / 4);
+	if (indent >= max_indent / 4)
+		return spaces;
 	return &spaces[max_indent - (indent * 4)];
 }

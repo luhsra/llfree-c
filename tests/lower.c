@@ -81,9 +81,9 @@ declare_test(lower_init)
 
 	// check alignment
 
-	check_equal_m("lu", (uint64_t)actual.children % LLFREE_CACHE_SIZE, 0ul,
+	check_equal_m(PRIu64, (uint64_t)actual.children % LLFREE_CACHE_SIZE, (uint64_t)0ul,
 		      "array must be aligned to cachesize");
-	check_equal_m("lu", (uint64_t)actual.fields % LLFREE_CACHE_SIZE, 0ul,
+	check_equal_m(PRIu64, (uint64_t)actual.fields % LLFREE_CACHE_SIZE, (uint64_t)0ul,
 		      "array must be aligned to cachesize");
 	lower_drop(&actual);
 
@@ -101,27 +101,27 @@ declare_test(lower_get)
 	size_t order = 0;
 
 	ret = lower_get(&actual, 0, order, ll_none());
-	check_equal("lu", ret.frame, 0lu);
+	check_equal(PRIu64, ret.frame, (uint64_t)0lu);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ { 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 } }));
 	return success;
 
 	ret = lower_get(&actual, 0, order, ll_none());
-	check_equal("lu", ret.frame, 1lu);
+	check_equal(PRIu64, ret.frame, (uint64_t)1lu);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ { 0x3, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 } }));
 
 	ret = lower_get(&actual, 320, order, ll_none());
-	check_equal("lu", ret.frame, 320lu);
+	check_equal(PRIu64, ret.frame, (uint64_t)320lu);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ { 0x3, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0 } }));
 
 	for (size_t i = 0; i < 954; i++) {
 		ret = lower_get(&actual, 0, order, ll_none());
-		check_equal("lu", ret.frame, (i + (i < 318 ? 2 : 3)));
+		check_equal(PRIu64, ret.frame, (uint64_t)(i + (i < 318 ? 2 : 3)));
 	}
 	check_equal_bitfield(
 		actual.fields[0],
@@ -140,7 +140,7 @@ declare_test(lower_get)
 	actual = lower_new(frames, LLFREE_INIT_FREE);
 
 	ret = lower_get(&actual, 0, order, ll_none());
-	check_equal("lu", ret.frame, 0lu);
+	check_equal(PRIu64, ret.frame, (uint64_t)0lu);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ { 0xffffffffffffffflu, UINT64_MAX, UINT64_MAX,
@@ -148,7 +148,7 @@ declare_test(lower_get)
 				 UINT64_MAX } }));
 
 	ret = lower_get(&actual, 0, order, ll_none());
-	check_equal("lu", ret.frame, 1lu);
+	check_equal(PRIu64, ret.frame, (uint64_t)1lu);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ { UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
@@ -177,7 +177,7 @@ declare_test(lower_get)
 	check_equal_bitfield(actual.fields[1],
 			     ((bitfield_t){ { 0, 0, 0, 0, 0, 0, 0, 0 } }));
 
-	check_equal("lu", ret.frame, 1lu << 9);
+	check_equal(PRIu64, ret.frame, (uint64_t)(1lu << 9));
 	lower_drop(&actual);
 
 	return success;
@@ -357,14 +357,14 @@ declare_test(lower_huge)
 	llfree_result_t frame1 = lower_get(&actual, 0, LLFREE_HUGE_ORDER, ll_none());
 	check(llfree_is_ok(frame1));
 	uint64_t offset = frame1.frame % LLFREE_CHILD_SIZE;
-	check_equal("lu", offset, 0ul);
+	check_equal(PRIu64, offset, (uint64_t)0ul);
 	llfree_result_t frame2 = lower_get(&actual, 0, LLFREE_HUGE_ORDER, ll_none());
 	check(llfree_is_ok(frame2));
 	offset = frame2.frame % LLFREE_CHILD_SIZE;
-	check_equal("lu", offset, 0ul);
+	check_equal(PRIu64, offset, (uint64_t)0ul);
 	check(frame1.frame != frame2.frame);
-	check_equal("lu", actual.frames - lower_stats(&actual).free_frames,
-		    2ul * LLFREE_CHILD_SIZE);
+	check_equal(PRIuS, actual.frames - lower_stats(&actual).free_frames,
+		    (size_t)(2 * LLFREE_CHILD_SIZE));
 
 	// request a regular frame
 	llfree_result_t regular = lower_get(&actual, 0, 0, ll_none());
@@ -378,8 +378,8 @@ declare_test(lower_huge)
 		lower_get(&actual, frame_from_row(10), LLFREE_HUGE_ORDER, ll_none());
 	check(llfree_is_ok(frame3));
 	offset = frame3.frame % LLFREE_CHILD_SIZE;
-	check_equal("lu", offset, 0ul);
-	check_equal("lu", frame3.frame, 3lu * LLFREE_CHILD_SIZE);
+	check_equal(PRIu64, offset, (uint64_t)0ul);
+	check_equal(PRIu64, frame3.frame, (uint64_t)(3lu * LLFREE_CHILD_SIZE));
 
 	// free regular page und try get this child as complete HP
 	assert(llfree_is_ok(lower_put(&actual, regular.frame, 0)));
@@ -454,7 +454,7 @@ declare_test(lower_max)
 declare_test(lower_free_all)
 {
 	bool success = true;
-	const uint64_t len = (1 << 13) + 35; // 16 HP + 35 regular frames
+	const size_t len = (1 << 13) + 35; // 16 HP + 35 regular frames
 	lower_t lower = lower_new(len, LLFREE_INIT_ALLOC);
 	check_equal("zu", lower.frames, len);
 	check_equal_m("zu", lower_stats(&lower).free_frames, 0lu,

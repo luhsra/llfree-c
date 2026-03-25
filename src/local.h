@@ -16,8 +16,6 @@ size_t ll_local_size(const llfree_tiering_t *tiering);
 /// The tiers array will contain slices pointing into the metadata buffer.
 void ll_local_init(local_t *self, const llfree_tiering_t *tiering);
 
-/// Get the total number of local slots (sum across all tiers)
-size_t ll_local_len(const local_t *self);
 /// Returns the allocated byte size of an initialized local block (aligned)
 size_t ll_local_mem_size(const local_t *self);
 /// Get the number of tiers
@@ -88,13 +86,13 @@ typedef struct demote_any_result {
 	treeF_t old_free;
 } demote_any_result_t;
 
-/// Demote from another tier's local slot (matches Rust demote_any).
+/// Demote from another tier's local slot
 /// Finds a target slot where policy(tier, target_tier, frames) == DEMOTE,
 /// atomically clears it (checking it has enough free),
 /// swaps the decremented tree into the requesting local.
 /// Returns the row to allocate from and the old requesting local for unreservation.
 demote_any_result_t ll_local_demote_any(local_t *self, uint8_t tier,
-					size_t index, ll_optional_t tree_idx,
+					ll_optional_t index, ll_optional_t tree_idx,
 					treeF_t frames,
 					llfree_policy_fn policy);
 

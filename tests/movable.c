@@ -39,12 +39,6 @@ static void llfree_drop(llfree_t *self)
 }
 #define lldrop __attribute__((cleanup(llfree_drop)))
 
-static void writer(void *arg, const char *msg)
-{
-	(void)arg;
-	printf("%s", msg);
-}
-
 declare_test(alloc_movable)
 {
 	bool success = true;

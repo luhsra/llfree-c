@@ -122,7 +122,6 @@ struct check_args {
 };
 
 /// Used for get_matching_reserve: Match -> requested, Demote-if-full -> requested.
-/// Matches Rust get_matching_reserve closure.
 static uint8_t check_reserve_tree(uint8_t tree_tier, treeF_t frames, void *args)
 {
 	struct check_args *a = (struct check_args *)args;
@@ -137,7 +136,6 @@ static uint8_t check_reserve_tree(uint8_t tree_tier, treeF_t frames, void *args)
 }
 
 /// Used for get_matching_global: Match only -> target tier.
-/// Matches Rust get_matching_global closure.
 static uint8_t check_global_matching_tree(uint8_t tree_tier, treeF_t frames,
 					  void *args)
 {
@@ -151,7 +149,6 @@ static uint8_t check_global_matching_tree(uint8_t tree_tier, treeF_t frames,
 }
 
 /// Used for get_demoting: Demote only -> requested tier.
-/// Matches Rust get_demoting closure.
 static uint8_t check_demote_tree(uint8_t tree_tier, treeF_t frames, void *args)
 {
 	struct check_args *a = (struct check_args *)args;
@@ -164,7 +161,6 @@ static uint8_t check_demote_tree(uint8_t tree_tier, treeF_t frames, void *args)
 }
 
 /// Used for get_at global fallback: Match/Steal -> target, Demote -> requested.
-/// Matches Rust get_at closure.
 static uint8_t check_get_at_tree(uint8_t tree_tier, treeF_t frames, void *args)
 {
 	struct check_args *a = (struct check_args *)args;
@@ -195,13 +191,13 @@ typedef struct reserve_args {
 
 /// Swap out the currently reserved tree for a new one and write back the
 /// free counter to the formerly reserved global tree.
-static void swap_reserved(llfree_t *self, uint8_t tier, size_t index,
+static void swap_reserved(llfree_t *self, uint8_t tier, size_t local,
 			  size_t new_idx, treeF_t new_free)
 {
 	llfree_debug("swap tier=%u index=%zu idx=%zu free=%" PRIuS, tier, index,
 		     new_idx, (size_t)new_free);
 	local_result_t old =
-		ll_local_swap(self->local, tier, index, new_idx, new_free);
+		ll_local_swap(self->local, tier, local, new_idx, new_free);
 	assert(old.success);
 	if (old.present) {
 		trees_unreserve(&self->trees, tree_from_row(old.start_row),
@@ -235,6 +231,7 @@ static llfree_result_t get_reserve(size_t idx, void *ctx)
 					rargs->order, ll_none());
 
 	if (llfree_is_ok(res)) {
+		llfree_debug("reserve success idx=%zu", idx);
 		treeF_t new_free = old_free - (treeF_t)(1u << rargs->order);
 		swap_reserved(self, target_tier, local, idx, new_free);
 		res.tier = target_tier;
@@ -277,17 +274,15 @@ static llfree_result_t get_matching_reserve(llfree_t *self, uint8_t tier,
 		// Avoid fragmenting fully free trees
 		check_args.free = p_range(1 << order, LLFREE_TREE_SIZE - 1);
 
+		llfree_debug("search best t=%d l=%zu", tier, local);
 		res = trees_search_best(&self->trees, tier, start, 1, near,
 					1 << order, self->policy, get_reserve,
 					&args);
 		if (res.error != LLFREE_ERR_MEMORY)
 			return res;
-
-		res = trees_search(&self->trees, start, 1, self->trees.len,
-				   get_reserve, &args);
-		if (res.error != LLFREE_ERR_MEMORY)
-			return res;
 	}
+
+	llfree_debug("search any t=%d l=%zu", tier, local);
 
 	// Any tree (including fully free ones)
 	check_args.free = p_range(1 << order, LLFREE_TREE_SIZE);
@@ -324,9 +319,9 @@ static bool sync_with_global(llfree_t *self, uint8_t tier, size_t index,
 	return true;
 }
 
-static llfree_result_t get_from_local(llfree_t *self, uint8_t tier,
-				      size_t index, uint8_t order,
-				      treeF_t frames, local_result_t *old)
+static llfree_result_t get_matching_local(llfree_t *self, uint8_t tier,
+					  size_t index, uint8_t order,
+					  treeF_t frames, local_result_t *old)
 {
 	*old = ll_local_get(self->local, tier, index, ll_none(), frames);
 	if (old->success) {
@@ -347,6 +342,8 @@ static llfree_result_t get_from_local(llfree_t *self, uint8_t tier,
 		return res;
 	}
 
+	llfree_debug("local miss tier=%u index=%zu present=%d", tier, index,
+		     old->present);
 	if (old->present && sync_with_global(self, tier, index, frames, *old)) {
 		return llfree_err(LLFREE_ERR_RETRY);
 	}
@@ -383,7 +380,7 @@ static llfree_result_t get_global(size_t idx, void *ctx)
 	return llfree_ok(res.frame, new_tier);
 }
 
-/// Steal from any local reservation (matches Rust steal_local).
+/// Steal from any local reservation
 static llfree_result_t steal_local(llfree_t *self,
 				   const llfree_request_t *request,
 				   ll_optional_t frame)
@@ -413,7 +410,7 @@ static llfree_result_t steal_local(llfree_t *self,
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
-/// Try matching-only allocation: local retry + reserve (matches Rust get_matching).
+/// Try matching-only allocation: local retry + reserve
 static llfree_result_t
 get_matching(llfree_t *self, const llfree_request_t *request, uint64_t *start)
 {
@@ -425,7 +422,7 @@ get_matching(llfree_t *self, const llfree_request_t *request, uint64_t *start)
 	    tier_count < self->trees.len) {
 		for (size_t i = 0; i < RETRIES; i++) {
 			local_result_t old;
-			llfree_result_t res = get_from_local(
+			llfree_result_t res = get_matching_local(
 				self, request->tier, request->local,
 				request->order, frames, &old);
 			if (old.present)
@@ -458,7 +455,7 @@ get_matching(llfree_t *self, const llfree_request_t *request, uint64_t *start)
 			    get_global, &args);
 }
 
-/// Demote from a local reservation (matches Rust demote_local).
+/// Demote from a local reservation
 static llfree_result_t demote_local(llfree_t *self,
 				    const llfree_request_t *request,
 				    ll_optional_t frame)
@@ -467,11 +464,12 @@ static llfree_result_t demote_local(llfree_t *self,
 	ll_optional_t tree_idx = frame.present ?
 					 ll_some(tree_from_frame(frame.value)) :
 					 ll_none();
-	size_t index = (request->local == LLFREE_LOCAL_NONE) ? 0 :
-							       request->local;
+	ll_optional_t local = (request->local == LLFREE_LOCAL_NONE) ?
+				      ll_none() :
+				      ll_some(request->local);
 
 	demote_any_result_t dem =
-		ll_local_demote_any(self->local, request->tier, index, tree_idx,
+		ll_local_demote_any(self->local, request->tier, local, tree_idx,
 				    frames, self->policy);
 	if (dem.found) {
 		if (dem.old_present) {
@@ -485,8 +483,13 @@ static llfree_result_t demote_local(llfree_t *self,
 		llfree_result_t res = lower_get(&self->lower,
 						frame_from_row(dem.row),
 						request->order, lower_frame);
-		if (llfree_is_ok(res))
+		if (llfree_is_ok(res)) {
+			llfree_info("demote success tier=%u index=%zu",
+				    request->tier, request->local);
 			return llfree_ok(res.frame, request->tier);
+		}
+		llfree_warn("demote failed tier=%u index=%zu", request->tier,
+			    request->local);
 		trees_put(&self->trees, tree_from_row(dem.row), frames,
 			  self->policy);
 		if (res.error != LLFREE_ERR_MEMORY)
@@ -495,7 +498,7 @@ static llfree_result_t demote_local(llfree_t *self,
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
-/// Allocate with demotion (matches Rust get_demoting).
+/// Allocate with demotion
 static llfree_result_t
 get_demoting(llfree_t *self, const llfree_request_t *request, uint64_t start)
 {
@@ -612,27 +615,24 @@ llfree_result_t llfree_get(llfree_t *self, ll_optional_t frame,
 	if (res.error != LLFREE_ERR_MEMORY)
 		return res;
 
+	llfree_info("No match t=%u l=%zu", request.tier, request.local);
+
 	res = get_demoting(self, &request, start);
 	if (res.error != LLFREE_ERR_MEMORY)
 		return res;
 
 	llfree_warn("OOM");
 
+	// Downgrade request until successful
 	for (uint8_t t = 1; t < LLFREE_MAX_TIERS; t++) {
-		uint8_t down_tier =
-			(uint8_t)((LLFREE_MAX_TIERS + request.tier - t) %
-				  LLFREE_MAX_TIERS);
-		if (ll_local_tier_locals(self->local, down_tier) !=
+		// Go downwards
+		uint8_t tier = (uint8_t)((LLFREE_MAX_TIERS + request.tier - t) %
+					 LLFREE_MAX_TIERS);
+		if (ll_local_tier_locals(self->local, tier) !=
 		    LLFREE_LOCAL_NONE) {
-			llfree_request_t down_req = request;
-			down_req.tier = down_tier;
-			if (request.local != LLFREE_LOCAL_NONE) {
-				size_t down_count = ll_local_tier_locals(
-					self->local, down_tier);
-				if (request.local >= down_count)
-					down_req.local = LLFREE_LOCAL_NONE;
-			}
-			res = get_matching(self, &down_req, &start);
+			llfree_request_t req = request;
+			req.tier = tier;
+			res = get_matching(self, &req, &start);
 			if (res.error != LLFREE_ERR_MEMORY)
 				return res;
 		}
@@ -814,13 +814,13 @@ void llfree_print(const llfree_t *self)
 		}                                                   \
 	})
 
-#define check_equal(fmt, actual, expected)                                   \
-	({                                                                   \
-		if (unlikely(((actual) != (expected)))) {                    \
-			llfree_warn("failed: %%" fmt " == %%" fmt, (actual), \
-				    (expected));                             \
-			assert(false);                                       \
-		}                                                            \
+#define check_equal(fmt, actual, expected)                                 \
+	({                                                                 \
+		if (unlikely(((actual) != (expected)))) {                  \
+			llfree_warn("failed: %" fmt " == %" fmt, (actual), \
+				    (expected));                           \
+			assert(false);                                     \
+		}                                                          \
 	})
 
 static void validate_tree(const llfree_t *self, local_result_t res)
