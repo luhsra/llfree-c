@@ -92,13 +92,13 @@ bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos)
 	// NOLINTEND(readability-magic-numbers)
 }
 
-llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
+llfree_result_t field_set_next(bitfield_t *field, frame_id_t start_frame,
 			       size_t order)
 {
 	size_t num_frames = 1 << order;
 	assert(num_frames < LLFREE_CHILD_SIZE);
 
-	uint64_t row = row_from_frame(start_frame) % FIELD_N;
+	uint64_t row = row_from_frame(start_frame).value % FIELD_N;
 
 	if (num_frames <= LLFREE_ATOMIC_SIZE) {
 		for_offsetted(row, FIELD_N, current_i) {
@@ -107,8 +107,8 @@ llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
 			if (atom_update(&field->rows[current_i], old,
 					first_zeros_aligned, order, &pos)) {
 				return llfree_ok(
-					((current_i * LLFREE_ATOMIC_SIZE) +
-					 pos),
+					frame_id((current_i * LLFREE_ATOMIC_SIZE) +
+						 pos),
 					0);
 			}
 		}
@@ -142,7 +142,8 @@ llfree_result_t field_set_next(bitfield_t *field, uint64_t start_frame,
 		if (!failed) {
 			// Success, we have updated all rows
 			return llfree_ok(
-				current_i * entries * LLFREE_ATOMIC_SIZE, 0);
+				frame_id(current_i * entries * LLFREE_ATOMIC_SIZE),
+				0);
 		}
 	}
 

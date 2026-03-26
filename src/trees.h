@@ -34,46 +34,48 @@ void trees_init(trees_t *self, size_t frames, uint8_t *buffer,
 uint8_t *trees_metadata(const trees_t *self);
 
 /// Load a single tree entry (atomic read)
-tree_t trees_load(const trees_t *self, size_t idx);
+tree_t trees_load(const trees_t *self, tree_id_t idx);
 
 /// Decrement free counter and update tier via check callback.
 /// On success, writes the resulting tier to *out_tier.
-bool trees_get(trees_t *self, size_t idx, treeF_t frames,
+bool trees_get(trees_t *self, tree_id_t idx, treeF_t frames,
 	       tree_check_fn check, void *args, uint8_t *out_tier);
 
 /// Increment free counter; resets tier to default when tree becomes fully free.
-void trees_put(trees_t *self, size_t idx, treeF_t frames,
+void trees_put(trees_t *self, tree_id_t idx, treeF_t frames,
 	       llfree_policy_fn policy);
 
 /// Reserve a tree if check permits.
 /// On success, writes the old free count to *out_free and tier to *out_tier.
-bool trees_reserve(trees_t *self, size_t idx, tree_check_fn check, void *args,
+bool trees_reserve(trees_t *self, tree_id_t idx, tree_check_fn check,
+		   void *args,
 		   treeF_t *out_free, uint8_t *out_tier);
 
 /// Unreserve a tree and add free frames back; handles tier demotion via policy.
-void trees_unreserve(trees_t *self, size_t idx, treeF_t free, uint8_t tier,
+void trees_unreserve(trees_t *self, tree_id_t idx, treeF_t free,
+		     uint8_t tier,
 		     llfree_policy_fn policy);
 
 /// Steal the global free counter from a reserved tree (synchronization).
 /// Returns true if successful, writing the stolen count to *out_stolen.
-bool trees_sync_steal(trees_t *self, size_t idx, treeF_t min,
+bool trees_sync_steal(trees_t *self, tree_id_t idx, treeF_t min,
 		      treeF_t *out_stolen);
 
 /// Increment free counter and optionally reserve the tree (free-reserve heuristic).
 /// may_reserve: whether reservation should be attempted.
 /// On return, *did_reserve indicates if reservation occurred.
 /// When reserved, *out_old_free is the free count before the put.
-void trees_put_or_reserve(trees_t *self, size_t idx, treeF_t frames,
+void trees_put_or_reserve(trees_t *self, tree_id_t idx, treeF_t frames,
 			  uint8_t tier, bool may_reserve,
 			  llfree_policy_fn policy, bool *did_reserve,
 			  treeF_t *out_old_free);
 
 /// Callback for tree search: attempt operation at given tree index.
 /// Return LLFREE_ERR_MEMORY to continue searching, anything else to stop.
-typedef llfree_result_t (*trees_access_fn)(size_t idx, void *ctx);
+typedef llfree_result_t (*trees_access_fn)(tree_id_t idx, void *ctx);
 
 /// Callback to fetch current free frames for online operation.
-typedef treeF_t (*trees_fetch_free_fn)(size_t idx, void *ctx);
+typedef treeF_t (*trees_fetch_free_fn)(tree_id_t idx, void *ctx);
 
 /// Linear alternating search from start.
 llfree_result_t trees_search(const trees_t *self, size_t start, size_t offset,
@@ -90,7 +92,7 @@ llfree_result_t trees_search_best(const trees_t *self, uint8_t tier,
 ll_tree_stats_t trees_stats(const trees_t *self);
 
 /// Load stats for a specific tree entry
-void trees_stats_at(const trees_t *self, size_t idx, uint8_t *tier,
+void trees_stats_at(const trees_t *self, tree_id_t idx, uint8_t *tier,
 		    treeF_t *free, bool *reserved);
 
 /// Change tree metadata according to matcher and change.

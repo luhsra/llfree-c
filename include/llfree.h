@@ -11,19 +11,41 @@
 #define ll_warn_unused
 #endif
 
-/// Optional size_t type
-typedef struct ll_optional {
-	bool present : 1;
-	size_t value : (sizeof(size_t) * 8) - 1;
-} ll_optional_t;
-static inline ll_unused ll_optional_t ll_some(size_t value)
+#define ll_def_optional(ty, prefix, def)                                    \
+	typedef struct {                                                    \
+		bool present;                                               \
+		ty value;                                                   \
+	} prefix##_optional_t;                                              \
+	static inline ll_unused prefix##_optional_t prefix##_some(ty value) \
+	{                                                                   \
+		return (prefix##_optional_t){ .present = true,              \
+					      .value = value };             \
+	}                                                                   \
+	static inline ll_unused prefix##_optional_t prefix##_none(void)     \
+	{                                                                   \
+		return (prefix##_optional_t){ .present = false,             \
+					      .value = def };               \
+	}
+
+/// Unique identifier for a frame
+typedef struct frame_id {
+	uint64_t value;
+} frame_id_t;
+static inline ll_unused frame_id_t frame_id(uint64_t value)
 {
-	return (ll_optional_t){ .present = true, .value = value };
+	return (frame_id_t){ .value = value };
 }
-static inline ll_unused ll_optional_t ll_none(void)
+ll_def_optional(struct frame_id, frame_id, { 0 });
+
+/// Unique identifier for a tree
+typedef struct tree_id {
+	size_t value;
+} tree_id_t;
+static inline ll_unused tree_id_t tree_id(size_t value)
 {
-	return (ll_optional_t){ .present = false, .value = 0 };
+	return (tree_id_t){ .value = value };
 }
+ll_def_optional(struct tree_id, tree_id, { 0 });
 
 /// Opaque llfree allocator type
 typedef struct llfree llfree_t;
@@ -44,16 +66,16 @@ enum : uint8_t {
 /// Result type for llfree_get: includes the tier of the allocated frame
 typedef struct ll_warn_unused llfree_result {
 	/// Frame number, usually only valid if error == LLFREE_ERR_OK
-	uint64_t frame : (sizeof(uint64_t) * 8) - LLFREE_TIER_BITS - 3;
+	frame_id_t frame;
 	/// Tier of the allocated frame (may differ from requested due to demotion)
-	uint8_t tier : LLFREE_TIER_BITS;
+	uint8_t tier;
 	/// Error code, 0 if no error
-	uint8_t error : 3;
+	uint8_t error;
 } llfree_result_t;
-_Static_assert(sizeof(llfree_result_t) == sizeof(uint64_t), "result size");
 
 /// Create a successful result with the given frame and tier
-static inline llfree_result_t ll_unused llfree_ok(uint64_t frame, uint8_t tier)
+static inline llfree_result_t ll_unused llfree_ok(frame_id_t frame,
+					  uint8_t tier)
 {
 	return (llfree_result_t){ .frame = frame,
 				  .tier = tier,
@@ -61,7 +83,9 @@ static inline llfree_result_t ll_unused llfree_ok(uint64_t frame, uint8_t tier)
 }
 static inline llfree_result_t ll_unused llfree_err(uint8_t err)
 {
-	return (llfree_result_t){ .frame = 0, .tier = 0, .error = err };
+	return (llfree_result_t){ .frame = frame_id(0),
+				  .tier = 0,
+				  .error = err };
 }
 
 /// Check if the result is ok (no error)
@@ -100,7 +124,7 @@ typedef struct llfree_request {
 /// Match conditions for llfree_change_tree.
 typedef struct llfree_tree_match {
 	/// Match a specific tree index (ll_none() for any tree).
-	ll_optional_t id;
+	tree_id_optional_t id;
 	/// Match a specific tier (LLFREE_TIER_NONE for any tier).
 	uint8_t tier;
 	/// Require at least this many free frames in the tree.
@@ -179,7 +203,6 @@ typedef struct llfree_meta_size {
 llfree_meta_size_t llfree_metadata_size(const llfree_tiering_t *tiering,
 					size_t frames);
 
-
 /// Size of the required metadata
 typedef struct llfree_meta {
 	/// CPU-local data.
@@ -212,10 +235,10 @@ llfree_meta_size_t llfree_metadata_size_of(const llfree_t *self);
 /// If frame is present, allocates that specific frame (get_at behavior);
 /// otherwise allocates any frame near the local slot's preferred location.
 /// Set request.local to LLFREE_LOCAL_NONE for global-only allocation.
-llfree_result_t llfree_get(llfree_t *self, ll_optional_t frame,
+llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 			   llfree_request_t request);
 /// Frees a frame
-llfree_result_t llfree_put(llfree_t *self, uint64_t frame,
+llfree_result_t llfree_put(llfree_t *self, frame_id_t frame,
 			   llfree_request_t request);
 
 /// Unreserves all local reservations.
@@ -275,7 +298,7 @@ ll_tree_stats_t llfree_tree_stats(const llfree_t *self);
 /// Counts free frames accurately by scanning the lower allocator.
 ll_stats_t llfree_stats(const llfree_t *self);
 /// Returns the full stats for a frame at a given order.
-ll_stats_t llfree_stats_at(const llfree_t *self, uint64_t frame,
+ll_stats_t llfree_stats_at(const llfree_t *self, frame_id_t frame,
 			   size_t order);
 
 // == Debugging ==

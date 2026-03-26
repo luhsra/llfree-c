@@ -23,74 +23,79 @@ uint8_t *trees_metadata(const trees_t *self)
 	return (uint8_t *)self->entries;
 }
 
-tree_t trees_load(const trees_t *self, size_t idx)
+tree_t trees_load(const trees_t *self, tree_id_t idx)
 {
-	assert(idx < self->len);
-	return atom_load(&self->entries[idx]);
+	assert(idx.value < self->len);
+	return atom_load(&self->entries[idx.value]);
 }
 
-bool trees_get(trees_t *self, size_t idx, treeF_t frames, tree_check_fn check,
+bool trees_get(trees_t *self, tree_id_t idx, treeF_t frames,
+	       tree_check_fn check,
 	       void *args, uint8_t *out_tier)
 {
-	assert(idx < self->len);
+	assert(idx.value < self->len);
 	tree_t old;
-	bool ok = atom_update(&self->entries[idx], old, tree_get, frames,
+	bool ok = atom_update(&self->entries[idx.value], old, tree_get, frames,
 			      out_tier, check, args);
 	return ok;
 }
 
-void trees_put(trees_t *self, size_t idx, treeF_t frames,
+void trees_put(trees_t *self, tree_id_t idx, treeF_t frames,
 	       llfree_policy_fn policy)
 {
-	assert(idx < self->len);
+	assert(idx.value < self->len);
 	(void)policy; // reserved for future use (see Rust tree_put policy check)
 	tree_t old;
-	atom_update(&self->entries[idx], old, tree_put, frames, policy,
+	atom_update(&self->entries[idx.value], old, tree_put, frames, policy,
 		    self->default_tier);
 }
 
-bool trees_reserve(trees_t *self, size_t idx, tree_check_fn check, void *args,
+bool trees_reserve(trees_t *self, tree_id_t idx, tree_check_fn check,
+		   void *args,
 		   treeF_t *out_free, uint8_t *out_tier)
 {
-	assert(idx < self->len);
+	assert(idx.value < self->len);
 	tree_t old;
-	bool ok = atom_update(&self->entries[idx], old, tree_reserve, out_tier,
+	bool ok = atom_update(&self->entries[idx.value], old, tree_reserve,
+			      out_tier,
 			      check, args);
 	if (ok && out_free != NULL)
 		*out_free = old.free;
 	return ok;
 }
 
-void trees_unreserve(trees_t *self, size_t idx, treeF_t free, uint8_t tier,
+void trees_unreserve(trees_t *self, tree_id_t idx, treeF_t free, uint8_t tier,
 		     llfree_policy_fn policy)
 {
-	assert(idx < self->len);
+	assert(idx.value < self->len);
 	tree_t old;
-	atom_update(&self->entries[idx], old, tree_unreserve_add, free, tier,
+	atom_update(&self->entries[idx.value], old, tree_unreserve_add, free,
+		    tier,
 		    policy, self->default_tier);
 }
 
-bool trees_sync_steal(trees_t *self, size_t idx, treeF_t min,
+bool trees_sync_steal(trees_t *self, tree_id_t idx, treeF_t min,
 		      treeF_t *out_stolen)
 {
-	assert(idx < self->len);
+	assert(idx.value < self->len);
 	tree_t old;
-	bool ok = atom_update(&self->entries[idx], old, tree_sync_steal, min);
+	bool ok = atom_update(&self->entries[idx.value], old, tree_sync_steal,
+			      min);
 	if (ok && out_stolen != NULL)
 		*out_stolen = old.free;
 	return ok;
 }
 
-void trees_put_or_reserve(trees_t *self, size_t idx, treeF_t frames,
+void trees_put_or_reserve(trees_t *self, tree_id_t idx, treeF_t frames,
 			  uint8_t tier, bool may_reserve,
 			  llfree_policy_fn policy, bool *did_reserve,
 			  treeF_t *out_old_free)
 {
-	assert(idx < self->len);
+	assert(idx.value < self->len);
 	(void)policy;
 	// Manual CAS loop: may_reserve must stay constant across retries
 	// (unlike the old tree_put_or_reserve which modified *reserve in place)
-	tree_t old = atom_load(&self->entries[idx]);
+	tree_t old = atom_load(&self->entries[idx.value]);
 	while (true) {
 		tree_t new = old;
 		new.free += frames;
@@ -106,7 +111,7 @@ void trees_put_or_reserve(trees_t *self, size_t idx, treeF_t frames,
 			new.reserved = true;
 		}
 
-		if (atom_cmp_exchange_weak(&self->entries[idx], &old, new)) {
+		if (atom_cmp_exchange_weak(&self->entries[idx.value], &old, new)) {
 			*did_reserve = reserve_this;
 			if (reserve_this && out_old_free != NULL)
 				*out_old_free = old.free;
@@ -122,15 +127,16 @@ llfree_result_t trees_search(const trees_t *self, size_t start, size_t offset,
 	for (int64_t i = (int64_t)offset; i < (int64_t)len; ++i) {
 		int64_t off = i % 2 == 0 ? i / 2 : -((i + 1) / 2);
 		size_t idx = (size_t)(base + off) % self->len;
-		llfree_result_t res = cb(idx, ctx);
+		llfree_result_t res = cb(tree_id(idx), ctx);
 		if (res.error != LLFREE_ERR_MEMORY) {
 			if (i - (int64_t)offset > 4)
 				llfree_debug(
 					"large search o=%zu i=%zd len=%zu -> tree %zu",
 					offset, (ssize_t)i, len,
-					llfree_is_ok(res) ?
-						tree_from_frame(res.frame) :
-						(size_t)-1);
+						llfree_is_ok(res) ?
+							tree_from_frame(
+								res.frame).value :
+							(size_t)-1);
 			return res;
 		}
 	}
@@ -167,7 +173,7 @@ llfree_result_t trees_search_best(const trees_t *self, uint8_t tier,
 
 		// Perfect match: try immediately
 		if (p.priority == UINT8_MAX) {
-			llfree_result_t res = cb(idx, ctx);
+			llfree_result_t res = cb(tree_id(idx), ctx);
 			if (res.error != LLFREE_ERR_MEMORY)
 				return res;
 			continue;
@@ -192,7 +198,7 @@ llfree_result_t trees_search_best(const trees_t *self, uint8_t tier,
 	for (size_t i = 0; i < TREES_SEARCH_BEST; ++i) {
 		if (best[i].prio == 0)
 			break;
-		llfree_result_t res = cb(best[i].idx, ctx);
+		llfree_result_t res = cb(tree_id(best[i].idx), ctx);
 		if (res.error != LLFREE_ERR_MEMORY)
 			return res;
 	}
@@ -215,11 +221,11 @@ ll_tree_stats_t trees_stats(const trees_t *self)
 	return stats;
 }
 
-void trees_stats_at(const trees_t *self, size_t idx, uint8_t *tier,
+void trees_stats_at(const trees_t *self, tree_id_t idx, uint8_t *tier,
 		    treeF_t *free, bool *reserved)
 {
-	assert(idx < self->len);
-	tree_t t = atom_load(&self->entries[idx]);
+	assert(idx.value < self->len);
+	tree_t t = atom_load(&self->entries[idx.value]);
 	if (tier != NULL)
 		*tier = t.tier;
 	if (free != NULL)
@@ -236,10 +242,10 @@ typedef struct change_at_args {
 	void *fetch_ctx;
 } change_at_args_t;
 
-static llfree_result_t trees_change_at(size_t idx, void *ctx)
+static llfree_result_t trees_change_at(tree_id_t idx, void *ctx)
 {
 	change_at_args_t *args = (change_at_args_t *)ctx;
-	tree_t old = atom_load(&args->trees->entries[idx]);
+	tree_t old = atom_load(&args->trees->entries[idx.value]);
 
 	while (true) {
 		treeF_t online_free = 0;
@@ -254,9 +260,9 @@ static llfree_result_t trees_change_at(size_t idx, void *ctx)
 			return llfree_err(LLFREE_ERR_MEMORY);
 		}
 
-		if (atom_cmp_exchange_weak(&args->trees->entries[idx], &old,
+		if (atom_cmp_exchange_weak(&args->trees->entries[idx.value], &old,
 					   desired)) {
-			return llfree_ok(0, 0);
+			return llfree_ok(frame_id(0), 0);
 		}
 	}
 }
@@ -277,7 +283,7 @@ llfree_result_t trees_change(trees_t *self, llfree_tree_match_t matcher,
 	};
 
 	if (matcher.id.present) {
-		if (matcher.id.value >= self->len)
+		if (matcher.id.value.value >= self->len)
 			return llfree_err(LLFREE_ERR_MEMORY);
 		return trees_change_at(matcher.id.value, &args);
 	}

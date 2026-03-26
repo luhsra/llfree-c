@@ -88,7 +88,7 @@ static void llfree_drop(llfree_t *self)
 static llfree_result_t convert_any_free_huge_tree(llfree_t *self)
 {
 	llfree_tree_match_t matcher = {
-		.id = ll_none(),
+		.id = tree_id_none(),
 		.tier = ZEROED_TIER_HUGE,
 		.free = LLFREE_TREE_SIZE,
 	};
@@ -129,7 +129,7 @@ declare_test(zeroed_prefers_tier)
 	check_equal("zu", tier_free_frames(&upper, ZEROED_TIER_HUGE_ZEROED),
 		    (size_t)LLFREE_TREE_SIZE);
 
-	llfree_result_t res = llfree_get(&upper, ll_none(), req_zeroed_huge(&upper, 0));
+	llfree_result_t res = llfree_get(&upper, frame_id_none(), req_zeroed_huge(&upper, 0));
 	check(llfree_is_ok(res));
 	check_equal("u", res.tier, (unsigned)ZEROED_TIER_HUGE_ZEROED);
 
@@ -158,7 +158,7 @@ declare_test(zeroed_steals_from_huge)
 	const size_t zeroed_huge_capacity = LLFREE_TREE_CHILDREN;
 	for (size_t i = 0; i < zeroed_huge_capacity; i++) {
 		llfree_result_t r =
-			llfree_get(&upper, ll_none(), req_zeroed_huge(&upper, 0));
+			llfree_get(&upper, frame_id_none(), req_zeroed_huge(&upper, 0));
 		check(llfree_is_ok(r));
 		check_equal("u", r.tier,
 			    (unsigned)ZEROED_TIER_HUGE_ZEROED);
@@ -166,7 +166,7 @@ declare_test(zeroed_steals_from_huge)
 
 	// Next zeroed request should fallback by stealing from huge tier.
 	llfree_result_t fb =
-		llfree_get(&upper, ll_none(), req_zeroed_huge(&upper, 0));
+		llfree_get(&upper, frame_id_none(), req_zeroed_huge(&upper, 0));
 	check(llfree_is_ok(fb));
 	check_equal("u", fb.tier, (unsigned)ZEROED_TIER_HUGE);
 
@@ -213,12 +213,12 @@ declare_test(zeroed_convert_until_exhausted)
 	check_equal("u", again.error, (unsigned)LLFREE_ERR_MEMORY);
 
 	// Zeroed huge allocations should still succeed from zeroed tier.
-	llfree_result_t res = llfree_get(&upper, ll_none(), req_zeroed_huge(&upper, 1));
+	llfree_result_t res = llfree_get(&upper, frame_id_none(), req_zeroed_huge(&upper, 1));
 	check(llfree_is_ok(res));
 	check_equal("u", res.tier, (unsigned)ZEROED_TIER_HUGE_ZEROED);
 
 	// Small allocation path still works in this tiering setup.
-	llfree_result_t small = llfree_get(&upper, ll_none(), req_small(&upper, 0));
+	llfree_result_t small = llfree_get(&upper, frame_id_none(), req_small(&upper, 0));
 	check(llfree_is_ok(small));
 	check_equal("u", small.tier, (unsigned)ZEROED_TIER_SMALL);
 

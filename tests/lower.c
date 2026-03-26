@@ -81,10 +81,10 @@ declare_test(lower_init)
 
 	// check alignment
 
-	check_equal_m(PRIu64, (uint64_t)actual.children % LLFREE_CACHE_SIZE, (uint64_t)0ul,
-		      "array must be aligned to cachesize");
-	check_equal_m(PRIu64, (uint64_t)actual.fields % LLFREE_CACHE_SIZE, (uint64_t)0ul,
-		      "array must be aligned to cachesize");
+	check_equal_m(PRIu64, (uint64_t)actual.children % LLFREE_CACHE_SIZE,
+		      (uint64_t)0ul, "array must be aligned to cachesize");
+	check_equal_m(PRIu64, (uint64_t)actual.fields % LLFREE_CACHE_SIZE,
+		      (uint64_t)0ul, "array must be aligned to cachesize");
 	lower_drop(&actual);
 
 	return success;
@@ -100,28 +100,29 @@ declare_test(lower_get)
 
 	size_t order = 0;
 
-	ret = lower_get(&actual, 0, order, ll_none());
-	check_equal(PRIu64, ret.frame, (uint64_t)0lu);
+	ret = lower_get(&actual, frame_id(0), order, frame_id_none());
+	check_equal(PRIu64, ret.frame.value, (uint64_t)0lu);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ { 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 } }));
 	return success;
 
-	ret = lower_get(&actual, 0, order, ll_none());
-	check_equal(PRIu64, ret.frame, (uint64_t)1lu);
+	ret = lower_get(&actual, frame_id(0), order, frame_id_none());
+	check_equal(PRIu64, ret.frame.value, (uint64_t)1lu);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ { 0x3, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 } }));
 
-	ret = lower_get(&actual, 320, order, ll_none());
-	check_equal(PRIu64, ret.frame, (uint64_t)320lu);
+	ret = lower_get(&actual, frame_id(320), order, frame_id_none());
+	check_equal(PRIu64, ret.frame.value, (uint64_t)320lu);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ { 0x3, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0 } }));
 
 	for (size_t i = 0; i < 954; i++) {
-		ret = lower_get(&actual, 0, order, ll_none());
-		check_equal(PRIu64, ret.frame, (uint64_t)(i + (i < 318 ? 2 : 3)));
+		ret = lower_get(&actual, frame_id(0), order, frame_id_none());
+		check_equal(PRIu64, ret.frame.value,
+			    (uint64_t)(i + (i < 318 ? 2 : 3)));
 	}
 	check_equal_bitfield(
 		actual.fields[0],
@@ -139,23 +140,23 @@ declare_test(lower_get)
 	frames = 2;
 	actual = lower_new(frames, LLFREE_INIT_FREE);
 
-	ret = lower_get(&actual, 0, order, ll_none());
-	check_equal(PRIu64, ret.frame, (uint64_t)0lu);
+	ret = lower_get(&actual, frame_id(0), order, frame_id_none());
+	check_equal(PRIu64, ret.frame.value, (uint64_t)0lu);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ { 0xffffffffffffffflu, UINT64_MAX, UINT64_MAX,
 				 UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
 				 UINT64_MAX } }));
 
-	ret = lower_get(&actual, 0, order, ll_none());
-	check_equal(PRIu64, ret.frame, (uint64_t)1lu);
+	ret = lower_get(&actual, frame_id(0), order, frame_id_none());
+	check_equal(PRIu64, ret.frame.value, (uint64_t)1lu);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ { UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
 				 UINT64_MAX, UINT64_MAX, UINT64_MAX,
 				 UINT64_MAX } }));
 
-	ret = lower_get(&actual, 0, order, ll_none());
+	ret = lower_get(&actual, frame_id(0), order, frame_id_none());
 	check_equal("d", ret.error, LLFREE_ERR_MEMORY);
 	check_equal_bitfield(
 		actual.fields[0],
@@ -167,9 +168,9 @@ declare_test(lower_get)
 	frames = 166120;
 	actual = lower_new(frames, LLFREE_INIT_FREE);
 
-	ret = lower_get(&actual, 0, 0, ll_none());
-	check(ret.frame == 0);
-	ret = lower_get(&actual, 0, LLFREE_HUGE_ORDER, ll_none());
+	ret = lower_get(&actual, frame_id(0), 0, frame_id_none());
+	check(ret.frame.value == 0);
+	ret = lower_get(&actual, frame_id(0), LLFREE_HUGE_ORDER, frame_id_none());
 
 	child_t child = atom_load(&actual.children[0].entries[1]);
 	check_equal("d", child.huge, true);
@@ -177,7 +178,7 @@ declare_test(lower_get)
 	check_equal_bitfield(actual.fields[1],
 			     ((bitfield_t){ { 0, 0, 0, 0, 0, 0, 0, 0 } }));
 
-	check_equal(PRIu64, ret.frame, (uint64_t)(1lu << 9));
+	check_equal(PRIu64, ret.frame.value, (uint64_t)(1lu << 9));
 	lower_drop(&actual);
 
 	return success;
@@ -194,7 +195,7 @@ declare_test(lower_put)
 	size_t order = 0;
 
 	for (int i = 0; i < 957; i++) {
-		ret = lower_get(&actual, 0, order, ll_none());
+		ret = lower_get(&actual, frame_id(0), order, frame_id_none());
 		assert(llfree_is_ok(ret));
 	}
 	check_equal_bitfield(
@@ -209,7 +210,7 @@ declare_test(lower_put)
 				 0x0 } }));
 
 	frame = 0;
-	ret = lower_put(&actual, frame, order);
+	ret = lower_put(&actual, frame_id(frame), order);
 	check(llfree_is_ok(ret));
 	check_equal_bitfield(
 		actual.fields[0],
@@ -224,7 +225,7 @@ declare_test(lower_put)
 
 	// repeat the same address
 	frame = 0;
-	ret = lower_put(&actual, frame, order);
+	ret = lower_put(&actual, frame_id(frame), order);
 	check_equal("u", ret.error, LLFREE_ERR_ADDRESS);
 	check_equal_bitfield(
 		actual.fields[0],
@@ -238,7 +239,7 @@ declare_test(lower_put)
 				 0x0 } }));
 
 	frame = 957;
-	ret = lower_put(&actual, frame, order);
+	ret = lower_put(&actual, frame_id(frame), order);
 	check_equal("u", ret.error, LLFREE_ERR_ADDRESS);
 	check_equal_bitfield(
 		actual.fields[0],
@@ -252,7 +253,7 @@ declare_test(lower_put)
 				 0x0 } }));
 
 	frame = 561;
-	ret = lower_put(&actual, frame, order);
+	ret = lower_put(&actual, frame_id(frame), order);
 	check(llfree_is_ok(ret));
 	check_equal_bitfield(
 		actual.fields[0],
@@ -267,7 +268,7 @@ declare_test(lower_put)
 
 	// outside the range
 	frame = 1361;
-	ret = lower_put(&actual, frame, order);
+	ret = lower_put(&actual, frame_id(frame), order);
 	check_equal("u", ret.error, LLFREE_ERR_ADDRESS);
 	check_equal_bitfield(
 		actual.fields[0],
@@ -290,23 +291,23 @@ declare_test(lower_is_free)
 
 	lower_t actual = lower_new(1360, LLFREE_INIT_FREE);
 
-	assert(lower_stats_at(&actual, 0, 0).free_frames);
-	assert(lower_stats_at(&actual, 910, 0).free_frames);
+	assert(lower_stats_at(&actual, frame_id(0), 0).free_frames);
+	assert(lower_stats_at(&actual, frame_id(910), 0).free_frames);
 
 	lower_drop(&actual);
 
 	actual = lower_new(1360, LLFREE_INIT_ALLOC);
 
-	assert(!lower_stats_at(&actual, 0, 0).free_frames);
-	assert(!lower_stats_at(&actual, 513, 0).free_frames);
-	assert(!lower_stats_at(&actual, 511, 0).free_frames);
+	assert(!lower_stats_at(&actual, frame_id(0), 0).free_frames);
+	assert(!lower_stats_at(&actual, frame_id(513), 0).free_frames);
+	assert(!lower_stats_at(&actual, frame_id(511), 0).free_frames);
 
-	assert(llfree_is_ok(lower_put(&actual, 513, 0)));
-	assert(llfree_is_ok(lower_put(&actual, 511, 0)));
+	assert(llfree_is_ok(lower_put(&actual, frame_id(513), 0)));
+	assert(llfree_is_ok(lower_put(&actual, frame_id(511), 0)));
 
-	assert(lower_stats_at(&actual, 513, 0).free_frames);
-	assert(lower_stats_at(&actual, 511, 0).free_frames);
-	assert(!lower_stats_at(&actual, 512, 0).free_frames);
+	assert(lower_stats_at(&actual, frame_id(513), 0).free_frames);
+	assert(lower_stats_at(&actual, frame_id(511), 0).free_frames);
+	assert(!lower_stats_at(&actual, frame_id(512), 0).free_frames);
 
 	lower_drop(&actual);
 	return success;
@@ -326,19 +327,19 @@ declare_test(lower_large)
 	size_t tree = 0;
 	for (size_t o = 0; o <= LLFREE_MAX_ORDER; o++) {
 		llfree_result_t frame;
-		frame = lower_get(&lower, tree * LLFREE_TREE_SIZE, o, ll_none());
+		frame = lower_get(&lower, frame_id(tree * LLFREE_TREE_SIZE), o, frame_id_none());
 
 		check_m(llfree_is_ok(frame), "%zu -> %" PRIuS, o,
 			(size_t)frame.error);
-		check_m(frame.frame % (1 << o) == 0, "%zu -> 0x%" PRIx64, o,
-			frame.frame);
-		frames[o] = frame.frame;
+		check_m(frame.frame.value % (1 << o) == 0, "%zu -> 0x%" PRIx64, o,
+			frame.frame.value);
+		frames[o] = frame.frame.value;
 	}
 
 	lower_print(&lower);
 
 	for (size_t o = 0; o <= LLFREE_MAX_ORDER; o++) {
-		llfree_result_t ret = lower_put(&lower, frames[o], o);
+		llfree_result_t ret = lower_put(&lower, frame_id(frames[o]), o);
 		check_m(llfree_is_ok(ret), "%zu -> 0x%" PRIx64, o, frames[o]);
 	}
 
@@ -354,49 +355,50 @@ declare_test(lower_huge)
 	const size_t FRAMES = LLFREE_CHILD_SIZE * 60lu;
 	lower_t actual = lower_new(FRAMES, LLFREE_INIT_FREE);
 
-	llfree_result_t frame1 = lower_get(&actual, 0, LLFREE_HUGE_ORDER, ll_none());
+	llfree_result_t frame1 =
+		lower_get(&actual, frame_id(0), LLFREE_HUGE_ORDER, frame_id_none());
 	check(llfree_is_ok(frame1));
-	uint64_t offset = frame1.frame % LLFREE_CHILD_SIZE;
+	uint64_t offset = frame1.frame.value % LLFREE_CHILD_SIZE;
 	check_equal(PRIu64, offset, (uint64_t)0ul);
-	llfree_result_t frame2 = lower_get(&actual, 0, LLFREE_HUGE_ORDER, ll_none());
+	llfree_result_t frame2 =
+		lower_get(&actual, frame_id(0), LLFREE_HUGE_ORDER, frame_id_none());
 	check(llfree_is_ok(frame2));
-	offset = frame2.frame % LLFREE_CHILD_SIZE;
+	offset = frame2.frame.value % LLFREE_CHILD_SIZE;
 	check_equal(PRIu64, offset, (uint64_t)0ul);
-	check(frame1.frame != frame2.frame);
+	check(frame1.frame.value != frame2.frame.value);
 	check_equal(PRIuS, actual.frames - lower_stats(&actual).free_frames,
 		    (size_t)(2 * LLFREE_CHILD_SIZE));
 
 	// request a regular frame
-	llfree_result_t regular = lower_get(&actual, 0, 0, ll_none());
+	llfree_result_t regular = lower_get(&actual, frame_id(0), 0, frame_id_none());
 	assert(llfree_is_ok(regular));
 	// regular frame cannot be returned as HP
 	assert(!llfree_is_ok(
-		lower_put(&actual, regular.frame, LLFREE_HUGE_ORDER)));
+		lower_put(&actual, frame_id(regular.frame.value), LLFREE_HUGE_ORDER)));
 
 	// this HF must be in another child than the regular frame.
-	llfree_result_t frame3 =
-		lower_get(&actual, frame_from_row(10), LLFREE_HUGE_ORDER, ll_none());
+	llfree_result_t frame3 = lower_get(&actual, frame_id(frame_from_row(row_id(10)).value), LLFREE_HUGE_ORDER, frame_id_none());
 	check(llfree_is_ok(frame3));
-	offset = frame3.frame % LLFREE_CHILD_SIZE;
+	offset = frame3.frame.value % LLFREE_CHILD_SIZE;
 	check_equal(PRIu64, offset, (uint64_t)0ul);
-	check_equal(PRIu64, frame3.frame, (uint64_t)(3lu * LLFREE_CHILD_SIZE));
+	check_equal(PRIu64, frame3.frame.value, (uint64_t)(3lu * LLFREE_CHILD_SIZE));
 
 	// free regular page und try get this child as complete HP
-	assert(llfree_is_ok(lower_put(&actual, regular.frame, 0)));
-	llfree_result_t frame4 = lower_get(&actual, 0, LLFREE_HUGE_ORDER, ll_none());
+	assert(llfree_is_ok(lower_put(&actual, frame_id(regular.frame.value), 0)));
+	llfree_result_t frame4 =
+		lower_get(&actual, frame_id(0), LLFREE_HUGE_ORDER, frame_id_none());
 	check(llfree_is_ok(frame4));
-	check(frame4.frame == regular.frame);
+	check(frame4.frame.value == regular.frame.value);
 
 	llfree_result_t ret =
-		lower_put(&actual, frame2.frame, LLFREE_HUGE_ORDER);
+		lower_put(&actual, frame_id(frame2.frame.value), LLFREE_HUGE_ORDER);
 	check(llfree_is_ok(ret));
 
 	// allocate the complete memory with HPs
 	for (size_t i = 3; i < 60; ++i) {
 		// get allocates only in chunks of N children. if there is no free HP in given chung it returns LLFREE_ERR_MEMORY
 		llfree_result_t frame = lower_get(
-			&actual, (i / LLFREE_TREE_CHILDREN) * LLFREE_TREE_SIZE,
-			LLFREE_HUGE_ORDER, ll_none());
+			&actual, frame_id((i / LLFREE_TREE_CHILDREN) * LLFREE_TREE_SIZE), LLFREE_HUGE_ORDER, frame_id_none());
 		check(llfree_is_ok(frame));
 	}
 
@@ -404,24 +406,26 @@ declare_test(lower_huge)
 		      "fully allocated with huge frames");
 
 	// reservation at full memory must fail
-	llfree_result_t frame = lower_get(&actual, 0, LLFREE_HUGE_ORDER, ll_none());
+	llfree_result_t frame =
+		lower_get(&actual, frame_id(0), LLFREE_HUGE_ORDER, frame_id_none());
 	check(frame.error == LLFREE_ERR_MEMORY);
 
 	// return HP as regular Frame must succseed
-	check(llfree_is_ok(lower_put(&actual, frame2.frame, 0)));
+	check(llfree_is_ok(lower_put(&actual, frame_id(frame2.frame.value), 0)));
 	// HP ist converted into regular frames so returning the whole page must fail
-	check(lower_put(&actual, frame2.frame, LLFREE_HUGE_ORDER).error ==
+	check(lower_put(&actual, frame_id(frame2.frame.value), LLFREE_HUGE_ORDER).error ==
 	      LLFREE_ERR_ADDRESS);
 
 	check(llfree_is_ok(
-		lower_put(&actual, frame1.frame, LLFREE_HUGE_ORDER)));
+		lower_put(&actual, frame_id(frame1.frame.value), LLFREE_HUGE_ORDER)));
 
 	// check if right amout of free regular frames are present
 	check_equal("zu", lower_stats(&actual).free_frames,
 		    LLFREE_CHILD_SIZE + 1ul);
 
 	// new acquired frame should be in same positon as the old no 1
-	check(lower_get(&actual, 0, LLFREE_HUGE_ORDER, ll_none()).frame == frame1.frame);
+	check(lower_get(&actual, frame_id(0), LLFREE_HUGE_ORDER, frame_id_none()).frame.value ==
+	      frame1.frame.value);
 
 	return success;
 }
@@ -434,9 +438,7 @@ declare_test(lower_max)
 	lower_t lower = lower_new(FRAMES, LLFREE_INIT_FREE);
 
 	for (size_t i = 0; i < FRAMES / (1 << LLFREE_MAX_ORDER); ++i) {
-		llfree_result_t frame = lower_get(
-			&lower, i * (1 << LLFREE_MAX_ORDER), LLFREE_MAX_ORDER,
-			ll_none());
+		llfree_result_t frame = lower_get(&lower, frame_id(i * (1 << LLFREE_MAX_ORDER)), LLFREE_MAX_ORDER, frame_id_none());
 		check_m(llfree_is_ok(frame), "%zu", i);
 	}
 
@@ -444,7 +446,7 @@ declare_test(lower_max)
 
 	for (size_t i = 0; i < FRAMES / (1 << LLFREE_MAX_ORDER); ++i) {
 		llfree_result_t ret = lower_put(
-			&lower, i * (1 << LLFREE_MAX_ORDER), LLFREE_MAX_ORDER);
+			&lower, frame_id(i * (1 << LLFREE_MAX_ORDER)), LLFREE_MAX_ORDER);
 		check_m(llfree_is_ok(ret), "%zu", i);
 	}
 
@@ -463,7 +465,7 @@ declare_test(lower_free_all)
 	// free all HPs
 	llfree_result_t ret;
 	for (size_t i = 0; i < 15; ++i) {
-		ret = lower_put(&lower, i * 512, LLFREE_HUGE_ORDER);
+		ret = lower_put(&lower, frame_id(i * 512), LLFREE_HUGE_ORDER);
 		check(llfree_is_ok(ret));
 	}
 	check_equal_m("zu", lower_stats(&lower).free_frames,
@@ -473,7 +475,7 @@ declare_test(lower_free_all)
 	// free last HP as regular frame and regular frames
 	const uint64_t start = 15lu * 512lu;
 	for (size_t i = 0; i < 512lu + 35lu; ++i) {
-		ret = lower_put(&lower, start + i, 0);
+		ret = lower_put(&lower, frame_id(start + i), 0);
 		check(llfree_is_ok(ret));
 	}
 

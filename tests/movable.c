@@ -50,18 +50,18 @@ declare_test(alloc_movable)
 	const size_t len = 4 * LLFREE_TREE_SIZE;
 	uint64_t *frames = calloc(len, sizeof(uint64_t));
 
-	llfree_result_t movable = llfree_get(&llfree, ll_none(), llreq_mov(&llfree, 0, 0));
+	llfree_result_t movable = llfree_get(&llfree, frame_id_none(), llreq_mov(&llfree, 0, 0));
 	check_m(llfree_is_ok(movable), "movable allocation failed");
-	llfree_result_t normal = llfree_get(&llfree, ll_none(), llreq(&llfree, 0, 0));
+	llfree_result_t normal = llfree_get(&llfree, frame_id_none(), llreq(&llfree, 0, 0));
 	check_m(llfree_is_ok(normal), "normal allocation failed");
 
 	for (size_t i = 0; i < len; i++) {
 		bool mov = i % 2 ? true : false;
 		llfree_result_t ret = llfree_get(
-			&llfree, ll_none(),
+			&llfree, frame_id_none(),
 			llfree_movable_request(ll_cores(&llfree), 0, 0, mov));
 		check_m(llfree_is_ok(ret), "movable allocation %zu failed", i);
-		frames[i] = ret.frame;
+		frames[i] = ret.frame.value;
 	}
 
 	// llfree_print(&llfree);
@@ -72,9 +72,9 @@ declare_test(alloc_movable)
 	      (1 << 30) / LLFREE_FRAME_SIZE - len - 2);
 
 	llfree_result_t ret =
-		llfree_put(&llfree, movable.frame, llreq(&llfree, 0, 0));
+		llfree_put(&llfree, frame_id(movable.frame.value), llreq(&llfree, 0, 0));
 	check_m(llfree_is_ok(ret), "free movable failed");
-	ret = llfree_put(&llfree, normal.frame, llreq(&llfree, 0, 0));
+	ret = llfree_put(&llfree, frame_id(normal.frame.value), llreq(&llfree, 0, 0));
 	check_m(llfree_is_ok(ret), "free normal failed");
 
 	// llfree_print(&llfree);
@@ -83,7 +83,7 @@ declare_test(alloc_movable)
 
 	for (size_t i = 0; i < len; i++) {
 		llfree_result_t ret =
-			llfree_put(&llfree, frames[i], llreq(&llfree, 0, 0));
+			llfree_put(&llfree, frame_id(frames[i]), llreq(&llfree, 0, 0));
 		check_m(llfree_is_ok(ret), "free allocation %zu failed", i);
 	}
 

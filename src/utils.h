@@ -14,6 +14,9 @@
 #define LL_MIN(a, b) ((a) > (b) ? (b) : (a))
 #define LL_MASK(bits) ((1u << (bits)) - 1)
 
+/// Optional size_t type
+ll_def_optional(size_t, ll, 0);
+
 /// Iterates over a Range between multiples of len starting at idx.
 ///
 /// Starting at idx up to the next Multiple of len (exclusive). Then the next
@@ -27,47 +30,69 @@
 	     _i < (len);                                                  \
 	     _i = _i + 1, (current_i) = _base_idx + ((_i + _offset) % (len)))
 
-// conversion functions
-static inline ll_unused size_t tree_from_frame(uint64_t frame)
+#define ll_opt_map(src, dst_ty, func) \
+	((src).present ? dst_ty##_some(func((src).value)) : dst_ty##_none())
+
+/// Unique identifier for a huge page
+typedef struct huge_id {
+	size_t value;
+} huge_id_t;
+static inline ll_unused huge_id_t huge_id(size_t value)
 {
-	return frame >> LLFREE_TREE_ORDER;
+	return (huge_id_t){ .value = value };
 }
-static inline ll_unused uint64_t frame_from_tree(size_t tree)
+ll_def_optional(struct huge_id, huge_id, { 0 });
+
+/// Unique identifier for a row in the bitfield
+typedef struct row_id {
+	uint64_t value;
+} row_id_t;
+static inline ll_unused row_id_t row_id(uint64_t value)
 {
-	return (uint64_t)tree << LLFREE_TREE_ORDER;
+	return (row_id_t){ .value = value };
+}
+ll_def_optional(struct row_id, row_id, { 0 });
+
+static inline ll_unused tree_id_t tree_from_frame(frame_id_t frame)
+{
+	return tree_id(frame.value >> LLFREE_TREE_ORDER);
+}
+static inline ll_unused frame_id_t frame_from_tree(tree_id_t tree)
+{
+	return frame_id((uint64_t)tree.value << LLFREE_TREE_ORDER);
 }
 
-static inline ll_unused size_t child_from_frame(uint64_t frame)
+static inline ll_unused size_t child_from_frame(frame_id_t frame)
 {
-	return frame >> LLFREE_CHILD_ORDER;
+	return (size_t)(frame.value >> LLFREE_CHILD_ORDER);
 }
-static inline ll_unused uint64_t frame_from_child(size_t child)
+static inline ll_unused frame_id_t frame_from_child(size_t child)
 {
-	return (uint64_t)child << LLFREE_CHILD_ORDER;
+	return frame_id((uint64_t)child << LLFREE_CHILD_ORDER);
 }
-static inline ll_unused size_t huge_from_frame(uint64_t frame)
+static inline ll_unused huge_id_t huge_from_frame(frame_id_t frame)
 {
-	return frame >> LLFREE_HUGE_ORDER;
+	return huge_id((size_t)(frame.value >> LLFREE_HUGE_ORDER));
 }
-static inline ll_unused uint64_t frame_from_huge(size_t huge)
+static inline ll_unused frame_id_t frame_from_huge(huge_id_t huge)
 {
-	return (uint64_t)huge << LLFREE_HUGE_ORDER;
-}
-
-static inline ll_unused uint64_t row_from_frame(uint64_t frame)
-{
-	return frame >> LLFREE_ATOMIC_ORDER;
-}
-static inline ll_unused uint64_t frame_from_row(uint64_t row)
-{
-	return row << LLFREE_ATOMIC_ORDER;
+	return frame_id((uint64_t)huge.value << LLFREE_HUGE_ORDER);
 }
 
-static inline ll_unused size_t tree_from_row(uint64_t row)
+static inline ll_unused row_id_t row_from_frame(frame_id_t frame)
+{
+	return row_id(frame.value >> LLFREE_ATOMIC_ORDER);
+}
+static inline ll_unused frame_id_t frame_from_row(row_id_t row)
+{
+	return frame_id(row.value << LLFREE_ATOMIC_ORDER);
+}
+
+static inline ll_unused tree_id_t tree_from_row(row_id_t row)
 {
 	return tree_from_frame(frame_from_row(row));
 }
-static inline ll_unused uint64_t row_from_tree(size_t tree)
+static inline ll_unused row_id_t row_from_tree(tree_id_t tree)
 {
 	return row_from_frame(frame_from_tree(tree));
 }

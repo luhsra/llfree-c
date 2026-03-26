@@ -89,22 +89,23 @@ declare_test(bitfield_set_bit)
 	bitfield_t actual = bf(0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 	bitfield_t expected = bf(0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 
-	llfree_result_t ret = field_set_next(&actual, 0, 0);
-	check_equal(PRIu64, ret.frame, (uint64_t)0lu);
+	llfree_result_t ret = field_set_next(&actual, frame_id(0), 0);
+	check_equal(PRIu64, ret.frame.value, (uint64_t)0lu);
 	check_equal_bitfield(actual, expected);
 
 	actual = bf(0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 	expected = bf(0x3, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 
-	ret = field_set_next(&actual, 0, 0);
-	check_equal(PRIu64, ret.frame, (uint64_t)1lu);
+	ret = field_set_next(&actual, frame_id(0), 0);
+	check_equal(PRIu64, ret.frame.value, (uint64_t)1lu);
 	check_equal_bitfield(actual, expected);
 
 	actual = bf(UINT64_MAX, 0xf, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 	expected = bf(UINT64_MAX, 0x1f, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
 
-	ret = field_set_next(&actual, 0, 0);
-	check_equal_m(PRIu64, ret.frame, (uint64_t)68l, "call should be a success");
+	ret = field_set_next(&actual, frame_id(0), 0);
+	check_equal_m(PRIu64, ret.frame.value, (uint64_t)68l,
+		      "call should be a success");
 	check_equal_bitfield(actual, expected);
 
 	actual = bf(UINT64_MAX, UINT64_MAX, UINT64_MAX, 0xfabdeadbeeffffff, 0x0,
@@ -112,8 +113,9 @@ declare_test(bitfield_set_bit)
 	expected = bf(UINT64_MAX, UINT64_MAX, UINT64_MAX, 0xfabdeadbefffffff,
 		      0x0, 0xdeadbeefdeadbeef, 0x0, 0x8000000000000000);
 
-	ret = field_set_next(&actual, 0, 0);
-	check_equal_m(PRIu64, ret.frame, (uint64_t)216l, "call should be a success");
+	ret = field_set_next(&actual, frame_id(0), 0);
+	check_equal_m(PRIu64, ret.frame.value, (uint64_t)216l,
+		      "call should be a success");
 	check_equal_bitfield_m(actual, expected, "row 3 bit 24 -> e to f");
 
 	actual = bf(UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
@@ -121,8 +123,9 @@ declare_test(bitfield_set_bit)
 	expected = bf(UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
 		      UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX);
 
-	ret = field_set_next(&actual, 0, 0);
-	check_equal_m(PRIu64, ret.frame, (uint64_t)0lu, "call should fail");
+	ret = field_set_next(&actual, frame_id(0), 0);
+	check_equal_m(PRIu64, ret.frame.value, (uint64_t)0lu,
+		      "call should fail");
 	check_equal_bitfield_m(actual, expected, "no change");
 
 	return success;
@@ -146,7 +149,7 @@ declare_test(bitfield_reset_bit)
 	pos = 0;
 
 	ret = field_toggle(&actual, pos, 0, true);
-	check_equal(PRIu64, ret.frame, (uint64_t)0lu);
+	check_equal(PRIu64, ret.frame.value, (uint64_t)0lu);
 	check_equal_bitfield_m(actual, expect, "first one should be set to 0");
 
 	actual = bf(0x1, 0xfacb8ffabf000000, 0xbadc007cd, 0x0, 0x0, 0x0, 0x0,
@@ -156,7 +159,7 @@ declare_test(bitfield_reset_bit)
 	pos = 7ul * 64 + 63;
 
 	ret = field_toggle(&actual, pos, 0, true);
-	check_equal(PRIu64, ret.frame, (uint64_t)0lu);
+	check_equal(PRIu64, ret.frame.value, (uint64_t)0lu);
 	check_equal_bitfield_m(actual, expect, "last bit should be set to 0");
 
 	actual = bf(0x1, 0xfacb8ffabf000000, 0xbadc007cd, 0x0, 0x0, 0x0, 0x0,
@@ -166,7 +169,7 @@ declare_test(bitfield_reset_bit)
 	pos = 2ul * 64 + 32;
 
 	ret = field_toggle(&actual, pos, 0, true);
-	check_equal(PRIu64, ret.frame, (uint64_t)0lu);
+	check_equal(PRIu64, ret.frame.value, (uint64_t)0lu);
 	check_equal_bitfield_m(actual, expect, "row 2 bit 31 -> b to a");
 
 	actual = bf(0x1, 0xfacb8ffabf000000, 0xb2dc007cd, 0x0, 0x0, 0x0, 0x0,

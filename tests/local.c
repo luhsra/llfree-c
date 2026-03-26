@@ -25,18 +25,18 @@ declare_test(local_last_free_inc)
 	uint8_t tier = 0;
 	size_t index = 0;
 	for (size_t i = 0; i < LAST_FREES; i++) {
-		check(!ll_local_free_inc(local, tier, index, 0));
+		check(!ll_local_free_inc(local, tier, index, tree_id(0)));
 	}
-	check(ll_local_free_inc(local, tier, index, 0));
-	check(ll_local_free_inc(local, tier, index, 0));
+	check(ll_local_free_inc(local, tier, index, tree_id(0)));
+	check(ll_local_free_inc(local, tier, index, tree_id(0)));
 
-	check(!ll_local_free_inc(local, tier, index, 1));
-	check(!ll_local_free_inc(local, tier, index, 0));
+	check(!ll_local_free_inc(local, tier, index, tree_id(1)));
+	check(!ll_local_free_inc(local, tier, index, tree_id(0)));
 
 	for (size_t i = 0; i < LAST_FREES; i++) {
-		check(!ll_local_free_inc(local, tier, index, 1));
+		check(!ll_local_free_inc(local, tier, index, tree_id(1)));
 	}
-	check(ll_local_free_inc(local, tier, index, 1));
+	check(ll_local_free_inc(local, tier, index, tree_id(1)));
 	llfree_ext_free(LLFREE_CACHE_SIZE, ll_local_size(&tiering), local);
 	return success;
 }

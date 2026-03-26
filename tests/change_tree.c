@@ -41,16 +41,18 @@ declare_test(change_tree_promotion_demotion)
 	lldrop llfree_t upper =
 		llfree_new(2, 4 * LLFREE_TREE_SIZE, LLFREE_INIT_FREE);
 
-	const size_t tree_id = 0;
+	const size_t tree_idx = 0;
 	uint8_t tier = 0;
 	treeF_t free = 0;
 	bool reserved = false;
-	trees_stats_at(&upper.trees, tree_id, &tier, &free, &reserved);
+	trees_stats_at(&upper.trees, tree_id(tree_idx), &tier,
+		      &free, &reserved);
 	check(!reserved);
 	check_equal("u", tier, 2u);
 	check_equal("zu", (size_t)free, (size_t)LLFREE_TREE_SIZE);
 
-	llfree_tree_match_t matcher = { .id = ll_some(tree_id),
+	llfree_tree_match_t matcher = {
+		.id = tree_id_some(tree_id(tree_idx)),
 					.tier = 2,
 					.free = LLFREE_TREE_SIZE };
 	llfree_tree_change_t demote = { .tier = 0,
@@ -58,7 +60,8 @@ declare_test(change_tree_promotion_demotion)
 	llfree_result_t res = llfree_change_tree(&upper, matcher, demote);
 	check(llfree_is_ok(res));
 
-	trees_stats_at(&upper.trees, tree_id, &tier, &free, &reserved);
+	trees_stats_at(&upper.trees, tree_id(tree_idx), &tier,
+		      &free, &reserved);
 	check_equal("u", tier, 0u);
 	check_equal("zu", (size_t)free, (size_t)LLFREE_TREE_SIZE);
 
@@ -68,7 +71,8 @@ declare_test(change_tree_promotion_demotion)
 	res = llfree_change_tree(&upper, matcher, promote);
 	check(llfree_is_ok(res));
 
-	trees_stats_at(&upper.trees, tree_id, &tier, &free, &reserved);
+	trees_stats_at(&upper.trees, tree_id(tree_idx), &tier,
+		      &free, &reserved);
 	check_equal("u", tier, 2u);
 	check_equal("zu", (size_t)free, (size_t)LLFREE_TREE_SIZE);
 
@@ -83,8 +87,8 @@ declare_test(change_tree_offline)
 		llfree_new(2, 4 * LLFREE_TREE_SIZE, LLFREE_INIT_FREE);
 	size_t before = llfree_tree_stats(&upper).free_frames;
 
-	const size_t tree_id = 0;
-	llfree_tree_match_t matcher = { .id = ll_some(tree_id),
+	const size_t tree = 0;
+	llfree_tree_match_t matcher = { .id = tree_id_some(tree_id(tree)),
 					.tier = LLFREE_TIER_NONE,
 					.free = LLFREE_TREE_SIZE };
 	llfree_tree_change_t offline = { .tier = LLFREE_TIER_NONE,
@@ -96,18 +100,20 @@ declare_test(change_tree_offline)
 	uint8_t tier = 0;
 	treeF_t free = 0;
 	bool reserved = false;
-	trees_stats_at(&upper.trees, tree_id, &tier, &free, &reserved);
+	trees_stats_at(&upper.trees, tree_id(tree), &tier, &free, &reserved);
 	check(!reserved);
 	check_equal("zu", (size_t)free, 0ul);
 	check_equal("zu", llfree_tree_stats(&upper).free_frames,
 		    before - LLFREE_TREE_SIZE);
 
 	llfree_result_t at = llfree_get(
-		&upper, ll_some(frame_from_tree(tree_id)), llreq(&upper, 0, 0));
+		&upper, frame_id_some(frame_from_tree(tree_id(tree))),
+		llreq(&upper, 0, 0));
 	check_m(!llfree_is_ok(at), "offlined tree should reject direct alloc");
 
-	llfree_result_t other = llfree_get(&upper, ll_some(frame_from_tree(1)),
-					   llreq(&upper, 0, 0));
+	llfree_result_t other =
+		llfree_get(&upper, frame_id_some(frame_from_tree(tree_id(1))),
+			   llreq(&upper, 0, 0));
 	check_m(llfree_is_ok(other), "other trees should still be allocatable");
 
 	return success;
@@ -119,8 +125,8 @@ declare_test(change_tree_offline_online)
 	lldrop llfree_t upper =
 		llfree_new(2, 4 * LLFREE_TREE_SIZE, LLFREE_INIT_FREE);
 
-	const size_t tree_id = 0;
-	llfree_tree_match_t matcher = { .id = ll_some(tree_id),
+	const size_t tree = 0;
+	llfree_tree_match_t matcher = { .id = tree_id_some(tree_id(tree)),
 					.tier = LLFREE_TIER_NONE,
 					.free = LLFREE_TREE_SIZE };
 	llfree_tree_change_t offline = { .tier = LLFREE_TIER_NONE,
@@ -137,12 +143,13 @@ declare_test(change_tree_offline_online)
 	uint8_t tier = 0;
 	treeF_t free = 0;
 	bool reserved = false;
-	trees_stats_at(&upper.trees, tree_id, &tier, &free, &reserved);
+	trees_stats_at(&upper.trees, tree_id(tree), &tier, &free, &reserved);
 	check(!reserved);
 	check_equal("zu", (size_t)free, (size_t)LLFREE_TREE_SIZE);
 
 	llfree_result_t at = llfree_get(
-		&upper, ll_some(frame_from_tree(tree_id)), llreq(&upper, 0, 0));
+		&upper, frame_id_some(frame_from_tree(tree_id(tree))),
+		llreq(&upper, 0, 0));
 	check_m(llfree_is_ok(at), "onlined tree should allow direct alloc");
 
 	llfree_validate(&upper);
