@@ -247,14 +247,14 @@ static llfree_result_t get_reserve(tree_id_t idx, void *ctx)
 /// Reserves and allocates from a new tree, searching near `start`.
 static llfree_result_t get_matching_reserve(llfree_t *self, uint8_t tier,
 					    size_t local, uint8_t order,
-					    uint64_t start)
+					    tree_id_t start)
 {
-	assert(start < self->trees.len);
+	assert(start.value < self->trees.len);
 
 	llfree_result_t res;
 	const size_t cl_trees = LLFREE_CACHE_SIZE / sizeof(tree_t);
 	size_t near = LL_MAX(self->trees.len / 16, cl_trees / 4);
-	start = align_down(start, next_pow2(2 * near));
+	start = tree_id(align_down(start.value, next_pow2(2 * near)));
 
 	struct check_args check_args = {
 		.tier = tier,
@@ -389,8 +389,7 @@ static llfree_result_t steal_local(llfree_t *self,
 	tree_id_optional_t tree_idx =
 		frame.present ? tree_id_some(tree_from_frame(frame.value)) :
 				tree_id_none();
-	size_t index = (request->local == LLFREE_LOCAL_NONE) ? 0 :
-							       request->local;
+	size_t index = request->local.present ? 0 : request->local.value;
 
 	local_result_t res = ll_local_steal(self->local, request->tier, index,
 					    tree_idx, frames, self->policy);
@@ -412,21 +411,20 @@ static llfree_result_t steal_local(llfree_t *self,
 
 /// Try matching-only allocation: local retry + reserve
 static llfree_result_t
-get_matching(llfree_t *self, const llfree_request_t *request, uint64_t *start)
+get_matching(llfree_t *self, const llfree_request_t *request, tree_id_t *start)
 {
 	size_t tier_count = ll_local_tier_locals(self->local, request->tier);
 	treeF_t frames = (treeF_t)(1u << request->order);
 
-	if (request->local != LLFREE_LOCAL_NONE &&
-	    tier_count != LLFREE_LOCAL_NONE && tier_count > 0 &&
-	    tier_count < self->trees.len) {
+	if (request->local.present && tier_count != LLFREE_LOCAL_NONE &&
+	    tier_count > 0 && tier_count < self->trees.len) {
 		for (size_t i = 0; i < RETRIES; i++) {
 			local_result_t old;
 			llfree_result_t res = get_matching_local(
-				self, request->tier, request->local,
+				self, request->tier, request->local.value,
 				request->order, frames, &old);
 			if (old.present)
-				*start = tree_from_row(old.start_row).value;
+				*start = tree_from_row(old.start_row);
 
 			if (res.error == LLFREE_ERR_RETRY)
 				continue;
@@ -434,7 +432,8 @@ get_matching(llfree_t *self, const llfree_request_t *request, uint64_t *start)
 				break;
 			return res;
 		}
-		return get_matching_reserve(self, request->tier, request->local,
+		return get_matching_reserve(self, request->tier,
+					    request->local.value,
 					    request->order, *start);
 	}
 
@@ -464,13 +463,10 @@ static llfree_result_t demote_local(llfree_t *self,
 	tree_id_optional_t tree_idx =
 		frame.present ? tree_id_some(tree_from_frame(frame.value)) :
 				tree_id_none();
-	ll_optional_t local = (request->local == LLFREE_LOCAL_NONE) ?
-				      ll_none() :
-				      ll_some(request->local);
 
 	demote_any_result_t dem =
-		ll_local_demote_any(self->local, request->tier, local, tree_idx,
-				    frames, self->policy);
+		ll_local_demote_any(self->local, request->tier, request->local,
+				    tree_idx, frames, self->policy);
 	if (dem.found) {
 		if (dem.old_row.present) {
 			trees_unreserve(&self->trees,
@@ -485,11 +481,11 @@ static llfree_result_t demote_local(llfree_t *self,
 						request->order, lower_frame);
 		if (llfree_is_ok(res)) {
 			llfree_info("demote success tier=%u index=%zu",
-				    request->tier, request->local);
+				    request->tier, request->local.value);
 			return llfree_ok(res.frame, request->tier);
 		}
 		llfree_warn("demote failed tier=%u index=%zu", request->tier,
-			    request->local);
+			    request->local.value);
 		trees_put(&self->trees, tree_from_row(dem.row), frames,
 			  self->policy);
 		if (res.error != LLFREE_ERR_MEMORY)
@@ -500,7 +496,7 @@ static llfree_result_t demote_local(llfree_t *self,
 
 /// Allocate with demotion
 static llfree_result_t
-get_demoting(llfree_t *self, const llfree_request_t *request, uint64_t start)
+get_demoting(llfree_t *self, const llfree_request_t *request, tree_id_t start)
 {
 	size_t tier_count = ll_local_tier_locals(self->local, request->tier);
 	struct check_args check_args = {
@@ -509,12 +505,12 @@ get_demoting(llfree_t *self, const llfree_request_t *request, uint64_t start)
 		.policy = self->policy,
 	};
 
-	if (request->local != LLFREE_LOCAL_NONE && tier_count > 0 &&
+	if (request->local.present && tier_count > 0 &&
 	    tier_count != LLFREE_LOCAL_NONE && tier_count < self->trees.len) {
 		reserve_args_t args = { .self = self,
 					.order = request->order,
 					.tier = request->tier,
-					.local = request->local,
+					.local = request->local.value,
 					.check = check_demote_tree,
 					.check_args = &check_args };
 		llfree_result_t res = trees_search(&self->trees, start, 0,
@@ -543,10 +539,10 @@ static llfree_result_t llfree_get_at(llfree_t *self, frame_id_t frame,
 	treeF_t frames = (treeF_t)(1u << request.order);
 
 	// Try local reservation first
-	if (request.local != LLFREE_LOCAL_NONE) {
+	if (request.local.present) {
 		for (size_t r = 0; r < RETRIES; r++) {
 			local_result_t old = ll_local_get(
-				self->local, request.tier, request.local,
+				self->local, request.tier, request.local.value,
 				tree_id_some(tree_idx), frames);
 			if (old.success) {
 				llfree_result_t res = lower_get(
@@ -559,8 +555,8 @@ static llfree_result_t llfree_get_at(llfree_t *self, frame_id_t frame,
 				return res;
 			}
 			if (old.present &&
-			    sync_with_global(self, request.tier, request.local,
-					     frames, old))
+			    sync_with_global(self, request.tier,
+					     request.local.value, frames, old))
 				continue;
 			break;
 		}
@@ -604,19 +600,20 @@ llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 	}
 
 	size_t tier_count = ll_local_tier_locals(self->local, request.tier);
-	uint64_t start;
+	tree_id_t start;
 	if (tier_count != LLFREE_LOCAL_NONE && tier_count > 0 &&
-	    request.local != LLFREE_LOCAL_NONE) {
-		start = self->trees.len / tier_count * request.local;
+	    request.local.present) {
+		start = tree_id(self->trees.len / tier_count *
+				request.local.value);
 	} else {
-		start = 0;
+		start = tree_id(0);
 	}
 
 	llfree_result_t res = get_matching(self, &request, &start);
 	if (res.error != LLFREE_ERR_MEMORY)
 		return res;
 
-	llfree_info("No match t=%u l=%zu", request.tier, request.local);
+	llfree_info("No match t=%u l=%zu", request.tier, request.local.value);
 
 	res = get_demoting(self, &request, start);
 	if (res.error != LLFREE_ERR_MEMORY)
@@ -663,12 +660,13 @@ llfree_result_t llfree_put(llfree_t *self, frame_id_t frame,
 	uint8_t tier = request.tier;
 	treeF_t frames = (treeF_t)(1u << request.order);
 
-	if (request.local != LLFREE_LOCAL_NONE) {
+	if (request.local.present) {
 		bool may_reserve = LLFREE_ENABLE_FREE_RESERVE &&
 				   ll_local_free_inc(self->local, request.tier,
-						     request.local, tree_idx);
+						     request.local.value,
+						     tree_idx);
 
-		if (ll_local_put(self->local, request.tier, request.local,
+		if (ll_local_put(self->local, request.tier, request.local.value,
 				 tree_idx, frames)) {
 			return llfree_ok(frame_id(0), 0);
 		}
@@ -681,7 +679,7 @@ llfree_result_t llfree_put(llfree_t *self, frame_id_t frame,
 
 		if (did_reserve) {
 			treeF_t swap_free = old_free + frames;
-			swap_reserved(self, request.tier, request.local,
+			swap_reserved(self, request.tier, request.local.value,
 				      tree_idx, swap_free);
 		}
 	} else {

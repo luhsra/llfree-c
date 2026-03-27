@@ -12,7 +12,7 @@
 #endif
 
 #define ll_def_optional(ty, prefix, def)                                    \
-	typedef struct {                                                    \
+	typedef struct prefix##_optional {                                                    \
 		bool present;                                               \
 		ty value;                                                   \
 	} prefix##_optional_t;                                              \
@@ -26,6 +26,8 @@
 		return (prefix##_optional_t){ .present = false,             \
 					      .value = def };               \
 	}
+
+ll_def_optional(size_t, ll, 0);
 
 /// Unique identifier for a frame
 typedef struct frame_id {
@@ -118,7 +120,7 @@ typedef struct llfree_request {
 	uint8_t tier;
 	/// Within-tier local index (e.g. core id),
 	/// or LLFREE_LOCAL_NONE for global-only allocation.
-	size_t local;
+	ll_optional_t local;
 } llfree_request_t;
 
 /// Match conditions for llfree_change_tree.
@@ -132,7 +134,7 @@ typedef struct llfree_tree_match {
 } llfree_tree_match_t;
 
 static inline llfree_request_t ll_unused llreq(uint8_t order, uint8_t tier,
-					       size_t local)
+					       ll_optional_t local)
 {
 	return (llfree_request_t){ .order = order,
 				   .tier = tier,
@@ -350,8 +352,8 @@ static inline llfree_request_t ll_unused llfree_simple_request(size_t cores,
 							       size_t core)
 {
 	if (order >= LLFREE_HUGE_ORDER)
-		return llreq(order, 1, core % cores);
-	return llreq(order, 0, core % cores);
+		return llreq(order, 1, ll_some(core % cores));
+	return llreq(order, 0, ll_some(core % cores));
 }
 
 // == More complex movable tiering example ==
@@ -394,8 +396,8 @@ static inline llfree_request_t ll_unused llfree_movable_request(size_t cores,
 								bool movable)
 {
 	if (order >= LLFREE_HUGE_ORDER)
-		return llreq(order, 2, core % cores);
+		return llreq(order, 2, ll_some(core % cores));
 	if (movable)
-		return llreq(order, 1, core % cores);
-	return llreq(order, 0, core % cores);
+		return llreq(order, 1, ll_some(core % cores));
+	return llreq(order, 0, ll_some(core % cores));
 }

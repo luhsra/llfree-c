@@ -121,10 +121,10 @@ void trees_put_or_reserve(trees_t *self, tree_id_t idx, treeF_t frames,
 	}
 }
 
-llfree_result_t trees_search(const trees_t *self, size_t start, size_t offset,
+llfree_result_t trees_search(const trees_t *self, tree_id_t start, size_t offset,
 			     size_t len, trees_access_fn cb, void *ctx)
 {
-	int64_t base = (int64_t)(start + self->len);
+	int64_t base = (int64_t)(start.value + self->len);
 	for (int64_t i = (int64_t)offset; i < (int64_t)len; ++i) {
 		int64_t off = i % 2 == 0 ? i / 2 : -((i + 1) / 2);
 		size_t idx = (size_t)(base + off) % self->len;
@@ -148,7 +148,7 @@ llfree_result_t trees_search(const trees_t *self, size_t start, size_t offset,
 }
 
 llfree_result_t trees_search_best(const trees_t *self, uint8_t tier,
-				  size_t start, size_t offset, size_t len,
+				  tree_id_t start, size_t offset, size_t len,
 				  treeF_t min_free, llfree_policy_fn policy,
 				  trees_access_fn cb, void *ctx)
 {
@@ -158,7 +158,7 @@ llfree_result_t trees_search_best(const trees_t *self, uint8_t tier,
 	};
 	struct best best[TREES_SEARCH_BEST] = { 0 };
 
-	int64_t base = (int64_t)(start + self->len);
+	int64_t base = (int64_t)(start.value + self->len);
 	for (int64_t i = (int64_t)offset; i < (int64_t)len; ++i) {
 		int64_t off = i % 2 == 0 ? i / 2 : -((i + 1) / 2);
 		size_t idx = (size_t)(base + off) % self->len;
@@ -289,7 +289,7 @@ llfree_result_t trees_change(trees_t *self, llfree_tree_match_t matcher,
 		return trees_change_at(matcher.id.value, &args);
 	}
 
-	return trees_search(self, 0, 0, self->len, trees_change_at, &args);
+	return trees_search(self, tree_id(0), 0, self->len, trees_change_at, &args);
 }
 
 void trees_print(const trees_t *self, size_t indent)
@@ -298,7 +298,7 @@ void trees_print(const trees_t *self, size_t indent)
 			 LLFREE_TREE_SIZE);
 	for (size_t i = 0; i < self->len; i++) {
 		tree_t tree = atom_load(&self->entries[i]);
-		tree_print(&tree, i, indent + 1);
+		tree_print(&tree, tree_id(i), indent + 1);
 	}
 	llfree_info_cont("%s}\n", INDENT(indent));
 }

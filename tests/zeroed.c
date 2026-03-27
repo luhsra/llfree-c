@@ -32,10 +32,10 @@ static llfree_tiering_t zeroed_tiering(size_t cores)
 	llfree_tiering_t t = { .num_tiers = 3,
 			       .default_tier = ZEROED_TIER_HUGE,
 			       .policy = zeroed_policy };
-	t.tiers[0] =
-		(llfree_tier_conf_t){ .tier = ZEROED_TIER_SMALL, .count = cores };
-	t.tiers[1] =
-		(llfree_tier_conf_t){ .tier = ZEROED_TIER_HUGE, .count = cores };
+	t.tiers[0] = (llfree_tier_conf_t){ .tier = ZEROED_TIER_SMALL,
+					   .count = cores };
+	t.tiers[1] = (llfree_tier_conf_t){ .tier = ZEROED_TIER_HUGE,
+					   .count = cores };
 	t.tiers[2] = (llfree_tier_conf_t){ .tier = ZEROED_TIER_HUGE_ZEROED,
 					   .count = cores };
 	return t;
@@ -43,13 +43,13 @@ static llfree_tiering_t zeroed_tiering(size_t cores)
 
 static llfree_request_t req_small(llfree_t *self, size_t core)
 {
-	return llreq(0, ZEROED_TIER_SMALL, core % ll_cores(self));
+	return llreq(0, ZEROED_TIER_SMALL, ll_some(core % ll_cores(self)));
 }
 
 static llfree_request_t req_zeroed_huge(llfree_t *self, size_t core)
 {
 	return llreq(LLFREE_HUGE_ORDER, ZEROED_TIER_HUGE_ZEROED,
-		     core % ll_cores(self));
+		     ll_some(core % ll_cores(self)));
 }
 
 static size_t tier_free_frames(const llfree_t *self, uint8_t tier)
@@ -119,7 +119,8 @@ declare_test(zeroed_prefers_tier)
 	llfree_validate(&upper);
 	check_equal("zu", llfree_frames(&upper), FRAMES);
 	check_equal("zu", tier_free_frames(&upper, ZEROED_TIER_HUGE), FRAMES);
-	check_equal("zu", tier_free_frames(&upper, ZEROED_TIER_HUGE_ZEROED), 0ul);
+	check_equal("zu", tier_free_frames(&upper, ZEROED_TIER_HUGE_ZEROED),
+		    0ul);
 
 	llfree_result_t conv = convert_any_free_huge_tree(&upper);
 	check_m(llfree_is_ok(conv),
@@ -129,7 +130,8 @@ declare_test(zeroed_prefers_tier)
 	check_equal("zu", tier_free_frames(&upper, ZEROED_TIER_HUGE_ZEROED),
 		    (size_t)LLFREE_TREE_SIZE);
 
-	llfree_result_t res = llfree_get(&upper, frame_id_none(), req_zeroed_huge(&upper, 0));
+	llfree_result_t res =
+		llfree_get(&upper, frame_id_none(), req_zeroed_huge(&upper, 0));
 	check(llfree_is_ok(res));
 	check_equal("u", res.tier, (unsigned)ZEROED_TIER_HUGE_ZEROED);
 
@@ -145,7 +147,8 @@ declare_test(zeroed_steals_from_huge)
 
 	llfree_validate(&upper);
 	check_equal("zu", tier_free_frames(&upper, ZEROED_TIER_HUGE), FRAMES);
-	check_equal("zu", tier_free_frames(&upper, ZEROED_TIER_HUGE_ZEROED), 0ul);
+	check_equal("zu", tier_free_frames(&upper, ZEROED_TIER_HUGE_ZEROED),
+		    0ul);
 
 	llfree_result_t conv = convert_any_free_huge_tree(&upper);
 	check(llfree_is_ok(conv));
@@ -157,11 +160,10 @@ declare_test(zeroed_steals_from_huge)
 	// A converted tree provides exactly LLFREE_TREE_CHILDREN huge frames.
 	const size_t zeroed_huge_capacity = LLFREE_TREE_CHILDREN;
 	for (size_t i = 0; i < zeroed_huge_capacity; i++) {
-		llfree_result_t r =
-			llfree_get(&upper, frame_id_none(), req_zeroed_huge(&upper, 0));
+		llfree_result_t r = llfree_get(&upper, frame_id_none(),
+					       req_zeroed_huge(&upper, 0));
 		check(llfree_is_ok(r));
-		check_equal("u", r.tier,
-			    (unsigned)ZEROED_TIER_HUGE_ZEROED);
+		check_equal("u", r.tier, (unsigned)ZEROED_TIER_HUGE_ZEROED);
 	}
 
 	// Next zeroed request should fallback by stealing from huge tier.
@@ -172,7 +174,8 @@ declare_test(zeroed_steals_from_huge)
 
 	llfree_validate(&upper);
 	check_equal("zu", tier_free_frames(&upper, ZEROED_TIER_HUGE_ZEROED),
-		    LLFREE_TREE_SIZE - (zeroed_huge_capacity << LLFREE_HUGE_ORDER));
+		    LLFREE_TREE_SIZE -
+			    (zeroed_huge_capacity << LLFREE_HUGE_ORDER));
 	return success;
 }
 
@@ -197,7 +200,8 @@ declare_test(zeroed_convert_until_exhausted)
 		}
 		check_equal("zu", tier_free_frames(&upper, ZEROED_TIER_HUGE),
 			    huge_before - LLFREE_TREE_SIZE);
-		check_equal("zu", tier_free_frames(&upper, ZEROED_TIER_HUGE_ZEROED),
+		check_equal("zu",
+			    tier_free_frames(&upper, ZEROED_TIER_HUGE_ZEROED),
 			    zeroed_before + LLFREE_TREE_SIZE);
 		converted++;
 	}
@@ -213,12 +217,14 @@ declare_test(zeroed_convert_until_exhausted)
 	check_equal("u", again.error, (unsigned)LLFREE_ERR_MEMORY);
 
 	// Zeroed huge allocations should still succeed from zeroed tier.
-	llfree_result_t res = llfree_get(&upper, frame_id_none(), req_zeroed_huge(&upper, 1));
+	llfree_result_t res =
+		llfree_get(&upper, frame_id_none(), req_zeroed_huge(&upper, 1));
 	check(llfree_is_ok(res));
 	check_equal("u", res.tier, (unsigned)ZEROED_TIER_HUGE_ZEROED);
 
 	// Small allocation path still works in this tiering setup.
-	llfree_result_t small = llfree_get(&upper, frame_id_none(), req_small(&upper, 0));
+	llfree_result_t small =
+		llfree_get(&upper, frame_id_none(), req_small(&upper, 0));
 	check(llfree_is_ok(small));
 	check_equal("u", small.tier, (unsigned)ZEROED_TIER_SMALL);
 

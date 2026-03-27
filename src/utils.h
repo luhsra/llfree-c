@@ -14,9 +14,6 @@
 #define LL_MIN(a, b) ((a) > (b) ? (b) : (a))
 #define LL_MASK(bits) ((1u << (bits)) - 1)
 
-/// Optional size_t type
-ll_def_optional(size_t, ll, 0);
-
 /// Iterates over a Range between multiples of len starting at idx.
 ///
 /// Starting at idx up to the next Multiple of len (exclusive). Then the next

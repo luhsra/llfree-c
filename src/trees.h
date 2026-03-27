@@ -78,13 +78,13 @@ typedef llfree_result_t (*trees_access_fn)(tree_id_t idx, void *ctx);
 typedef treeF_t (*trees_fetch_free_fn)(tree_id_t idx, void *ctx);
 
 /// Linear alternating search from start.
-llfree_result_t trees_search(const trees_t *self, size_t start, size_t offset,
+llfree_result_t trees_search(const trees_t *self, tree_id_t start, size_t offset,
 			     size_t len, trees_access_fn cb, void *ctx);
 
 /// Best-fit search: collect N best candidates by policy priority, then try them.
 #define TREES_SEARCH_BEST 3
 llfree_result_t trees_search_best(const trees_t *self, uint8_t tier,
-				  size_t start, size_t offset, size_t len,
+				  tree_id_t start, size_t offset, size_t len,
 				  treeF_t min_free, llfree_policy_fn policy,
 				  trees_access_fn cb, void *ctx);
 

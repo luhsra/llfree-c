@@ -120,13 +120,13 @@ bool tree_change(tree_t *self, uint8_t match_tier, treeF_t min_free,
 	return true;
 }
 
-void tree_print(tree_t *self, size_t idx, size_t indent)
+void tree_print(tree_t *self, tree_id_t idx, size_t indent)
 {
 	if (indent == 0)
 		llfree_info_start();
 	llfree_info_cont("%stree[%" PRIuS
 			 "] { reserved: %d, tier: %u, free: %" PRIuS " }\n",
-			 INDENT(indent), idx, self->reserved,
+			 INDENT(indent), idx.value, self->reserved,
 			 (unsigned)self->tier, (size_t)self->free);
 	if (indent == 0)
 		llfree_info_end();

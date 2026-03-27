@@ -79,4 +79,4 @@ bool tree_change(tree_t *self, uint8_t match_tier, treeF_t min_free,
 		treeF_t online_free);
 
 /// Debug print the tree
-void tree_print(tree_t *self, size_t idx, size_t indent);
+void tree_print(tree_t *self, tree_id_t idx, size_t indent);
