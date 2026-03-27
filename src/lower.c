@@ -138,14 +138,15 @@ static llfree_result_t get_max(lower_t *self, frame_id_t frame)
 {
 	assert(self != 0);
 
-	size_t idx = child_from_frame(frame) / 2;
+	size_t idx = child_from_frame(frame).value / 2;
 	assert(idx < child_count(self) / 2);
 	for_offsetted(idx, LLFREE_TREE_CHILDREN / 2, current_i) {
 		child_pair_t old;
 		_Atomic(child_pair_t) *pair =
 			(_Atomic(child_pair_t) *)get_child(self, current_i * 2);
 		if (atom_update(pair, old, child_set_max)) {
-			return llfree_ok(frame_from_child(current_i * 2), 0);
+			return llfree_ok(
+				frame_from_child(huge_id(current_i * 2)), 0);
 		}
 	}
 
@@ -156,27 +157,29 @@ static llfree_result_t get_huge(lower_t *self, frame_id_t frame)
 {
 	assert(self != 0);
 
-	size_t idx = child_from_frame(frame);
+	size_t idx = child_from_frame(frame).value;
 	assert(idx < child_count(self));
 	for_offsetted(idx, LLFREE_TREE_CHILDREN, current_i) {
 		child_t old;
 		_Atomic(child_t) *child = get_child(self, current_i);
 		if (atom_update(child, old, child_set_huge)) {
-			return llfree_ok(frame_from_child(current_i), 0);
+			return llfree_ok(frame_from_child(huge_id(current_i)),
+					 0);
 		}
 	}
 
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
-static llfree_result_t lower_get_at(lower_t *self, frame_id_t frame, size_t order)
+static llfree_result_t lower_get_at(lower_t *self, frame_id_t frame,
+				    size_t order)
 {
 	if (frame.value + (1u << order) > self->frames ||
 	    frame.value % (1u << order) != 0) {
 		llfree_warn("invalid frame %" PRIu64 "\n", frame.value);
 		return llfree_err(LLFREE_ERR_ADDRESS);
 	}
-	size_t child_idx = child_from_frame(frame);
+	size_t child_idx = child_from_frame(frame).value;
 	_Atomic(child_t) *child = get_child(self, child_idx);
 	if (order == LLFREE_MAX_ORDER) {
 		child_pair_t old;
@@ -194,8 +197,8 @@ static llfree_result_t lower_get_at(lower_t *self, frame_id_t frame, size_t orde
 	child_t old;
 	if (atom_update(child, old, child_dec, order)) {
 		bitfield_t *field = &self->fields[child_idx];
-		llfree_result_t ret =
-			field_toggle(field, frame.value % CHILD_N, order, false);
+		llfree_result_t ret = field_toggle(field, frame.value % CHILD_N,
+						   order, false);
 		if (llfree_is_ok(ret))
 			return llfree_ok(frame, 0);
 		if (!atom_update(child, old, child_inc, order)) {
@@ -217,7 +220,7 @@ llfree_result_t lower_get(lower_t *self, const frame_id_t start_frame,
 		if (order == LLFREE_HUGE_ORDER)
 			return get_huge(self, start_frame);
 
-		const size_t idx = child_from_frame(start_frame);
+		const size_t idx = child_from_frame(start_frame).value;
 		assert(idx < child_count(self));
 		for_offsetted(idx, LLFREE_TREE_CHILDREN, current_i) {
 			child_t old;
@@ -227,10 +230,11 @@ llfree_result_t lower_get(lower_t *self, const frame_id_t start_frame,
 					field_set_next(&self->fields[current_i],
 						       start_frame, order);
 				if (llfree_is_ok(pos)) {
+					frame_id_t offset = frame_from_child(
+						huge_id(current_i));
 					return llfree_ok(
-						frame_id(
-							frame_from_child(current_i).value +
-							pos.frame.value),
+						frame_id(offset.value +
+							 pos.frame.value),
 						0);
 				}
 
@@ -287,7 +291,7 @@ llfree_result_t lower_put(lower_t *self, frame_id_t frame, size_t order)
 		return llfree_err(LLFREE_ERR_ADDRESS);
 	}
 
-	const size_t child_idx = child_from_frame(frame);
+	const size_t child_idx = child_from_frame(frame).value;
 	_Atomic(child_t) *child = get_child(self, child_idx);
 
 	if (order == LLFREE_MAX_ORDER) {
@@ -359,18 +363,18 @@ ll_stats_t lower_stats_at(const lower_t *self, frame_id_t frame, size_t order)
 	}
 
 	if (order == 0) {
-		size_t i = child_from_frame(frame);
+		size_t i = child_from_frame(frame).value;
 		child_t child = atom_load(get_child(self, i));
 		if (child.free == CHILD_N) {
 			stats.free_frames = CHILD_N;
 			stats.free_huge = 1;
 		} else if (child.free > 0) {
-			stats.free_frames = field_is_free(&self->fields[i],
-						  frame.value % CHILD_N);
+			stats.free_frames = field_is_free(
+				&self->fields[i], frame.value % CHILD_N);
 			stats.free_huge = 0;
 		}
 	} else if (order == LLFREE_HUGE_ORDER) {
-		size_t i = child_from_frame(frame);
+		size_t i = child_from_frame(frame).value;
 		child_t child = atom_load(get_child(self, i));
 		stats.free_frames = (size_t)child.free;
 		stats.free_huge = (child.free == CHILD_N);

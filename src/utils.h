@@ -62,13 +62,13 @@ static inline ll_unused frame_id_t frame_from_tree(tree_id_t tree)
 	return frame_id((uint64_t)tree.value << LLFREE_TREE_ORDER);
 }
 
-static inline ll_unused size_t child_from_frame(frame_id_t frame)
+static inline ll_unused huge_id_t child_from_frame(frame_id_t frame)
 {
-	return (size_t)(frame.value >> LLFREE_CHILD_ORDER);
+	return huge_id((size_t)(frame.value >> LLFREE_CHILD_ORDER));
 }
-static inline ll_unused frame_id_t frame_from_child(size_t child)
+static inline ll_unused frame_id_t frame_from_child(huge_id_t child)
 {
-	return frame_id((uint64_t)child << LLFREE_CHILD_ORDER);
+	return frame_id((uint64_t)child.value << LLFREE_CHILD_ORDER);
 }
 static inline ll_unused huge_id_t huge_from_frame(frame_id_t frame)
 {

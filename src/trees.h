@@ -22,8 +22,8 @@ static inline ll_unused size_t trees_metadata_size(size_t frames)
 	return align_up(sizeof(tree_t) * tree_len, LLFREE_CACHE_SIZE);
 }
 
-/// Initialize callback: given tree start frame index, return free frame count
-typedef treeF_t (*trees_init_fn)(size_t tree_start_frame, void *ctx);
+/// Initialize callback: given tree start frame id, return free frame count
+typedef treeF_t (*trees_init_fn)(frame_id_t tree_start_frame, void *ctx);
 
 /// Initialize the tree array.
 /// If init_fn is NULL, entries are assumed already valid (INIT_NONE).

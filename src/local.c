@@ -28,10 +28,10 @@ _Static_assert(sizeof(local_history_t) == sizeof(uint64_t), "size overflow");
 #endif // LLFREE_ENABLE_FREE_RESERVE
 
 static inline reserved_t ll_reserved_new(bool present, treeF_t free,
-					 uint64_t start_row)
+					 row_id_t start_row)
 {
 	assert(free <= LLFREE_TREE_SIZE);
-	return (reserved_t){ present, free, start_row };
+	return (reserved_t){ present, free, start_row.value };
 }
 
 static bool ll_reserved_dec(reserved_t *self, tree_id_optional_t tree_idx,
@@ -67,13 +67,13 @@ static bool ll_reserved_swap(reserved_t *self, reserved_t new)
 	return true;
 }
 
-static bool ll_reserved_set_start(reserved_t *self, uint64_t start_row)
+static bool ll_reserved_set_start(reserved_t *self, row_id_t start_row)
 {
 	if (!self->present ||
 	    tree_from_row(row_id(self->start_row)).value !=
-		    tree_from_row(row_id(start_row)).value)
+		    tree_from_row(start_row).value)
 		return false;
-	self->start_row = start_row;
+	self->start_row = start_row.value;
 	return true;
 }
 
@@ -82,7 +82,7 @@ static bool ll_reserved_take(reserved_t *self)
 {
 	if (!self->present)
 		return false;
-	*self = ll_reserved_new(false, 0, 0);
+	*self = ll_reserved_new(false, 0, row_id(0));
 	return true;
 }
 
@@ -154,7 +154,7 @@ void ll_local_init(local_t *self, const llfree_tiering_t *tiering)
 		for (size_t j = 0; j < count; j++) {
 			entry_t *entry = &base[offset + j];
 			atom_store(&entry->preferred,
-				   ll_reserved_new(false, 0, 0));
+				   ll_reserved_new(false, 0, row_id(0)));
 #if LLFREE_ENABLE_FREE_RESERVE
 			atom_store(&entry->last, ((local_history_t){ 0, 0 }));
 #endif
@@ -192,7 +192,7 @@ static inline local_result_t make_result(bool success, uint8_t tier,
 		.present = old.present,
 		.tier = tier,
 		.free = old.free,
-		.start_row = old.start_row,
+		.start_row = row_id(old.start_row),
 	};
 }
 
@@ -221,7 +221,7 @@ bool ll_local_put(local_t *self, uint8_t tier, size_t index,
 }
 
 local_result_t ll_local_set_start(local_t *self, uint8_t tier, size_t index,
-				  uint64_t start_row)
+				  row_id_t start_row)
 {
 	assert(tier < LLFREE_MAX_TIERS);
 	assert(index < self->tiers[tier].len);
@@ -239,7 +239,7 @@ local_result_t ll_local_swap(local_t *self, uint8_t tier, size_t index,
 	assert(index < self->tiers[tier].len);
 	entry_t *entry = &self->tiers[tier].entries[index];
 	reserved_t new =
-		ll_reserved_new(true, new_free, row_from_tree(new_tree_idx).value);
+		ll_reserved_new(true, new_free, row_from_tree(new_tree_idx));
 	reserved_t old;
 	atom_update(&entry->preferred, old, ll_reserved_swap, new);
 	return make_result(true, tier, old);
@@ -320,22 +320,21 @@ demote_any_result_t ll_local_demote_any(local_t *self, uint8_t tier,
 
 			// Compute new tree: old minus frames we're about to allocate
 			reserved_t new_res = ll_reserved_new(
-				true, old.free - frames, old.start_row);
+				true, old.free - frames, row_id(old.start_row));
 
 			// Swap into the requesting local
 			demote_any_result_t result = { .found = true,
-						       .row = old.start_row };
+						       .row = row_id(old.start_row),
+						       .old_row = row_id_none() };
 			tier_locals_t *req = &self->tiers[tier];
 			if (index.present && req->len > 0 && idx < req->len) {
 				reserved_t prev;
 				atom_update(&req->entries[idx].preferred, prev,
 					    ll_reserved_swap, new_res);
-				result.old_present = prev.present;
-				result.old_row = prev.start_row;
+				if (prev.present)
+					result.old_row = row_id_some(row_id(prev.start_row));
 				result.old_tier = tier;
 				result.old_free = prev.free;
-			} else {
-				result.old_present = false;
 			}
 			return result;
 		}
@@ -389,7 +388,7 @@ local_result_t ll_local_drain(local_t *self, uint8_t tier, size_t index)
 	entry_t *entry = &self->tiers[tier].entries[index];
 	reserved_t old;
 	atom_update(&entry->preferred, old, ll_reserved_swap,
-		    ll_reserved_new(false, 0, 0));
+		    ll_reserved_new(false, 0, row_id(0)));
 	return make_result(old.present, tier, old);
 }
 
@@ -425,7 +424,10 @@ local_result_t ll_local_stats_at(const local_t *self, tree_id_t tree_idx)
 		}
 	}
 	return (local_result_t){
-		.success = false, .present = false, .free = 0, .start_row = 0
+		.success = false,
+		.present = false,
+		.free = 0,
+		.start_row = row_id(0)
 	};
 }
 

@@ -30,11 +30,11 @@ typedef struct local_result {
 	bool present; /// was there a previous reservation?
 	uint8_t tier; /// tier of the reservation
 	treeF_t free; /// free count
-	uint64_t start_row; /// bitfield row index of reserved tree
+	row_id_t start_row; /// bitfield row index of reserved tree
 } local_result_t;
 
 static inline ll_unused local_result_t local_ok(uint8_t tier, treeF_t free,
-				      uint64_t start_row)
+				      row_id_t start_row)
 {
 	return (local_result_t){ .success = true,
 				 .present = true,
@@ -43,7 +43,7 @@ static inline ll_unused local_result_t local_ok(uint8_t tier, treeF_t free,
 				 .start_row = start_row };
 }
 static inline ll_unused local_result_t local_fail(uint8_t tier, bool present,
-					treeF_t free, uint64_t start_row)
+					treeF_t free, row_id_t start_row)
 {
 	return (local_result_t){ .success = false,
 				 .present = present,
@@ -64,7 +64,7 @@ bool ll_local_put(local_t *self, uint8_t tier, size_t index,
 
 /// Update the starting row for the given (tier, index).
 local_result_t ll_local_set_start(local_t *self, uint8_t tier, size_t index,
-				  uint64_t start_row);
+				  row_id_t start_row);
 
 /// Swap (tier, index) with a new tree (returns the old reservation).
 local_result_t ll_local_swap(local_t *self, uint8_t tier, size_t index,
@@ -80,9 +80,8 @@ local_result_t ll_local_steal(local_t *self, uint8_t tier, size_t index,
 /// Result of ll_local_demote_any.
 typedef struct demote_any_result {
 	bool found;
-	uint64_t row; /// row to allocate from
-	bool old_present; /// was there an old tree in the requesting local?
-	uint64_t old_row;
+	row_id_t row; /// row to allocate from
+	row_id_optional_t old_row; /// old tree in the requesting local, if present
 	uint8_t old_tier; /// tier of old tree (= requesting tier)
 	treeF_t old_free;
 } demote_any_result_t;

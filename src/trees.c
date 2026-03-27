@@ -12,7 +12,8 @@ void trees_init(trees_t *self, size_t frames, uint8_t *buffer,
 
 	if (init_fn != NULL) {
 		for (size_t i = 0; i < self->len; ++i) {
-			treeF_t free = init_fn(i * LLFREE_TREE_SIZE, init_ctx);
+			treeF_t free =
+				init_fn(frame_from_tree(tree_id(i)), init_ctx);
 			self->entries[i] = tree_new(false, default_tier, free);
 		}
 	}
