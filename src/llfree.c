@@ -509,6 +509,7 @@ get_demoting(llfree_t *self, const llfree_request_t *request, tree_id_t start)
 
 	if (request->local.present && tier_count.present &&
 	    tier_count.value > 0 && tier_count.value < self->trees.len) {
+		// Reserve new tree with demotion
 		reserve_args_t args = { .self = self,
 					.order = request->order,
 					.tier = request->tier,
@@ -521,16 +522,21 @@ get_demoting(llfree_t *self, const llfree_request_t *request, tree_id_t start)
 		if (res.error != LLFREE_ERR_MEMORY)
 			return res;
 
-		return demote_local(self, request, frame_id_none());
+	} else {
+		// Global allocation with demotion
+		get_global_args_t args = { .self = self,
+					   .tier = request->tier,
+					   .order = request->order,
+					   .check = check_demote_tree,
+					   .check_args = &check_args };
+		llfree_result_t res = trees_search(&self->trees, start, 0,
+						   self->trees.len, get_global,
+						   &args);
+		if (res.error != LLFREE_ERR_MEMORY)
+			return res;
 	}
-	// Global path with demotion-only
-	get_global_args_t args = { .self = self,
-				   .tier = request->tier,
-				   .order = request->order,
-				   .check = check_demote_tree,
-				   .check_args = &check_args };
-	return trees_search(&self->trees, start, 0, self->trees.len, get_global,
-			    &args);
+	// Fallback to demoting local
+	return demote_local(self, request, frame_id_none());
 }
 
 static llfree_result_t llfree_get_at(llfree_t *self, frame_id_t frame,
