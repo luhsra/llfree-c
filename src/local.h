@@ -21,8 +21,8 @@ size_t ll_local_mem_size(const local_t *self);
 /// Get the number of tiers
 uint8_t ll_local_num_tiers(const local_t *self);
 
-/// Returns the number of local slots for a given tier, or LLFREE_LOCAL_NONE if tier not configured.
-size_t ll_local_tier_locals(const local_t *self, uint8_t tier);
+/// Returns the number of local slots for a given tier, or ll_none() if tier not configured.
+ll_optional_t ll_local_tier_locals(const local_t *self, uint8_t tier);
 
 /// Result of a local get/put operation
 typedef struct local_result {

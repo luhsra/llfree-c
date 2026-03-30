@@ -218,14 +218,14 @@ static llfree_result_t get_reserve(tree_id_t idx, void *ctx)
 			   &old_free, &target_tier))
 		return llfree_err(LLFREE_ERR_MEMORY);
 
-	size_t tier_len = ll_local_tier_locals(self->local, target_tier);
-	if (tier_len == 0 || tier_len == LLFREE_LOCAL_NONE) {
+	ll_optional_t tier_len = ll_local_tier_locals(self->local, target_tier);
+	if (!tier_len.present || tier_len.value == 0) {
 		trees_unreserve(&self->trees, idx, old_free, target_tier,
 				self->policy);
 		llfree_warn("no locals for tier %u", target_tier);
 		return llfree_err(LLFREE_ERR_MEMORY);
 	}
-	size_t local = rargs->local % tier_len;
+	size_t local = rargs->local % tier_len.value;
 
 	llfree_result_t res = lower_get(&self->lower, frame_from_tree(idx),
 					rargs->order, frame_id_none());
@@ -389,7 +389,7 @@ static llfree_result_t steal_local(llfree_t *self,
 	tree_id_optional_t tree_idx =
 		frame.present ? tree_id_some(tree_from_frame(frame.value)) :
 				tree_id_none();
-	size_t index = request->local.present ? 0 : request->local.value;
+	size_t index = request->local.present ? request->local.value : 0;
 
 	local_result_t res = ll_local_steal(self->local, request->tier, index,
 					    tree_idx, frames, self->policy);
@@ -413,11 +413,12 @@ static llfree_result_t steal_local(llfree_t *self,
 static llfree_result_t
 get_matching(llfree_t *self, const llfree_request_t *request, tree_id_t *start)
 {
-	size_t tier_count = ll_local_tier_locals(self->local, request->tier);
+	ll_optional_t tier_count =
+		ll_local_tier_locals(self->local, request->tier);
 	treeF_t frames = (treeF_t)(1u << request->order);
 
-	if (request->local.present && tier_count != LLFREE_LOCAL_NONE &&
-	    tier_count > 0 && tier_count < self->trees.len) {
+	if (request->local.present && tier_count.present &&
+	    tier_count.value != 0 && tier_count.value < self->trees.len) {
 		for (size_t i = 0; i < RETRIES; i++) {
 			local_result_t old;
 			llfree_result_t res = get_matching_local(
@@ -498,15 +499,16 @@ static llfree_result_t demote_local(llfree_t *self,
 static llfree_result_t
 get_demoting(llfree_t *self, const llfree_request_t *request, tree_id_t start)
 {
-	size_t tier_count = ll_local_tier_locals(self->local, request->tier);
+	ll_optional_t tier_count =
+		ll_local_tier_locals(self->local, request->tier);
 	struct check_args check_args = {
 		.tier = request->tier,
 		.free = p_range(1 << request->order, LLFREE_TREE_SIZE),
 		.policy = self->policy,
 	};
 
-	if (request->local.present && tier_count > 0 &&
-	    tier_count != LLFREE_LOCAL_NONE && tier_count < self->trees.len) {
+	if (request->local.present && tier_count.present &&
+	    tier_count.value > 0 && tier_count.value < self->trees.len) {
 		reserve_args_t args = { .self = self,
 					.order = request->order,
 					.tier = request->tier,
@@ -599,11 +601,12 @@ llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 		return llfree_get_at(self, frame.value, request);
 	}
 
-	size_t tier_count = ll_local_tier_locals(self->local, request.tier);
+	ll_optional_t tier_count =
+		ll_local_tier_locals(self->local, request.tier);
 	tree_id_t start;
-	if (tier_count != LLFREE_LOCAL_NONE && tier_count > 0 &&
+	if (tier_count.present && tier_count.value != 0 &&
 	    request.local.present) {
-		start = tree_id(self->trees.len / tier_count *
+		start = tree_id(self->trees.len / tier_count.value *
 				request.local.value);
 	} else {
 		start = tree_id(0);
@@ -626,10 +629,14 @@ llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 		// Go downwards
 		uint8_t tier = (uint8_t)((LLFREE_MAX_TIERS + request.tier - t) %
 					 LLFREE_MAX_TIERS);
-		if (ll_local_tier_locals(self->local, tier) !=
-		    LLFREE_LOCAL_NONE) {
-			llfree_request_t req = request;
-			req.tier = tier;
+		ll_optional_t tier_locals =
+			ll_local_tier_locals(self->local, tier);
+		if (tier_locals.present) {
+			llfree_request_t req = llreq(
+				request.order, tier,
+				ll_some(request.local.value %
+					tier_locals.value) // adjust to fit
+			);
 			res = get_matching(self, &req, &start);
 			if (res.error != LLFREE_ERR_MEMORY)
 				return res;
@@ -704,10 +711,10 @@ llfree_result_t llfree_change_tree(llfree_t *self, llfree_tree_match_t matcher,
 void llfree_drain(llfree_t *self)
 {
 	for (uint8_t t = 0; t < LLFREE_MAX_TIERS; t++) {
-		size_t len = ll_local_tier_locals(self->local, t);
-		if (len == LLFREE_LOCAL_NONE)
+		ll_optional_t locals = ll_local_tier_locals(self->local, t);
+		if (!locals.present)
 			continue;
-		for (size_t i = 0; i < len; i++) {
+		for (size_t i = 0; i < locals.value; i++) {
 			local_result_t old = ll_local_drain(self->local, t, i);
 			if (!old.present)
 				continue;

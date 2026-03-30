@@ -110,8 +110,6 @@ enum : uint8_t {
 	LLFREE_INIT_MAX = 5,
 };
 
-#define LLFREE_LOCAL_NONE SIZE_MAX
-
 /// Request for memory allocation, matching the Rust `Request` struct.
 typedef struct llfree_request {
 	/// Allocation order (frames = 1 << order)
@@ -119,19 +117,9 @@ typedef struct llfree_request {
 	/// Requested tier
 	uint8_t tier;
 	/// Within-tier local index (e.g. core id),
-	/// or LLFREE_LOCAL_NONE for global-only allocation.
+	/// or ll_none() for global-only allocation.
 	ll_optional_t local;
 } llfree_request_t;
-
-/// Match conditions for llfree_change_tree.
-typedef struct llfree_tree_match {
-	/// Match a specific tree index (ll_none() for any tree).
-	tree_id_optional_t id;
-	/// Match a specific tier (LLFREE_TIER_NONE for any tier).
-	uint8_t tier;
-	/// Require at least this many free frames in the tree.
-	size_t free;
-} llfree_tree_match_t;
 
 static inline llfree_request_t ll_unused llreq(uint8_t order, uint8_t tier,
 					       ll_optional_t local)
@@ -236,7 +224,7 @@ llfree_meta_size_t llfree_metadata_size_of(const llfree_t *self);
 /// The actual tier may differ from request.tier if demotion occurred.
 /// If frame is present, allocates that specific frame (get_at behavior);
 /// otherwise allocates any frame near the local slot's preferred location.
-/// Set request.local to LLFREE_LOCAL_NONE for global-only allocation.
+/// Set request.local to ll_none() for global-only allocation.
 llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 			   llfree_request_t request);
 /// Frees a frame
@@ -245,6 +233,16 @@ llfree_result_t llfree_put(llfree_t *self, frame_id_t frame,
 
 /// Unreserves all local reservations.
 void llfree_drain(llfree_t *self);
+
+/// Match conditions for llfree_change_tree.
+typedef struct llfree_tree_match {
+	/// Match a specific tree index (ll_none() for any tree).
+	tree_id_optional_t id;
+	/// Match a specific tier (LLFREE_TIER_NONE for any tier).
+	uint8_t tier;
+	/// Require at least this many free frames in the tree.
+	size_t free;
+} llfree_tree_match_t;
 
 /// Tree operation for llfree_change_tree.
 typedef enum llfree_tree_operation {

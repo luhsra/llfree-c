@@ -5,7 +5,7 @@
 #include "trees.h"
 
 // Helper macros for movable tiering requests
-#define ll_cores(self) ll_local_tier_locals((self)->local, 0)
+#define ll_cores(self) ll_local_tier_locals((self)->local, 0).value
 #define llreq(self, core, order) \
 	llfree_movable_request(ll_cores(self), (uint8_t)(order), core, false)
 

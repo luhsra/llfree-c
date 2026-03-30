@@ -11,7 +11,7 @@ enum : uint8_t {
 	ZEROED_TIER_HUGE_ZEROED = 2,
 };
 
-#define ll_cores(self) ll_local_tier_locals((self)->local, 0)
+#define ll_cores(self) ll_local_tier_locals((self)->local, 0).value
 
 static llfree_policy_t zeroed_policy(uint8_t requested, uint8_t target,
 				     size_t free)
