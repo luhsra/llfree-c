@@ -71,20 +71,18 @@ bool tree_sync_steal(tree_t *self, treeF_t min)
 }
 
 bool tree_put_or_reserve(tree_t *self, treeF_t frames, uint8_t tier,
-			 bool *reserve, treeF_t min, uint8_t default_tier)
+			 llfree_policy_fn policy, uint8_t default_tier,
+			 treeF_t min, bool *reserve)
 {
-	treeF_t free = self->free + frames;
-	assert(free <= LLFREE_TREE_SIZE);
-	self->free = free;
-	if (free == LLFREE_TREE_SIZE)
-		self->tier = default_tier;
+	bool success = tree_put(self, frames, policy, default_tier);
+	assert(success); // should never fail
 
-	if (*reserve && !self->reserved && self->tier == tier &&
+	if (reserve && *reserve && !self->reserved && self->tier == tier &&
 	    self->free > min) {
-		*reserve = true;
 		self->free = 0;
 		self->reserved = true;
-	} else {
+		*reserve = true; // keep: race if CAS fails
+	} else if (reserve) {
 		*reserve = false;
 	}
 	return true;

@@ -661,23 +661,20 @@ llfree_result_t llfree_put(llfree_t *self, frame_id_t frame,
 	treeF_t frames = (treeF_t)(1u << request.order);
 
 	if (request.local.present) {
-		bool may_reserve = LLFREE_ENABLE_FREE_RESERVE &&
-				   ll_local_free_inc(self->local, request.tier,
-						     request.local.value,
-						     tree_idx);
+		bool reserve = LLFREE_ENABLE_FREE_RESERVE &&
+			       ll_local_free_inc(self->local, request.tier,
+						 request.local.value, tree_idx);
 
 		if (ll_local_put(self->local, request.tier, request.local.value,
 				 tree_idx, frames)) {
 			return llfree_ok(frame_id(0), 0);
 		}
 
-		bool did_reserve;
 		treeF_t old_free;
 		trees_put_or_reserve(&self->trees, tree_idx, frames, tier,
-				     may_reserve, self->policy, &did_reserve,
-				     &old_free);
+				     &reserve, self->policy, &old_free);
 
-		if (did_reserve) {
+		if (reserve) {
 			treeF_t swap_free = old_free + frames;
 			swap_reserved(self, request.tier, request.local.value,
 				      tree_idx, swap_free);

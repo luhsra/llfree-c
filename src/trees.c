@@ -31,8 +31,7 @@ tree_t trees_load(const trees_t *self, tree_id_t idx)
 }
 
 bool trees_get(trees_t *self, tree_id_t idx, treeF_t frames,
-	       tree_check_fn check,
-	       void *args, uint8_t *out_tier)
+	       tree_check_fn check, void *args, uint8_t *out_tier)
 {
 	assert(idx.value < self->len);
 	tree_t old;
@@ -52,14 +51,12 @@ void trees_put(trees_t *self, tree_id_t idx, treeF_t frames,
 }
 
 bool trees_reserve(trees_t *self, tree_id_t idx, tree_check_fn check,
-		   void *args,
-		   treeF_t *out_free, uint8_t *out_tier)
+		   void *args, treeF_t *out_free, uint8_t *out_tier)
 {
 	assert(idx.value < self->len);
 	tree_t old;
 	bool ok = atom_update(&self->entries[idx.value], old, tree_reserve,
-			      out_tier,
-			      check, args);
+			      out_tier, check, args);
 	if (ok && out_free != NULL)
 		*out_free = old.free;
 	return ok;
@@ -71,8 +68,7 @@ void trees_unreserve(trees_t *self, tree_id_t idx, treeF_t free, uint8_t tier,
 	assert(idx.value < self->len);
 	tree_t old;
 	atom_update(&self->entries[idx.value], old, tree_unreserve_add, free,
-		    tier,
-		    policy, self->default_tier);
+		    tier, policy, self->default_tier);
 }
 
 bool trees_sync_steal(trees_t *self, tree_id_t idx, treeF_t min,
@@ -88,41 +84,22 @@ bool trees_sync_steal(trees_t *self, tree_id_t idx, treeF_t min,
 }
 
 void trees_put_or_reserve(trees_t *self, tree_id_t idx, treeF_t frames,
-			  uint8_t tier, bool may_reserve,
-			  llfree_policy_fn policy, bool *did_reserve,
+			  uint8_t tier, bool *reserve, llfree_policy_fn policy,
 			  treeF_t *out_old_free)
 {
 	assert(idx.value < self->len);
-	(void)policy;
-	// Manual CAS loop: may_reserve must stay constant across retries
-	// (unlike the old tree_put_or_reserve which modified *reserve in place)
-	tree_t old = atom_load(&self->entries[idx.value]);
-	while (true) {
-		tree_t new = old;
-		new.free += frames;
-		assert(new.free <= LLFREE_TREE_SIZE);
-		if (new.free == LLFREE_TREE_SIZE)
-			new.tier = self->default_tier;
-
-		bool reserve_this = may_reserve &&
-				    !new.reserved &&new.tier ==
-					    tier &&new.free > TREES_MIN_FREE;
-		if (reserve_this) {
-			new.free = 0;
-			new.reserved = true;
-		}
-
-		if (atom_cmp_exchange_weak(&self->entries[idx.value], &old, new)) {
-			*did_reserve = reserve_this;
-			if (reserve_this && out_old_free != NULL)
-				*out_old_free = old.free;
-			return;
-		}
-	}
+	tree_t old;
+	bool success = atom_update(&self->entries[idx.value], old,
+				   tree_put_or_reserve, frames, tier, policy,
+				   self->default_tier, TREES_MIN_FREE, reserve);
+	assert(success); // Should never fail
+	if (out_old_free != NULL)
+		*out_old_free = old.free;
 }
 
-llfree_result_t trees_search(const trees_t *self, tree_id_t start, size_t offset,
-			     size_t len, trees_access_fn cb, void *ctx)
+llfree_result_t trees_search(const trees_t *self, tree_id_t start,
+			     size_t offset, size_t len, trees_access_fn cb,
+			     void *ctx)
 {
 	int64_t base = (int64_t)(start.value + self->len);
 	for (int64_t i = (int64_t)offset; i < (int64_t)len; ++i) {
@@ -134,10 +111,9 @@ llfree_result_t trees_search(const trees_t *self, tree_id_t start, size_t offset
 				llfree_debug(
 					"large search o=%zu i=%zd len=%zu -> tree %zu",
 					offset, (ssize_t)i, len,
-						llfree_is_ok(res) ?
-							tree_from_frame(
-								res.frame).value :
-							(size_t)-1);
+					llfree_is_ok(res) ?
+						tree_from_frame(res.frame).value :
+						(size_t)-1);
 			return res;
 		}
 	}
@@ -261,8 +237,8 @@ static llfree_result_t trees_change_at(tree_id_t idx, void *ctx)
 			return llfree_err(LLFREE_ERR_MEMORY);
 		}
 
-		if (atom_cmp_exchange_weak(&args->trees->entries[idx.value], &old,
-					   desired)) {
+		if (atom_cmp_exchange_weak(&args->trees->entries[idx.value],
+					   &old, desired)) {
 			return llfree_ok(frame_id(0), 0);
 		}
 	}
@@ -289,7 +265,8 @@ llfree_result_t trees_change(trees_t *self, llfree_tree_match_t matcher,
 		return trees_change_at(matcher.id.value, &args);
 	}
 
-	return trees_search(self, tree_id(0), 0, self->len, trees_change_at, &args);
+	return trees_search(self, tree_id(0), 0, self->len, trees_change_at,
+			    &args);
 }
 
 void trees_print(const trees_t *self, size_t indent)

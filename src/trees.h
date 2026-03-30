@@ -48,12 +48,10 @@ void trees_put(trees_t *self, tree_id_t idx, treeF_t frames,
 /// Reserve a tree if check permits.
 /// On success, writes the old free count to *out_free and tier to *out_tier.
 bool trees_reserve(trees_t *self, tree_id_t idx, tree_check_fn check,
-		   void *args,
-		   treeF_t *out_free, uint8_t *out_tier);
+		   void *args, treeF_t *out_free, uint8_t *out_tier);
 
 /// Unreserve a tree and add free frames back; handles tier demotion via policy.
-void trees_unreserve(trees_t *self, tree_id_t idx, treeF_t free,
-		     uint8_t tier,
+void trees_unreserve(trees_t *self, tree_id_t idx, treeF_t free, uint8_t tier,
 		     llfree_policy_fn policy);
 
 /// Steal the global free counter from a reserved tree (synchronization).
@@ -62,12 +60,11 @@ bool trees_sync_steal(trees_t *self, tree_id_t idx, treeF_t min,
 		      treeF_t *out_stolen);
 
 /// Increment free counter and optionally reserve the tree (free-reserve heuristic).
-/// may_reserve: whether reservation should be attempted.
-/// On return, *did_reserve indicates if reservation occurred.
+/// *reserve: whether reservation should be attempted.
+/// On return, *reserve is true if a reservation occurred.
 /// When reserved, *out_old_free is the free count before the put.
 void trees_put_or_reserve(trees_t *self, tree_id_t idx, treeF_t frames,
-			  uint8_t tier, bool may_reserve,
-			  llfree_policy_fn policy, bool *did_reserve,
+			  uint8_t tier, bool *reserve, llfree_policy_fn policy,
 			  treeF_t *out_old_free);
 
 /// Callback for tree search: attempt operation at given tree index.
@@ -78,8 +75,9 @@ typedef llfree_result_t (*trees_access_fn)(tree_id_t idx, void *ctx);
 typedef treeF_t (*trees_fetch_free_fn)(tree_id_t idx, void *ctx);
 
 /// Linear alternating search from start.
-llfree_result_t trees_search(const trees_t *self, tree_id_t start, size_t offset,
-			     size_t len, trees_access_fn cb, void *ctx);
+llfree_result_t trees_search(const trees_t *self, tree_id_t start,
+			     size_t offset, size_t len, trees_access_fn cb,
+			     void *ctx);
 
 /// Best-fit search: collect N best candidates by policy priority, then try them.
 #define TREES_SEARCH_BEST 3

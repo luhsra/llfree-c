@@ -70,13 +70,14 @@ bool tree_sync_steal(tree_t *self, treeF_t min);
 /// Increment free counter or reserve for free-reserve heuristic.
 /// Resets tier to default_tier when tree becomes entirely free.
 bool tree_put_or_reserve(tree_t *self, treeF_t frames, uint8_t tier,
-			 bool *reserve, treeF_t min, uint8_t default_tier);
+			 llfree_policy_fn policy, uint8_t default_tier,
+			 treeF_t min, bool *reserve);
 
 /// Change a tree entry if matcher conditions are met.
 /// Returns false if it does not match or if operation preconditions fail.
 bool tree_change(tree_t *self, uint8_t match_tier, treeF_t min_free,
-		uint8_t change_tier, llfree_tree_operation_t operation,
-		treeF_t online_free);
+		 uint8_t change_tier, llfree_tree_operation_t operation,
+		 treeF_t online_free);
 
 /// Debug print the tree
 void tree_print(tree_t *self, tree_id_t idx, size_t indent);
