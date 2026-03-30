@@ -76,12 +76,14 @@ static bool ll_reserved_set_start(reserved_t *self, row_id_t start_row)
 }
 
 /// Atomically take a present reservation (clears it)
-static bool ll_reserved_take(reserved_t *self)
+static bool ll_reserved_take(reserved_t *self, tree_id_optional_t tree_idx,
+			     treeF_t frames)
 {
-	if (!self->present)
-		return false;
-	*self = ll_reserved_new(false, 0, row_id(0));
-	return true;
+	if (ll_reserved_dec(self, tree_idx, frames)) {
+		*self = ll_reserved_new(false, 0, row_id(0));
+		return true;
+	}
+	return false;
 }
 
 // ----------------------------------------------------------------------------
@@ -302,46 +304,41 @@ demote_any_result_t ll_local_demote_any(local_t *self, uint8_t tier,
 
 			// Atomically take the slot if present
 			reserved_t old;
-			bool ok = atom_update(&target->entries[jj].preferred,
-					      old, ll_reserved_take);
-			if (!ok)
+			if (!atom_update(&target->entries[jj].preferred, old,
+					 ll_reserved_take, tree_idx, frames))
 				continue;
 
-			// Check the taken slot has enough free
-			if (old.free < frames ||
-			    (tree_idx.present &&
-			     tree_from_row(row_id(old.start_row)).value !=
-				     tree_idx.value.value)) {
-				// Put it back
-				reserved_t restore = old;
-				atom_update(&target->entries[jj].preferred, old,
-					    ll_reserved_swap, restore);
-				continue;
-			}
-
-			// Compute new tree: old minus frames we're about to allocate
-			reserved_t new_res = ll_reserved_new(
-				true, old.free - frames, row_id(old.start_row));
+			reserved_t new_res = old;
+			bool success =
+				ll_reserved_dec(&new_res, tree_idx, frames);
+			assert(success); // we just took it, so this should not fail
 
 			// Swap into the requesting local
-			demote_any_result_t result = {
-				.found = true,
-				.row = row_id(old.start_row),
-				.old_row = row_id_none()
-			};
 			tier_locals_t *req = &self->tiers[tier];
 			if (index.present && req->len.present &&
 			    req->len.value > 0 && idx < req->len.value) {
 				reserved_t prev;
 				atom_update(&req->entries[idx].preferred, prev,
 					    ll_reserved_swap, new_res);
-				if (prev.present)
-					result.old_row = row_id_some(
-						row_id(prev.start_row));
-				result.old_tier = tier;
-				result.old_free = prev.free;
+				// Return the previous reservation for unreservation, if present
+				return (demote_any_result_t){
+					.found = true,
+					.row = row_id(new_res.start_row),
+					.unreserve = prev.present,
+					.unres_row = row_id(prev.start_row),
+					.unres_tier = tier,
+					.unres_free = prev.free,
+				};
 			}
-			return result;
+			// Or return (and unreserve) the demoted tree if no local reservation
+			return (demote_any_result_t){
+				.found = true,
+				.row = row_id(new_res.start_row),
+				.unreserve = true,
+				.unres_row = row_id(new_res.start_row),
+				.unres_tier = tier,
+				.unres_free = new_res.free,
+			};
 		}
 	}
 	return fail;

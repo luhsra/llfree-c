@@ -469,10 +469,10 @@ static llfree_result_t demote_local(llfree_t *self,
 		ll_local_demote_any(self->local, request->tier, request->local,
 				    tree_idx, frames, self->policy);
 	if (dem.found) {
-		if (dem.old_row.present) {
+		if (dem.unreserve) {
 			trees_unreserve(&self->trees,
-					tree_from_row(dem.old_row.value),
-					dem.old_free, dem.old_tier,
+					tree_from_row(dem.unres_row),
+					dem.unres_free, dem.unres_tier,
 					self->policy);
 		}
 

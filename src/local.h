@@ -34,7 +34,7 @@ typedef struct local_result {
 } local_result_t;
 
 static inline ll_unused local_result_t local_ok(uint8_t tier, treeF_t free,
-				      row_id_t start_row)
+						row_id_t start_row)
 {
 	return (local_result_t){ .success = true,
 				 .present = true,
@@ -43,7 +43,8 @@ static inline ll_unused local_result_t local_ok(uint8_t tier, treeF_t free,
 				 .start_row = start_row };
 }
 static inline ll_unused local_result_t local_fail(uint8_t tier, bool present,
-					treeF_t free, row_id_t start_row)
+						  treeF_t free,
+						  row_id_t start_row)
 {
 	return (local_result_t){ .success = false,
 				 .present = present,
@@ -58,8 +59,7 @@ local_result_t ll_local_get(local_t *self, uint8_t tier, size_t index,
 			    tree_id_optional_t tree_idx, treeF_t frames);
 
 /// Increment the number of free frames for the given (tier, index).
-bool ll_local_put(local_t *self, uint8_t tier, size_t index,
-		  tree_id_t tree_idx,
+bool ll_local_put(local_t *self, uint8_t tier, size_t index, tree_id_t tree_idx,
 		  treeF_t frames);
 
 /// Update the starting row for the given (tier, index).
@@ -81,9 +81,10 @@ local_result_t ll_local_steal(local_t *self, uint8_t tier, size_t index,
 typedef struct demote_any_result {
 	bool found;
 	row_id_t row; /// row to allocate from
-	row_id_optional_t old_row; /// old tree in the requesting local, if present
-	uint8_t old_tier; /// tier of old tree (= requesting tier)
-	treeF_t old_free;
+	bool unreserve; /// whether the caller should unreserve the following tree
+	row_id_t unres_row;
+	uint8_t unres_tier;
+	treeF_t unres_free;
 } demote_any_result_t;
 
 /// Demote from another tier's local slot
