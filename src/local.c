@@ -104,9 +104,9 @@ typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) entry {
 _Static_assert(sizeof(entry_t) == LLFREE_CACHE_SIZE,
 	       "entry_t exceeds cache line");
 
-/// Slice of entries for one tier
+/// Slice of entries for one tier (stored as offset into metadata buffer)
 typedef struct tier_locals {
-	entry_t *entries; // NULL if no locals for this tier
+	size_t offset; // byte offset from local base to first entry
 	ll_optional_t len; // ll_none() if tier not configured
 } tier_locals_t;
 
@@ -135,25 +135,25 @@ void ll_local_init(local_t *self, const llfree_tiering_t *tiering)
 	self->num_tiers = (uint8_t)tiering->num_tiers;
 
 	// Entries start after the local_t header, cache-line aligned
-	entry_t *base =
-		(entry_t *)((uint8_t *)self +
-			    align_up(sizeof(local_t), LLFREE_CACHE_SIZE));
+	size_t base_offset = align_up(sizeof(local_t), LLFREE_CACHE_SIZE);
 
 	// Initialize tier slices
 	for (size_t i = 0; i < LLFREE_MAX_TIERS; i++)
 		self->tiers[i] =
-			(tier_locals_t){ .entries = NULL, .len = ll_none() };
+			(tier_locals_t){ .offset = 0, .len = ll_none() };
 
 	size_t offset = 0;
 	for (size_t i = 0; i < tiering->num_tiers; i++) {
 		uint8_t tier = tiering->tiers[i].tier;
 		size_t count = tiering->tiers[i].count;
 		self->tiers[tier] = (tier_locals_t){
-			.entries = &base[offset],
+			.offset = base_offset + (sizeof(entry_t) * offset),
 			.len = ll_some(count),
 		};
 		for (size_t j = 0; j < count; j++) {
-			entry_t *entry = &base[offset + j];
+			entry_t *entry = (entry_t *)((uint8_t *)self +
+						     self->tiers[tier].offset) +
+					 j;
 			atom_store(&entry->preferred,
 				   ll_reserved_new(false, 0, row_id(0)));
 #if LLFREE_ENABLE_FREE_RESERVE
@@ -203,7 +203,8 @@ local_result_t ll_local_get(local_t *self, uint8_t tier, size_t index,
 	assert(tier < LLFREE_MAX_TIERS);
 	assert(self->tiers[tier].len.present &&
 	       index < self->tiers[tier].len.value);
-	entry_t *entry = &self->tiers[tier].entries[index];
+	entry_t *entry =
+		((entry_t *)((uint8_t *)self + self->tiers[tier].offset)) + index;
 	reserved_t old;
 	bool ok = atom_update(&entry->preferred, old, ll_reserved_dec, tree_idx,
 			      frames);
@@ -216,7 +217,8 @@ bool ll_local_put(local_t *self, uint8_t tier, size_t index, tree_id_t tree_idx,
 	assert(tier < LLFREE_MAX_TIERS);
 	assert(self->tiers[tier].len.present &&
 	       index < self->tiers[tier].len.value);
-	entry_t *entry = &self->tiers[tier].entries[index];
+	entry_t *entry =
+		((entry_t *)((uint8_t *)self + self->tiers[tier].offset)) + index;
 	reserved_t old;
 	return atom_update(&entry->preferred, old, ll_reserved_inc, tree_idx,
 			   frames);
@@ -228,7 +230,8 @@ local_result_t ll_local_set_start(local_t *self, uint8_t tier, size_t index,
 	assert(tier < LLFREE_MAX_TIERS);
 	assert(self->tiers[tier].len.present &&
 	       index < self->tiers[tier].len.value);
-	entry_t *entry = &self->tiers[tier].entries[index];
+	entry_t *entry =
+		((entry_t *)((uint8_t *)self + self->tiers[tier].offset)) + index;
 	reserved_t old;
 	bool ok = atom_update(&entry->preferred, old, ll_reserved_set_start,
 			      start_row);
@@ -241,7 +244,8 @@ local_result_t ll_local_swap(local_t *self, uint8_t tier, size_t index,
 	assert(tier < LLFREE_MAX_TIERS);
 	assert(self->tiers[tier].len.present &&
 	       index < self->tiers[tier].len.value);
-	entry_t *entry = &self->tiers[tier].entries[index];
+	entry_t *entry =
+		((entry_t *)((uint8_t *)self + self->tiers[tier].offset)) + index;
 	reserved_t new =
 		ll_reserved_new(true, new_free, row_from_tree(new_tree_idx));
 	reserved_t old;
@@ -269,8 +273,10 @@ local_result_t ll_local_steal(local_t *self, uint8_t tier, size_t index,
 		for (size_t j = 0; j < target->len.value; j++) {
 			size_t jj = (index + j) % target->len.value;
 			reserved_t old;
-			bool ok = atom_update(&target->entries[jj].preferred,
-					      old, ll_reserved_dec, tree_idx,
+			entry_t *target_entries =
+				(entry_t *)((uint8_t *)self + target->offset);
+			bool ok = atom_update(&target_entries[jj].preferred, old,
+					      ll_reserved_dec, tree_idx,
 					      frames);
 			if (ok)
 				return make_result(true, target_tier, old);
@@ -304,7 +310,9 @@ demote_any_result_t ll_local_demote_any(local_t *self, uint8_t tier,
 
 			// Atomically take the slot if present
 			reserved_t old;
-			if (!atom_update(&target->entries[jj].preferred, old,
+			entry_t *target_entries =
+				(entry_t *)((uint8_t *)self + target->offset);
+			if (!atom_update(&target_entries[jj].preferred, old,
 					 ll_reserved_take, tree_idx, frames))
 				continue;
 
@@ -317,8 +325,10 @@ demote_any_result_t ll_local_demote_any(local_t *self, uint8_t tier,
 			tier_locals_t *req = &self->tiers[tier];
 			if (index.present && req->len.present &&
 			    req->len.value > 0 && idx < req->len.value) {
+				entry_t *req_entries =
+					(entry_t *)((uint8_t *)self + req->offset);
 				reserved_t prev;
-				atom_update(&req->entries[idx].preferred, prev,
+				atom_update(&req_entries[idx].preferred, prev,
 					    ll_reserved_swap, new_res);
 				// Return the previous reservation for unreservation, if present
 				return (demote_any_result_t){
@@ -369,7 +379,8 @@ bool ll_local_free_inc(local_t *self, uint8_t tier, size_t index,
 #if LLFREE_ENABLE_FREE_RESERVE
 	assert(tier < LLFREE_MAX_TIERS);
 	assert(index < self->tiers[tier].len);
-	entry_t *entry = &self->tiers[tier].entries[index];
+	entry_t *entry =
+		((entry_t *)((uint8_t *)self + self->tiers[tier].offset)) + index;
 	local_history_t frees;
 	bool updated = atom_update(&entry->last, frees, frees_inc, tree_idx);
 	// !updated means threshold was reached → caller should reserve
@@ -388,7 +399,8 @@ local_result_t ll_local_drain(local_t *self, uint8_t tier, size_t index)
 	assert(tier < LLFREE_MAX_TIERS);
 	assert(self->tiers[tier].len.present &&
 	       index < self->tiers[tier].len.value);
-	entry_t *entry = &self->tiers[tier].entries[index];
+	entry_t *entry =
+		((entry_t *)((uint8_t *)self + self->tiers[tier].offset)) + index;
 	reserved_t old;
 	atom_update(&entry->preferred, old, ll_reserved_swap,
 		    ll_reserved_new(false, 0, row_id(0)));
@@ -401,7 +413,9 @@ ll_tree_stats_t ll_local_stats(const local_t *self)
 	for (uint8_t t = 0; t < LLFREE_MAX_TIERS; t++) {
 		const tier_locals_t *tl = &self->tiers[t];
 		for (size_t j = 0; tl->len.present && j < tl->len.value; j++) {
-			reserved_t res = atom_load(&tl->entries[j].preferred);
+			entry_t *entries =
+				(entry_t *)((uint8_t *)self + tl->offset);
+			reserved_t res = atom_load(&entries[j].preferred);
 			if (res.present) {
 				stats.free_frames += res.free;
 				stats.free_trees += res.free ==
@@ -418,7 +432,9 @@ local_result_t ll_local_stats_at(const local_t *self, tree_id_t tree_idx)
 	for (uint8_t t = 0; t < LLFREE_MAX_TIERS; t++) {
 		const tier_locals_t *tl = &self->tiers[t];
 		for (size_t j = 0; tl->len.present && j < tl->len.value; j++) {
-			reserved_t res = atom_load(&tl->entries[j].preferred);
+			entry_t *entries =
+				(entry_t *)((uint8_t *)self + tl->offset);
+			reserved_t res = atom_load(&entries[j].preferred);
 			if (!res.present)
 				continue;
 			if (tree_from_row(row_id(res.start_row)).value ==
@@ -450,7 +466,9 @@ void ll_local_print(const local_t *self, size_t indent)
 		llfree_info_cont("%stier %u (%zu entries):\n",
 				 INDENT(indent + 1), t, tl->len.value);
 		for (size_t j = 0; j < tl->len.value; j++) {
-			reserved_t res = atom_load(&tl->entries[j].preferred);
+			entry_t *entries =
+				(entry_t *)((uint8_t *)self + tl->offset);
+			reserved_t res = atom_load(&entries[j].preferred);
 			llfree_info_cont(
 				"%s[%zu] { present: %d, free: %" PRIu64
 				", idx: %" PRIuS " }\n",
@@ -480,7 +498,9 @@ void ll_local_validate(const local_t *self, const llfree_t *llfree,
 	for (uint8_t t = 0; t < LLFREE_MAX_TIERS; t++) {
 		const tier_locals_t *tl = &self->tiers[t];
 		for (size_t j = 0; tl->len.present && j < tl->len.value; j++) {
-			reserved_t res = atom_load(&tl->entries[j].preferred);
+			entry_t *entries =
+				(entry_t *)((uint8_t *)self + tl->offset);
+			reserved_t res = atom_load(&entries[j].preferred);
 			assert(res.free <= LLFREE_TREE_SIZE);
 			if (res.present) {
 				validate_tree(llfree,
