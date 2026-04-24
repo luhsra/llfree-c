@@ -177,7 +177,7 @@ static llfree_result_t lower_get_at(lower_t *self, frame_id_t frame,
 	if (frame.value + (1u << order) > self->frames ||
 	    frame.value % (1u << order) != 0) {
 		llfree_warn("invalid frame %" PRIu64 "\n", frame.value);
-		return llfree_err(LLFREE_ERR_ADDRESS);
+		return llfree_err(LLFREE_ERR_ARGUMENT);
 	}
 	size_t child_idx = child_from_frame(frame).value;
 	_Atomic(child_t) *child = get_child(self, child_idx);
@@ -288,7 +288,7 @@ llfree_result_t lower_put(lower_t *self, frame_id_t frame, size_t order)
 	if (frame.value + (1 << order) > self->frames ||
 	    frame.value % (1 << order) != 0) {
 		llfree_warn("invalid frame %" PRIu64 "\n", frame.value);
-		return llfree_err(LLFREE_ERR_ADDRESS);
+		return llfree_err(LLFREE_ERR_ARGUMENT);
 	}
 
 	const size_t child_idx = child_from_frame(frame).value;
@@ -299,13 +299,13 @@ llfree_result_t lower_put(lower_t *self, frame_id_t frame, size_t order)
 		if (atom_update((_Atomic(child_pair_t) *)child, old,
 				child_clear_max))
 			return llfree_err(LLFREE_ERR_OK);
-		return llfree_err(LLFREE_ERR_MEMORY);
+		return llfree_err(LLFREE_ERR_ARGUMENT);
 	}
 	if (order == LLFREE_HUGE_ORDER) {
 		child_t old;
 		if (atom_update(child, old, child_clear_huge))
 			return llfree_err(LLFREE_ERR_OK);
-		return llfree_err(LLFREE_ERR_ADDRESS);
+		return llfree_err(LLFREE_ERR_ARGUMENT);
 	}
 
 	bitfield_t *field = &self->fields[child_idx];
@@ -366,8 +366,8 @@ ll_stats_t lower_stats_at(const lower_t *self, frame_id_t frame, size_t order)
 		size_t i = child_from_frame(frame).value;
 		child_t child = atom_load(get_child(self, i));
 		if (child.free == CHILD_N) {
-			stats.free_frames = CHILD_N;
-			stats.free_huge = 1;
+			stats.free_frames = 1;
+			stats.free_huge = 0;
 		} else if (child.free > 0) {
 			stats.free_frames = field_is_free(
 				&self->fields[i], frame.value % CHILD_N);

@@ -27,7 +27,7 @@ DEBUG := 1
 ifeq ($(DEBUG), 1)
 	CFLAGS += -g -DVERBOSE
 else
-	CFLAGS += -O3 -g -march=native -fomit-frame-pointer
+	CFLAGS += -O2 -g -march=native -fomit-frame-pointer
 endif
 
 # Library name, sources, and build directory

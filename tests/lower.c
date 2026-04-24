@@ -226,7 +226,7 @@ declare_test(lower_put)
 	// repeat the same address
 	frame = 0;
 	ret = lower_put(&actual, frame_id(frame), order);
-	check_equal("u", ret.error, LLFREE_ERR_ADDRESS);
+	check_equal("u", ret.error, LLFREE_ERR_MEMORY);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ { 0xfffffffffffffffe, UINT64_MAX, UINT64_MAX,
@@ -240,7 +240,7 @@ declare_test(lower_put)
 
 	frame = 957;
 	ret = lower_put(&actual, frame_id(frame), order);
-	check_equal("u", ret.error, LLFREE_ERR_ADDRESS);
+	check_equal("u", ret.error, LLFREE_ERR_MEMORY);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ { 0xfffffffffffffffe, UINT64_MAX, UINT64_MAX,
@@ -269,7 +269,7 @@ declare_test(lower_put)
 	// outside the range
 	frame = 1361;
 	ret = lower_put(&actual, frame_id(frame), order);
-	check_equal("u", ret.error, LLFREE_ERR_ADDRESS);
+	check_equal("u", ret.error, LLFREE_ERR_ARGUMENT);
 	check_equal_bitfield(
 		actual.fields[0],
 		((bitfield_t){ { 0xfffffffffffffffe, UINT64_MAX, UINT64_MAX,
@@ -414,7 +414,7 @@ declare_test(lower_huge)
 	check(llfree_is_ok(lower_put(&actual, frame_id(frame2.frame.value), 0)));
 	// HP ist converted into regular frames so returning the whole page must fail
 	check(lower_put(&actual, frame_id(frame2.frame.value), LLFREE_HUGE_ORDER).error ==
-	      LLFREE_ERR_ADDRESS);
+	      LLFREE_ERR_ARGUMENT);
 
 	check(llfree_is_ok(
 		lower_put(&actual, frame_id(frame1.frame.value), LLFREE_HUGE_ORDER)));

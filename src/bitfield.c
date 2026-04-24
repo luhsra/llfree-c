@@ -183,7 +183,7 @@ llfree_result_t field_toggle(bitfield_t *field, size_t index, size_t order,
 					      ~mask)) {
 				continue;
 			}
-			return llfree_err(LLFREE_ERR_ADDRESS);
+			return llfree_err(LLFREE_ERR_MEMORY);
 		}
 		return llfree_err(LLFREE_ERR_OK);
 	}
@@ -195,7 +195,7 @@ llfree_result_t field_toggle(bitfield_t *field, size_t index, size_t order,
 			expected)) {
 		return llfree_err(LLFREE_ERR_OK);
 	}
-	return llfree_err(LLFREE_ERR_ADDRESS);
+	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
 size_t field_count_ones(bitfield_t *field)

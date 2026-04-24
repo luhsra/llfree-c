@@ -145,6 +145,8 @@ static uint8_t check_global_matching_tree(uint8_t tree_tier, treeF_t frames,
 	llfree_policy_t p = a->policy(a->tier, tree_tier, frames);
 	if (p.type == LLFREE_POLICY_MATCH)
 		return tree_tier;
+	if (p.type == LLFREE_POLICY_DEMOTE && frames == LLFREE_TREE_SIZE)
+		return a->tier;
 	return LLFREE_TIER_NONE;
 }
 
@@ -194,7 +196,7 @@ typedef struct reserve_args {
 static void swap_reserved(llfree_t *self, uint8_t tier, size_t local,
 			  tree_id_t new_idx, treeF_t new_free)
 {
-	llfree_debug("swap tier=%u index=%zu idx=%zu free=%" PRIuS, tier, index,
+	llfree_debug("swap tier=%u index=%zu idx=%zu free=%" PRIuS, tier, local,
 		     new_idx.value, (size_t)new_free);
 	local_result_t old =
 		ll_local_swap(self->local, tier, local, new_idx, new_free);
@@ -535,8 +537,8 @@ get_demoting(llfree_t *self, const llfree_request_t *request, tree_id_t start)
 		if (res.error != LLFREE_ERR_MEMORY)
 			return res;
 	}
-	// Fallback to demoting local
-	return demote_local(self, request, frame_id_none());
+
+	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
 static llfree_result_t llfree_get_at(llfree_t *self, frame_id_t frame,
@@ -597,11 +599,65 @@ static llfree_result_t llfree_get_at(llfree_t *self, frame_id_t frame,
 	return demote_local(self, &request, frame_id_some(frame));
 }
 
+static bool validate_request(llfree_t *self, llfree_request_t request,
+			     frame_id_optional_t frame)
+{
+	if (request.order > LLFREE_MAX_ORDER) {
+		llfree_info("Arg: order=%u > max=%u", request.order,
+			    LLFREE_MAX_ORDER);
+		return false;
+	}
+
+	ll_optional_t tier_locals =
+		ll_local_tier_locals(self->local, request.tier);
+	if (!tier_locals.present) {
+		llfree_info("Arg: tier=%u is not configured", request.tier);
+		return false;
+	}
+
+	if (request.local.present && request.local.value >= tier_locals.value) {
+		llfree_info("Arg: local=%" PRIu64
+			    " out of bounds for tier=%u (locals=%" PRIuS ")",
+			    (uint64_t)request.local.value, request.tier,
+			    tier_locals.value);
+		return false;
+	}
+
+	uint64_t req_frames = 1ull << request.order;
+	if (req_frames > self->lower.frames) {
+		llfree_info("Arg: request size=%" PRIu64
+			    " exceeds managed frames=%" PRIuS,
+			    req_frames, self->lower.frames);
+		return false;
+	}
+
+	if (!frame.present)
+		return true;
+
+	uint64_t f = frame.value.value;
+	if (f > self->lower.frames - req_frames) {
+		llfree_info("Arg: frame=%" PRIu64
+			    " out of range for order=%u (frames=%" PRIuS ")",
+			    f, request.order, self->lower.frames);
+		return false;
+	}
+
+	if (f % req_frames != 0) {
+		llfree_info("Arg: frame=%" PRIu64
+			    " is misaligned for order=%u (align=%" PRIu64 ")",
+			    f, request.order, req_frames);
+		return false;
+	}
+
+	return true;
+}
+
 llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 			   llfree_request_t request)
 {
 	assert(self != NULL);
-	assert(request.order <= LLFREE_MAX_ORDER);
+	if (!validate_request(self, request, frame))
+		return llfree_err(LLFREE_ERR_ARGUMENT);
 
 	if (frame.present) {
 		return llfree_get_at(self, frame.value, request);
@@ -622,13 +678,13 @@ llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 	if (res.error != LLFREE_ERR_MEMORY)
 		return res;
 
-	llfree_info("No match t=%u l=%zu", request.tier, request.local.value);
+	llfree_debug("No match t=%u l=%zu", request.tier, request.local.value);
 
 	res = get_demoting(self, &request, start);
 	if (res.error != LLFREE_ERR_MEMORY)
 		return res;
 
-	llfree_warn("OOM");
+	llfree_debug("OOM");
 
 	// Downgrade request until successful
 	for (uint8_t t = 1; t < LLFREE_MAX_TIERS; t++) {
@@ -638,11 +694,12 @@ llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 		ll_optional_t tier_locals =
 			ll_local_tier_locals(self->local, tier);
 		if (tier_locals.present) {
-			llfree_request_t req = llreq(
-				request.order, tier,
-				ll_some(request.local.value %
-					tier_locals.value) // adjust to fit
-			);
+			ll_optional_t local = ll_none();
+			if (request.local.present)
+				local = ll_some(request.local.value %
+						tier_locals.value);
+			llfree_request_t req =
+				llreq(request.order, tier, local);
 			res = get_matching(self, &req, &start);
 			if (res.error != LLFREE_ERR_MEMORY)
 				return res;
@@ -653,15 +710,15 @@ llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 	if (res.error != LLFREE_ERR_MEMORY)
 		return res;
 
-	return llfree_err(LLFREE_ERR_MEMORY);
+	return demote_local(self, &request, frame_id_none());
 }
 
 llfree_result_t llfree_put(llfree_t *self, frame_id_t frame,
 			   llfree_request_t request)
 {
 	assert(self != NULL);
-	assert(request.order <= LLFREE_MAX_ORDER);
-	assert(frame.value < self->lower.frames);
+	if (!validate_request(self, request, frame_id_some(frame)))
+		return llfree_err(LLFREE_ERR_ARGUMENT);
 
 	llfree_result_t res = lower_put(&self->lower, frame, request.order);
 	if (!llfree_is_ok(res)) {
@@ -671,7 +728,7 @@ llfree_result_t llfree_put(llfree_t *self, frame_id_t frame,
 
 	tree_id_t tree_idx = tree_from_frame(frame);
 	uint8_t tier = request.tier;
-	treeF_t frames = (treeF_t)(1u << request.order);
+	treeF_t alloc_frames = (treeF_t)(1u << request.order);
 
 	if (request.local.present) {
 		bool reserve = LLFREE_ENABLE_FREE_RESERVE &&
@@ -679,21 +736,21 @@ llfree_result_t llfree_put(llfree_t *self, frame_id_t frame,
 						 request.local.value, tree_idx);
 
 		if (ll_local_put(self->local, request.tier, request.local.value,
-				 tree_idx, frames)) {
+				 tree_idx, alloc_frames)) {
 			return llfree_ok(frame_id(0), 0);
 		}
 
 		treeF_t old_free;
-		trees_put_or_reserve(&self->trees, tree_idx, frames, tier,
+		trees_put_or_reserve(&self->trees, tree_idx, alloc_frames, tier,
 				     &reserve, self->policy, &old_free);
 
 		if (reserve) {
-			treeF_t swap_free = old_free + frames;
+			treeF_t swap_free = old_free + alloc_frames;
 			swap_reserved(self, request.tier, request.local.value,
 				      tree_idx, swap_free);
 		}
 	} else {
-		trees_put(&self->trees, tree_idx, frames, self->policy);
+		trees_put(&self->trees, tree_idx, alloc_frames, self->policy);
 	}
 	return llfree_ok(frame_id(0), 0);
 }

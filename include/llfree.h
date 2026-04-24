@@ -59,8 +59,8 @@ enum : uint8_t {
 	LLFREE_ERR_MEMORY = 1,
 	/// Failed atomic operation, retry procedure
 	LLFREE_ERR_RETRY = 2,
-	/// Invalid address
-	LLFREE_ERR_ADDRESS = 3,
+	/// Invalid argument
+	LLFREE_ERR_ARGUMENT = 3,
 	/// Allocator not initialized or initialization failed
 	LLFREE_ERR_INIT = 4,
 };
