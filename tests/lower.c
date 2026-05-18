@@ -317,15 +317,18 @@ declare_test(lower_large)
 {
 	bool success = true;
 
-	const size_t FRAMES = 16lu * LLFREE_CHILD_SIZE;
+	// Need enough frames for one allocation at each order up to TREE_ORDER
+	// Each order o requires 2^o frames, and we need TREE_ORDER+1 trees
+	const size_t FRAMES = (LLFREE_TREE_ORDER + 1lu) * LLFREE_TREE_SIZE;
 
 	lower_t lower = lower_new(FRAMES, LLFREE_INIT_FREE);
 
 	lower_print(&lower);
 
-	uint64_t frames[LLFREE_MAX_ORDER + 1];
-	size_t tree = 0;
-	for (size_t o = 0; o <= LLFREE_MAX_ORDER; o++) {
+	uint64_t frames[LLFREE_TREE_ORDER + 1];
+	for (size_t o = 0; o <= LLFREE_TREE_ORDER; o++) {
+		// Use a different tree for each order to avoid conflicts
+		size_t tree = o;
 		llfree_result_t frame;
 		frame = lower_get(&lower, frame_id(tree * LLFREE_TREE_SIZE), o, frame_id_none());
 
@@ -338,7 +341,7 @@ declare_test(lower_large)
 
 	lower_print(&lower);
 
-	for (size_t o = 0; o <= LLFREE_MAX_ORDER; o++) {
+	for (size_t o = 0; o <= LLFREE_TREE_ORDER; o++) {
 		llfree_result_t ret = lower_put(&lower, frame_id(frames[o]), o);
 		check_m(llfree_is_ok(ret), "%zu -> 0x%" PRIx64, o, frames[o]);
 	}
@@ -434,19 +437,20 @@ declare_test(lower_max)
 {
 	bool success = true;
 
-	const size_t FRAMES = LLFREE_CHILD_SIZE * 60lu;
+	// Use a multiple of TREE_SIZE to ensure exact fit
+	const size_t FRAMES = LLFREE_TREE_SIZE * 8lu;
 	lower_t lower = lower_new(FRAMES, LLFREE_INIT_FREE);
 
-	for (size_t i = 0; i < FRAMES / (1 << LLFREE_MAX_ORDER); ++i) {
-		llfree_result_t frame = lower_get(&lower, frame_id(i * (1 << LLFREE_MAX_ORDER)), LLFREE_MAX_ORDER, frame_id_none());
+	for (size_t i = 0; i < FRAMES / (1 << LLFREE_TREE_ORDER); ++i) {
+		llfree_result_t frame = lower_get(&lower, frame_id(i * (1 << LLFREE_TREE_ORDER)), LLFREE_TREE_ORDER, frame_id_none());
 		check_m(llfree_is_ok(frame), "%zu", i);
 	}
 
 	check_equal("zu", lower_stats(&lower).free_frames, 0lu);
 
-	for (size_t i = 0; i < FRAMES / (1 << LLFREE_MAX_ORDER); ++i) {
+	for (size_t i = 0; i < FRAMES / (1 << LLFREE_TREE_ORDER); ++i) {
 		llfree_result_t ret = lower_put(
-			&lower, frame_id(i * (1 << LLFREE_MAX_ORDER)), LLFREE_MAX_ORDER);
+			&lower, frame_id(i * (1 << LLFREE_TREE_ORDER)), LLFREE_TREE_ORDER);
 		check_m(llfree_is_ok(ret), "%zu", i);
 	}
 

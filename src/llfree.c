@@ -602,9 +602,9 @@ static llfree_result_t llfree_get_at(llfree_t *self, frame_id_t frame,
 static bool validate_request(llfree_t *self, llfree_request_t request,
 			     frame_id_optional_t frame)
 {
-	if (request.order > LLFREE_MAX_ORDER) {
+	if (request.order > LLFREE_TREE_ORDER) {
 		llfree_info("Arg: order=%u > max=%u", request.order,
-			    LLFREE_MAX_ORDER);
+			    LLFREE_TREE_ORDER);
 		return false;
 	}
 

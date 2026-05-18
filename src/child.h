@@ -27,17 +27,3 @@ bool child_inc(child_t *self, size_t order);
 
 /// Decrement the free counter if possible
 bool child_dec(child_t *self, size_t order);
-
-/// Alloc the child as a huge page
-bool child_set_huge(child_t *self);
-/// Free the child from a huge page
-bool child_clear_huge(child_t *self);
-
-typedef struct child_pair {
-	child_t first, second;
-} child_pair_t;
-
-/// Alloc a pair of child entries as a max-order page
-bool child_set_max(child_pair_t *self);
-/// Free a pair of child entries from a max-order page
-bool child_clear_max(child_pair_t *self);

@@ -4,7 +4,7 @@
 #include "llfree_platform.h"
 
 /// Minimal size the LLFree can manage
-#define MIN_PAGES (1ul << LLFREE_MAX_ORDER)
+#define MIN_PAGES (1ul << LLFREE_TREE_ORDER)
 /// 64 Bit Addresses - 12 Bit needed for offset inside the Page
 #define MAX_PAGES (1ul << (64 - LLFREE_FRAME_BITS))
 /// Number of retries
@@ -14,13 +14,15 @@
 #define LL_MIN(a, b) ((a) > (b) ? (b) : (a))
 #define LL_MASK(bits) ((1u << (bits)) - 1)
 
-/// Iterates over a Range between multiples of len starting at idx.
+/// Iterates over values with circular offset behavior starting at `start`
+/// for `len` iterations, wrapping around using modulo arithmetic.
 ///
-/// Starting at idx up to the next Multiple of len (exclusive). Then the next
-/// step will be the highest multiple of len less than idx. (_base_idx)
-/// Loop will end after len iterations.
-/// code will be executed in each loop.
-/// The current loop value can accessed by current_i
+/// @param start Starting value
+/// @param len Number of iterations
+/// @param current_i Variable holding the current value
+///
+/// Example: for_offsetted(5, 8, i) iterates over 5, 6, 7, 0, 1, 2, 3, 4
+/// Example: for_offsetted(9, 8, i) iterates over 9, 10, 11, 12, 13, 14, 15, 8
 #define for_offsetted(start, len, current_i)                              \
 	for (size_t _i = 0, _offset = (start) % (len),                    \
 		    _base_idx = (start) - _offset, (current_i) = (start); \
