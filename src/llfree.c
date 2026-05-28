@@ -684,13 +684,19 @@ llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 	if (res.error != LLFREE_ERR_MEMORY)
 		return res;
 
-	llfree_debug("OOM");
+	llfree_debug("Stealing");
 
 	// Downgrade request until successful
 	for (uint8_t t = 1; t < LLFREE_MAX_TIERS; t++) {
 		// Go downwards
 		uint8_t tier = (uint8_t)((LLFREE_MAX_TIERS + request.tier - t) %
 					 LLFREE_MAX_TIERS);
+
+		// Verify that stealing is allowed
+		if (self->policy(request.tier, tier, LLFREE_TREE_SIZE).type !=
+		    LLFREE_POLICY_STEAL)
+			continue;
+
 		ll_optional_t tier_locals =
 			ll_local_tier_locals(self->local, tier);
 		if (tier_locals.present) {
@@ -705,6 +711,8 @@ llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 				return res;
 		}
 	}
+
+	llfree_warn("OOM");
 
 	res = steal_local(self, &request, frame_id_none());
 	if (res.error != LLFREE_ERR_MEMORY)

@@ -4,7 +4,7 @@
 #include "llfree_platform.h"
 
 /// Minimal size the LLFree can manage
-#define MIN_PAGES (1ul << LLFREE_TREE_ORDER)
+#define MIN_PAGES (1ul << LLFREE_HUGE_ORDER)
 /// 64 Bit Addresses - 12 Bit needed for offset inside the Page
 #define MAX_PAGES (1ul << (64 - LLFREE_FRAME_BITS))
 /// Number of retries
