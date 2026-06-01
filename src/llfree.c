@@ -323,7 +323,8 @@ static bool sync_with_global(llfree_t *self, uint8_t tier, size_t index,
 
 static llfree_result_t get_matching_local(llfree_t *self, uint8_t tier,
 					  size_t index, uint8_t order,
-					  treeF_t frames, local_result_t *old)
+					  treeF_t frames, local_result_t *old,
+					  bool sync)
 {
 	*old = ll_local_get(self->local, tier, index, tree_id_none(), frames);
 	if (old->success) {
@@ -346,8 +347,10 @@ static llfree_result_t get_matching_local(llfree_t *self, uint8_t tier,
 
 	llfree_debug("local miss tier=%u index=%zu present=%d", tier, index,
 		     old->present);
-	if (old->present && sync_with_global(self, tier, index, frames, *old)) {
-		return llfree_err(LLFREE_ERR_RETRY);
+	if (sync && old->present &&
+	    sync_with_global(self, tier, index, frames, *old)) {
+		return get_matching_local(self, tier, index, order, frames, old,
+					  false);
 	}
 
 	return llfree_err(LLFREE_ERR_MEMORY);
@@ -425,12 +428,10 @@ get_matching(llfree_t *self, const llfree_request_t *request, tree_id_t *start)
 			local_result_t old;
 			llfree_result_t res = get_matching_local(
 				self, request->tier, request->local.value,
-				request->order, frames, &old);
+				request->order, frames, &old, true);
 			if (old.present)
 				*start = tree_from_row(old.start_row);
 
-			if (res.error == LLFREE_ERR_RETRY)
-				continue;
 			if (res.error == LLFREE_ERR_MEMORY)
 				break;
 			return res;

@@ -57,12 +57,10 @@ enum : uint8_t {
 	LLFREE_ERR_OK = 0,
 	/// Not enough memory
 	LLFREE_ERR_MEMORY = 1,
-	/// Failed atomic operation, retry procedure
-	LLFREE_ERR_RETRY = 2,
 	/// Invalid argument
-	LLFREE_ERR_ARGUMENT = 3,
+	LLFREE_ERR_ARGUMENT = 2,
 	/// Allocator not initialized or initialization failed
-	LLFREE_ERR_INIT = 4,
+	LLFREE_ERR_INIT = 3,
 };
 
 /// Result type for llfree_get: includes the tier of the allocated frame

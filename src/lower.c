@@ -282,7 +282,7 @@ static llfree_result_t split_huge(child_t old, _Atomic(child_t) *child,
 				return llfree_err(LLFREE_ERR_OK);
 		}
 		llfree_warn("split huge: timeout");
-		return llfree_err(LLFREE_ERR_RETRY);
+		return llfree_err(LLFREE_ERR_MEMORY);
 	}
 	return llfree_err(LLFREE_ERR_OK);
 }
