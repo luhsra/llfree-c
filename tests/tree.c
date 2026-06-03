@@ -16,14 +16,7 @@ static llfree_policy_t test_policy(uint8_t req, uint8_t tgt, size_t free)
 	return (llfree_policy_t){ LLFREE_POLICY_DEMOTE, 0 };
 }
 
-/// Test check function for tree_reserve: always allows, returns tier 0
-static uint8_t check_always_allow(uint8_t tree_tier, treeF_t frames, void *args)
-{
-	(void)tree_tier;
-	(void)frames;
-	(void)args;
-	return 0;
-}
+
 
 declare_test(tree_atomic)
 {
@@ -64,34 +57,43 @@ declare_test(tree_reserve)
 {
 	int success = true;
 	bool ret = false;
+	bool reserved = false;
+	uint8_t out_tier = 0;
+
+	// Use test_policy: same tier -> Match -> reserve behavior
+	// tree_reserve_or_steal with Match sets reserved=true, free=0, tier=req
 
 	tree_t actual = tree_new(false, 0, 764);
 	tree_t expect = tree_new(true, 0, 0);
 
-	ret = tree_reserve(&actual, NULL, check_always_allow, NULL);
+	ret = tree_reserve_or_steal(&actual, 1, test_policy, 0, &reserved, &out_tier);
 	check(ret);
-	equal_trees(actual, expect);
-
-	// already at minimum
-	actual = tree_new(false, 0, 0);
-	expect = tree_new(true, 0, 0);
-	ret = tree_reserve(&actual, NULL, check_always_allow, NULL);
-	check(ret);
+	check(reserved);
 	equal_trees(actual, expect);
 
 	// if already reserved
 	actual = tree_new(true, 0, 456);
 	expect = actual;
-	ret = tree_reserve(&actual, NULL, check_always_allow, NULL);
+	ret = tree_reserve_or_steal(&actual, 1, test_policy, 0, &reserved, &out_tier);
 	check_m(!ret, "already reserved");
 	equal_trees(actual, expect);
 
 	// max counter value
 	actual = tree_new(false, 0, LLFREE_TREE_SIZE);
 	expect = tree_new(true, 0, 0);
-	ret = tree_reserve(&actual, NULL, check_always_allow, NULL);
+	ret = tree_reserve_or_steal(&actual, 1, test_policy, 0, &reserved, &out_tier);
 	check(ret);
+	check(reserved);
 	equal_trees(actual, expect);
+
+	// Steal behavior: target > request -> Steal, decrements counter
+	actual = tree_new(false, 1, 764);
+	treeF_t free_before = actual.free;
+	ret = tree_reserve_or_steal(&actual, 4, test_policy, 0, &reserved, &out_tier);
+	check(ret);
+	check(!reserved);
+	check_equal("u", actual.free, free_before - 4);
+	check_equal("u", actual.tier, 1); // tier unchanged
 
 	return success;
 }

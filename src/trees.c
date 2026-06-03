@@ -50,13 +50,16 @@ void trees_put(trees_t *self, tree_id_t idx, treeF_t frames,
 		    self->default_tier);
 }
 
-bool trees_reserve(trees_t *self, tree_id_t idx, tree_check_fn check,
-		   void *args, treeF_t *out_free, uint8_t *out_tier)
+bool trees_reserve_or_steal(trees_t *self, tree_id_t idx, treeF_t frames,
+			    llfree_policy_fn policy, uint8_t tier,
+			    bool *out_reserved, treeF_t *out_free,
+			    uint8_t *out_tier)
 {
 	assert(idx.value < self->len);
 	tree_t old;
-	bool ok = atom_update(&self->entries[idx.value], old, tree_reserve,
-			      out_tier, check, args);
+	bool ok = atom_update(&self->entries[idx.value], old,
+			       tree_reserve_or_steal, frames, policy, tier,
+			       out_reserved, out_tier);
 	if (ok && out_free != NULL)
 		*out_free = old.free;
 	return ok;
@@ -123,9 +126,9 @@ llfree_result_t trees_search(const trees_t *self, tree_id_t start,
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
-llfree_result_t trees_search_best(const trees_t *self, uint8_t tier,
-				  tree_id_t start, size_t offset, size_t len,
-				  treeF_t min_free, llfree_policy_fn policy,
+llfree_result_t trees_search_best(const trees_t *self, tree_id_t start,
+				  size_t offset, size_t len,
+				  trees_rate_fn rate, void *rate_args,
 				  trees_access_fn cb, void *ctx)
 {
 	struct best {
@@ -140,21 +143,23 @@ llfree_result_t trees_search_best(const trees_t *self, uint8_t tier,
 		size_t idx = (size_t)(base + off) % self->len;
 
 		tree_t tree = atom_load(&self->entries[idx]);
-		if (tree.reserved || tree.free < min_free ||
-		    tree.free == LLFREE_TREE_SIZE)
+		if (tree.reserved)
 			continue;
 
-		llfree_policy_t p = policy(tier, tree.tier, tree.free);
-		if (p.type != LLFREE_POLICY_MATCH)
+		// Rate the tree
+		llfree_policy_t p = rate(tree.tier, tree.free, rate_args);
+		if (p.type == LLFREE_POLICY_INVALID)
 			continue;
 
 		// Perfect match: try immediately
-		if (p.priority == UINT8_MAX) {
+		if (p.type == LLFREE_POLICY_MATCH &&
+		    p.priority == UINT8_MAX) {
 			llfree_result_t res = cb(tree_id(idx), ctx);
 			if (res.error != LLFREE_ERR_MEMORY)
 				return res;
 			continue;
 		}
+
 
 		// Priority+1 so 0 means "no candidate"
 		uint8_t prio = p.priority + 1;

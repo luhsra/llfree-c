@@ -31,22 +31,31 @@ bool tree_get(tree_t *self, treeF_t frames, uint8_t *result_tier,
 	return true;
 }
 
-bool tree_reserve(tree_t *self, uint8_t *result_tier, tree_check_fn check,
-		  void *args)
+bool tree_reserve_or_steal(tree_t *self, treeF_t frames, llfree_policy_fn policy,
+			   uint8_t tier, bool *out_reserved, uint8_t *out_tier)
 {
-	assert(check != NULL);
-	if (self->reserved)
+	if (self->reserved || self->free < frames)
 		return false;
-	uint8_t new_tier = check(self->tier, self->free, args);
-	if (new_tier == LLFREE_TIER_NONE)
+	llfree_policy_t p = policy(tier, self->tier, self->free);
+	switch (p.type) {
+	case LLFREE_POLICY_MATCH:
+	case LLFREE_POLICY_DEMOTE:
+		// Reserve: take all free frames, mark reserved
+		*out_reserved = true;
+		*out_tier = tier;
+		self->reserved = true;
+		self->free = 0;
+		self->tier = tier;
+		return true;
+	case LLFREE_POLICY_STEAL:
+		// Steal: just decrement counter, keep tier
+		*out_reserved = false;
+		*out_tier = self->tier;
+		self->free -= frames;
+		return true;
+	default:
 		return false;
-
-	self->reserved = true;
-	self->tier = new_tier;
-	self->free = 0;
-	if (result_tier != NULL)
-		*result_tier = new_tier;
-	return true;
+	}
 }
 
 bool tree_unreserve_add(tree_t *self, treeF_t frames, uint8_t tier,

@@ -166,7 +166,8 @@ declare_test(zeroed_steals_from_huge)
 		check_equal("u", r.tier, (unsigned)ZEROED_TIER_HUGE_ZEROED);
 	}
 
-	// Next zeroed request should fallback by stealing from huge tier.
+	// Next zeroed request falls back by stealing from a huge tree.
+	// The huge tree's tier is kept (Steal -> target_tier = 1 = Huge).
 	llfree_result_t fb =
 		llfree_get(&upper, frame_id_none(), req_zeroed_huge(&upper, 0));
 	check(llfree_is_ok(fb));
@@ -178,6 +179,7 @@ declare_test(zeroed_steals_from_huge)
 			    (zeroed_huge_capacity << LLFREE_HUGE_ORDER));
 	return success;
 }
+
 
 declare_test(zeroed_convert_until_exhausted)
 {

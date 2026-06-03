@@ -54,9 +54,14 @@ bool tree_put(tree_t *self, treeF_t frames, llfree_policy_fn policy,
 bool tree_get(tree_t *self, treeF_t frames, uint8_t *result_tier,
 	      tree_check_fn check, void *args);
 
-/// Reserve a tree if check returns a valid tier, and set it to that tier.
-bool tree_reserve(tree_t *self, uint8_t *result_tier, tree_check_fn check,
-		  void *args);
+/// Reserve an entire tree (Match/Demote) or decrement its counter (Steal).
+/// On Match or Demote: sets reserved=true, free=0, tier=requested tier.
+/// On Steal: decrements free counter, keeps existing tier.
+/// Returns true on success, false if tree is already reserved or has insufficient free.
+/// *out_reserved: true if tree was reserved, false if stolen.
+/// *out_tier: the resulting tier (requested for reserve, existing for steal).
+bool tree_reserve_or_steal(tree_t *self, treeF_t frames, llfree_policy_fn policy,
+			   uint8_t tier, bool *out_reserved, uint8_t *out_tier);
 
 /// Unreserve a tree and add frames back; optionally demotes tier via policy.
 /// Resets tier to default_tier when tree becomes entirely free.

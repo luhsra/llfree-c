@@ -30,6 +30,11 @@ else
 	CFLAGS += -O2 -g -march=native -fomit-frame-pointer
 endif
 
+# if LLFREE_TREE_CHILDREN_ORDER is defined, pass it to the compiler
+ifneq ($(LLFREE_TREE_CHILDREN_ORDER),)
+	CFLAGS += -DLLFREE_TREE_CHILDREN_ORDER=$(LLFREE_TREE_CHILDREN_ORDER)
+endif
+
 # Library name, sources, and build directory
 LIB = $(BUILDDIR)/libllc.a
 SRCS = $(wildcard $(SRCDIR)/*.c)
