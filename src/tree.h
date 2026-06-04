@@ -21,9 +21,6 @@ typedef struct tree {
 } tree_t;
 _Static_assert(sizeof(tree_t) == sizeof(treeF_t), "tree size mismatch");
 
-/// Check function that returns the resulting tier if successful or LLFREE_TIER_NONE if not.
-typedef uint8_t (*tree_check_fn)(uint8_t tree_tier, treeF_t frames, void *args);
-
 /// Range for tree free-counter search
 typedef struct p_range {
 	treeF_t min, max;
@@ -51,8 +48,10 @@ static inline ll_unused tree_t tree_new(bool reserved, uint8_t tier,
 bool tree_put(tree_t *self, treeF_t frames, llfree_policy_fn policy,
 	      uint8_t default_tier);
 
-bool tree_get(tree_t *self, treeF_t frames, uint8_t *result_tier,
-	      tree_check_fn check, void *args);
+/// Steal frames from a tree (decrement free counter).
+/// Returns true on success, false if tree has insufficient free or its tier is incompatible.
+bool tree_steal(tree_t *self, treeF_t frames, uint8_t *tier,
+		llfree_policy_fn policy);
 
 /// Reserve an entire tree (Match/Demote) or decrement its counter (Steal).
 /// On Match or Demote: sets reserved=true, free=0, tier=requested tier.
@@ -60,8 +59,9 @@ bool tree_get(tree_t *self, treeF_t frames, uint8_t *result_tier,
 /// Returns true on success, false if tree is already reserved or has insufficient free.
 /// *out_reserved: true if tree was reserved, false if stolen.
 /// *out_tier: the resulting tier (requested for reserve, existing for steal).
-bool tree_reserve_or_steal(tree_t *self, treeF_t frames, llfree_policy_fn policy,
-			   uint8_t tier, bool *out_reserved, uint8_t *out_tier);
+bool tree_reserve_or_steal(tree_t *self, treeF_t frames,
+			   llfree_policy_fn policy, uint8_t tier,
+			   bool *out_reserved, uint8_t *out_tier);
 
 /// Unreserve a tree and add frames back; optionally demotes tier via policy.
 /// Resets tier to default_tier when tree becomes entirely free.
@@ -71,12 +71,6 @@ bool tree_unreserve_add(tree_t *self, treeF_t frames, uint8_t tier,
 /// Steal free counter from a reserved tree (sets free=0).
 /// Returns true if reserved and free > min.
 bool tree_sync_steal(tree_t *self, treeF_t min);
-
-/// Increment free counter or reserve for free-reserve heuristic.
-/// Resets tier to default_tier when tree becomes entirely free.
-bool tree_put_or_reserve(tree_t *self, treeF_t frames, uint8_t tier,
-			 llfree_policy_fn policy, uint8_t default_tier,
-			 treeF_t min, bool *reserve);
 
 /// Change a tree entry if matcher conditions are met.
 /// Returns false if it does not match or if operation preconditions fail.

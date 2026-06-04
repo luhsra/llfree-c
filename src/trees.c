@@ -30,13 +30,13 @@ tree_t trees_load(const trees_t *self, tree_id_t idx)
 	return atom_load(&self->entries[idx.value]);
 }
 
-bool trees_get(trees_t *self, tree_id_t idx, treeF_t frames,
-	       tree_check_fn check, void *args, uint8_t *out_tier)
+bool trees_steal(trees_t *self, tree_id_t idx, treeF_t frames,
+	       uint8_t *tier, llfree_policy_fn policy)
 {
 	assert(idx.value < self->len);
 	tree_t old;
-	bool ok = atom_update(&self->entries[idx.value], old, tree_get, frames,
-			      out_tier, check, args);
+	bool ok = atom_update(&self->entries[idx.value], old, tree_steal, frames,
+			      tier, policy);
 	return ok;
 }
 
@@ -84,20 +84,6 @@ bool trees_sync_steal(trees_t *self, tree_id_t idx, treeF_t min,
 	if (ok && out_stolen != NULL)
 		*out_stolen = old.free;
 	return ok;
-}
-
-void trees_put_or_reserve(trees_t *self, tree_id_t idx, treeF_t frames,
-			  uint8_t tier, bool *reserve, llfree_policy_fn policy,
-			  treeF_t *out_old_free)
-{
-	assert(idx.value < self->len);
-	tree_t old;
-	bool success = atom_update(&self->entries[idx.value], old,
-				   tree_put_or_reserve, frames, tier, policy,
-				   self->default_tier, TREES_MIN_FREE, reserve);
-	assert(success); // Should never fail
-	if (out_old_free != NULL)
-		*out_old_free = old.free;
 }
 
 llfree_result_t trees_search(const trees_t *self, tree_id_t start,

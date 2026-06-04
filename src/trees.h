@@ -12,9 +12,6 @@ typedef struct trees {
 	uint8_t default_tier;
 } trees_t;
 
-/// Minimum free count for partial-tree heuristics
-#define TREES_MIN_FREE (LLFREE_TREE_SIZE / 16)
-
 /// Size of the metadata buffer needed for the tree array
 static inline ll_unused size_t trees_metadata_size(size_t frames)
 {
@@ -38,8 +35,8 @@ tree_t trees_load(const trees_t *self, tree_id_t idx);
 
 /// Decrement free counter and update tier via check callback.
 /// On success, writes the resulting tier to *out_tier.
-bool trees_get(trees_t *self, tree_id_t idx, treeF_t frames,
-	       tree_check_fn check, void *args, uint8_t *out_tier);
+bool trees_steal(trees_t *self, tree_id_t idx, treeF_t frames,
+	       uint8_t *tier, llfree_policy_fn policy);
 
 /// Increment free counter; resets tier to default when tree becomes fully free.
 void trees_put(trees_t *self, tree_id_t idx, treeF_t frames,
@@ -66,14 +63,6 @@ void trees_unreserve(trees_t *self, tree_id_t idx, treeF_t free, uint8_t tier,
 bool trees_sync_steal(trees_t *self, tree_id_t idx, treeF_t min,
 		      treeF_t *out_stolen);
 
-/// Increment free counter and optionally reserve the tree (free-reserve heuristic).
-/// *reserve: whether reservation should be attempted.
-/// On return, *reserve is true if a reservation occurred.
-/// When reserved, *out_old_free is the free count before the put.
-void trees_put_or_reserve(trees_t *self, tree_id_t idx, treeF_t frames,
-			  uint8_t tier, bool *reserve, llfree_policy_fn policy,
-			  treeF_t *out_old_free);
-
 /// Callback for tree search: attempt operation at given tree index.
 /// Return LLFREE_ERR_MEMORY to continue searching, anything else to stop.
 typedef llfree_result_t (*trees_access_fn)(tree_id_t idx, void *ctx);
@@ -95,11 +84,11 @@ typedef llfree_policy_t (*trees_rate_fn)(uint8_t target_tier, treeF_t free,
 
 /// Best-fit search: evaluate each tree via rate(), try perfect matches
 /// immediately, then collect top N candidates by priority and try them.
-#define TREES_SEARCH_BEST 3
+#define TREES_SEARCH_BEST 8
 llfree_result_t trees_search_best(const trees_t *self, tree_id_t start,
-				  size_t offset, size_t len,
-				  trees_rate_fn rate, void *rate_args,
-				  trees_access_fn cb, void *ctx);
+				  size_t offset, size_t len, trees_rate_fn rate,
+				  void *rate_args, trees_access_fn cb,
+				  void *ctx);
 
 /// Compute tree statistics over the entire array
 ll_tree_stats_t trees_stats(const trees_t *self);

@@ -111,10 +111,6 @@ llfree_meta_t llfree_metadata(const llfree_t *self)
 	return meta;
 }
 
-// == Check functions ==
-// These are callbacks for tree_check_fn (uint8_t tree_tier, treeF_t frames, void *args)
-// Each matches a specific Rust closure pattern.
-
 /// rate_args for trees_rate_fn: evaluate a tree for the given request.
 struct rate_args {
 	uint8_t tier; ///< requested tier
@@ -126,7 +122,7 @@ struct rate_args {
 /// Accept Match (keep priority), Demote-if-full (perfect match).
 /// Steal is rejected in near search (matching Rust).
 static llfree_policy_t rate_reserve_near_tree(uint8_t tree_tier, treeF_t free,
-						  void *args)
+					      void *args)
 {
 	struct rate_args *a = (struct rate_args *)args;
 	if (free < a->frames)
@@ -145,7 +141,7 @@ static llfree_policy_t rate_reserve_near_tree(uint8_t tree_tier, treeF_t free,
 /// Steal -> passed through (reserve_or_steal_cb handles it).
 /// Others -> Invalid.
 static llfree_policy_t rate_reserve_global_tree(uint8_t tree_tier, treeF_t free,
-						  void *args)
+						void *args)
 {
 	struct rate_args *a = (struct rate_args *)args;
 	if (free < a->frames)
@@ -167,35 +163,6 @@ static llfree_policy_t rate_global_tree(uint8_t tree_tier, treeF_t free,
 	if (free < a->frames)
 		return (llfree_policy_t){ LLFREE_POLICY_INVALID, 0 };
 	return a->policy(a->tier, tree_tier, free);
-}
-
-/// Policy-to-tier helper: translates a policy result into the actual
-/// resulting tier for the allocation.
-/// Match/Demote -> requested tier, Steal -> target tier, Invalid -> NONE.
-static uint8_t policy_to_tier(llfree_policy_t p, uint8_t request_tier,
-			      uint8_t target_tier)
-{
-	switch (p.type) {
-	case LLFREE_POLICY_MATCH:
-	case LLFREE_POLICY_DEMOTE:
-		return request_tier;
-	case LLFREE_POLICY_STEAL:
-		return target_tier;
-	default:
-		return LLFREE_TIER_NONE;
-	}
-}
-
-/// Check callback for get_reserve in search_and_reserve and get_global in get_at:
-/// uses policy_to_tier to convert the rate into a target tier.
-/// Also rejects trees with insufficient free frames (matching Rust's rate() guard).
-static uint8_t check_reserve_tree(uint8_t tree_tier, treeF_t frames, void *args)
-{
-	struct rate_args *a = (struct rate_args *)args;
-	if (frames < a->frames)
-		return LLFREE_TIER_NONE;
-	llfree_policy_t p = a->policy(a->tier, tree_tier, frames);
-	return policy_to_tier(p, a->tier, tree_tier);
 }
 
 // == Core allocation helpers ==
@@ -245,8 +212,8 @@ static llfree_result_t reserve_or_steal_cb(tree_id_t idx, void *ctx)
 	ll_optional_t tier_len = ll_local_tier_locals(self->local, target_tier);
 	if (!tier_len.present || tier_len.value == 0) {
 		if (reserved)
-			trees_unreserve(&self->trees, idx, old_free, target_tier,
-					self->policy);
+			trees_unreserve(&self->trees, idx, old_free,
+					target_tier, self->policy);
 		else
 			trees_put(&self->trees, idx, frames, self->policy);
 		llfree_warn("no locals for tier %u", target_tier);
@@ -268,10 +235,34 @@ static llfree_result_t reserve_or_steal_cb(tree_id_t idx, void *ctx)
 	} else {
 		llfree_debug("reserve_or_steal failed idx=%zu", idx.value);
 		if (reserved)
-			trees_unreserve(&self->trees, idx, old_free, target_tier,
-					self->policy);
+			trees_unreserve(&self->trees, idx, old_free,
+					target_tier, self->policy);
 		else
 			trees_put(&self->trees, idx, frames, self->policy);
+	}
+	return res;
+}
+
+/// Steals a tree from the trees and allocates from it.
+static llfree_result_t steal_cb(tree_id_t idx, void *ctx)
+{
+	reserve_or_steal_args_t *rargs = (reserve_or_steal_args_t *)ctx;
+	llfree_t *self = rargs->self;
+	treeF_t frames = (treeF_t)(1u << rargs->order);
+
+	uint8_t tier = rargs->tier;
+	if (!trees_steal(&self->trees, idx, frames, &tier, self->policy))
+		return llfree_err(LLFREE_ERR_MEMORY);
+
+	llfree_result_t res = lower_get(&self->lower, frame_from_tree(idx),
+					rargs->order, frame_id_none());
+
+	if (llfree_is_ok(res)) {
+		llfree_debug("get_global success idx=%zu", idx.value);
+		res.tier = tier;
+	} else {
+		llfree_debug("get_global failed idx=%zu", idx.value);
+		trees_put(&self->trees, idx, frames, self->policy);
 	}
 	return res;
 }
@@ -287,10 +278,9 @@ static llfree_result_t search_and_reserve(llfree_t *self, uint8_t tier,
 	size_t near = LL_MAX(self->trees.len / 16, cl_trees / 4);
 	start = tree_id(align_down(start.value, next_pow2(2 * near)));
 
-	reserve_or_steal_args_t args = { .self = self,
-					 .order = order,
-					 .tier = tier,
-					 .local = local };
+	reserve_or_steal_args_t args = {
+		.self = self, .order = order, .tier = tier, .local = local
+	};
 
 	llfree_debug("reserve tier=%u index=%zu o=%d", tier, local, order);
 
@@ -482,17 +472,9 @@ static llfree_result_t llfree_get_at(llfree_t *self, frame_id_t frame,
 			return res;
 	}
 
-	// Fallback to global reservation
-	struct rate_args rate_a = {
-		.tier = request.tier,
-		.frames = frames,
-		.policy = self->policy,
-	};
-	// Build a check that uses policy_to_tier
-	uint8_t new_tier;
-	// Reuse check_reserve_tree which already does policy_to_tier
-	if (trees_get(&self->trees, tree_idx, frames, check_reserve_tree,
-		      &rate_a, &new_tier)) {
+	uint8_t new_tier = request.tier;
+	if (trees_steal(&self->trees, tree_idx, frames, &new_tier,
+			self->policy)) {
 		llfree_result_t res = lower_get(&self->lower, frame,
 						request.order,
 						frame_id_some(frame));
@@ -617,17 +599,16 @@ llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 		};
 		llfree_result_t res = trees_search_best(
 			&self->trees, start, 0, self->trees.len,
-			rate_global_tree, &rate_a, reserve_or_steal_cb, &args);
+			rate_global_tree, &rate_a, steal_cb, &args);
 		if (res.error != LLFREE_ERR_MEMORY)
 			return res;
 	}
 
 	// -- Out of memory handling ---
-	llfree_warn("OOM");
+	llfree_debug("OOM");
 
 	// Try stealing from other local reservations
-	llfree_result_t res =
-		steal_local(self, &request, frame_id_none());
+	llfree_result_t res = steal_local(self, &request, frame_id_none());
 	if (res.error != LLFREE_ERR_MEMORY)
 		return res;
 

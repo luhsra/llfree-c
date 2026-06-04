@@ -1,4 +1,5 @@
 #include "tree.h"
+#include "llfree.h"
 #include "llfree_platform.h"
 #include "llfree_types.h"
 
@@ -15,24 +16,36 @@ bool tree_put(tree_t *self, treeF_t frames, llfree_policy_fn policy,
 	return true;
 }
 
-bool tree_get(tree_t *self, treeF_t frames, uint8_t *result_tier,
-	      tree_check_fn check, void *args)
+bool tree_steal(tree_t *self, treeF_t frames, uint8_t *tier,
+		llfree_policy_fn policy)
 {
+        assert(tier != NULL);
 	if (self->free < frames)
 		return false;
-	uint8_t new_tier = check(self->tier, self->free, args);
-	if (new_tier == LLFREE_TIER_NONE)
+
+	llfree_policy_t p = policy(*tier, self->tier, self->free);
+	uint8_t new_tier = LLFREE_TIER_NONE;
+	switch (p.type) {
+	case LLFREE_POLICY_MATCH:
+	case LLFREE_POLICY_DEMOTE:
+		new_tier = *tier; // demote to the tier of the stealer
+		break;
+	case LLFREE_POLICY_STEAL:
+		new_tier = self->tier; // keep the current tier
+		*tier = self->tier;
+		break;
+	default:
 		return false;
+	}
 
 	self->free -= frames;
 	self->tier = new_tier;
-	if (result_tier != NULL)
-		*result_tier = new_tier;
 	return true;
 }
 
-bool tree_reserve_or_steal(tree_t *self, treeF_t frames, llfree_policy_fn policy,
-			   uint8_t tier, bool *out_reserved, uint8_t *out_tier)
+bool tree_reserve_or_steal(tree_t *self, treeF_t frames,
+			   llfree_policy_fn policy, uint8_t tier,
+			   bool *out_reserved, uint8_t *out_tier)
 {
 	if (self->reserved || self->free < frames)
 		return false;
@@ -77,24 +90,6 @@ bool tree_sync_steal(tree_t *self, treeF_t min)
 		return true;
 	}
 	return false;
-}
-
-bool tree_put_or_reserve(tree_t *self, treeF_t frames, uint8_t tier,
-			 llfree_policy_fn policy, uint8_t default_tier,
-			 treeF_t min, bool *reserve)
-{
-	bool success = tree_put(self, frames, policy, default_tier);
-	assert(success); // should never fail
-
-	if (reserve && *reserve && !self->reserved && self->tier == tier &&
-	    self->free > min) {
-		self->free = 0;
-		self->reserved = true;
-		*reserve = true; // keep: race if CAS fails
-	} else if (reserve) {
-		*reserve = false;
-	}
-	return true;
 }
 
 bool tree_change(tree_t *self, uint8_t match_tier, treeF_t min_free,
