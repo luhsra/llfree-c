@@ -21,16 +21,6 @@ typedef struct tree {
 } tree_t;
 _Static_assert(sizeof(tree_t) == sizeof(treeF_t), "tree size mismatch");
 
-/// Range for tree free-counter search
-typedef struct p_range {
-	treeF_t min, max;
-} p_range_t;
-static inline ll_unused p_range_t p_range(treeF_t min, treeF_t max)
-{
-	assert(min <= max);
-	return (p_range_t){ min, max };
-}
-
 /// Lower bound used by the tree search heuristics
 #define TREE_LOWER_LIM (LLFREE_TREE_SIZE / 16)
 

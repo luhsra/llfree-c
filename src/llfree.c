@@ -71,6 +71,10 @@ llfree_result_t llfree_init(llfree_t *self, size_t frames, uint8_t init,
 	       tiering->num_tiers <= LLFREE_MAX_TIERS);
 	assert(check_meta(meta, llfree_metadata_size(tiering, frames)));
 
+	llfree_info("llfree init frames=%" PRIu64 " huge_size=%" PRIu32
+		    " tree_size=%" PRIu32,
+		    frames, 1u << LLFREE_HUGE_ORDER, LLFREE_TREE_SIZE);
+
 	if (init >= LLFREE_INIT_MAX) {
 		llfree_info("Invalid init mode %d", init);
 		return llfree_err(LLFREE_ERR_INIT);
