@@ -4,66 +4,66 @@
 #include "llfree_types.h"
 
 bool tree_put(tree_t *self, treeF_t frames, llfree_policy_fn policy,
-	      uint8_t default_tier)
+	      uint8_t default_cluster)
 {
 	treeF_t free = self->free + frames;
 	assert(free <= LLFREE_TREE_SIZE);
 	self->free = free;
 	if (free == LLFREE_TREE_SIZE &&
-	    policy(self->tier, default_tier, self->free).type !=
+	    policy(self->cluster, default_cluster, self->free).type !=
 		    LLFREE_POLICY_INVALID)
-		self->tier = default_tier;
+		self->cluster = default_cluster;
 	return true;
 }
 
-bool tree_steal(tree_t *self, treeF_t frames, uint8_t *tier,
+bool tree_steal(tree_t *self, treeF_t frames, uint8_t *cluster,
 		llfree_policy_fn policy)
 {
-        assert(tier != NULL);
+        assert(cluster != NULL);
 	if (self->free < frames)
 		return false;
 
-	llfree_policy_t p = policy(*tier, self->tier, self->free);
-	uint8_t new_tier = LLFREE_TIER_NONE;
+	llfree_policy_t p = policy(*cluster, self->cluster, self->free);
+	uint8_t new_cluster = LLFREE_CLUSTER_NONE;
 	switch (p.type) {
 	case LLFREE_POLICY_MATCH:
 	case LLFREE_POLICY_DEMOTE:
-		new_tier = *tier; // demote to the tier of the stealer
+		new_cluster = *cluster; // demote to the cluster of the stealer
 		break;
 	case LLFREE_POLICY_STEAL:
-		new_tier = self->tier; // keep the current tier
-		*tier = self->tier;
+		new_cluster = self->cluster; // keep the current cluster
+		*cluster = self->cluster;
 		break;
 	default:
 		return false;
 	}
 
 	self->free -= frames;
-	self->tier = new_tier;
+	self->cluster = new_cluster;
 	return true;
 }
 
 bool tree_reserve_or_steal(tree_t *self, treeF_t frames,
-			   llfree_policy_fn policy, uint8_t tier,
-			   bool *out_reserved, uint8_t *out_tier)
+			   llfree_policy_fn policy, uint8_t cluster,
+			   bool *out_reserved, uint8_t *out_cluster)
 {
 	if (self->reserved || self->free < frames)
 		return false;
-	llfree_policy_t p = policy(tier, self->tier, self->free);
+	llfree_policy_t p = policy(cluster, self->cluster, self->free);
 	switch (p.type) {
 	case LLFREE_POLICY_MATCH:
 	case LLFREE_POLICY_DEMOTE:
 		// Reserve: take all free frames, mark reserved
 		*out_reserved = true;
-		*out_tier = tier;
+		*out_cluster = cluster;
 		self->reserved = true;
 		self->free = 0;
-		self->tier = tier;
+		self->cluster = cluster;
 		return true;
 	case LLFREE_POLICY_STEAL:
-		// Steal: just decrement counter, keep tier
+		// Steal: just decrement counter, keep cluster
 		*out_reserved = false;
-		*out_tier = self->tier;
+		*out_cluster = self->cluster;
 		self->free -= frames;
 		return true;
 	default:
@@ -71,16 +71,16 @@ bool tree_reserve_or_steal(tree_t *self, treeF_t frames,
 	}
 }
 
-bool tree_unreserve_add(tree_t *self, treeF_t frames, uint8_t tier,
-			llfree_policy_fn policy, uint8_t default_tier)
+bool tree_unreserve_add(tree_t *self, treeF_t frames, uint8_t cluster,
+			llfree_policy_fn policy, uint8_t default_cluster)
 {
 	if (!self->reserved)
 		return false;
 	self->reserved = false;
-	llfree_policy_t p = policy(tier, self->tier, frames);
+	llfree_policy_t p = policy(cluster, self->cluster, frames);
 	if (p.type == LLFREE_POLICY_DEMOTE)
-		self->tier = tier;
-	return tree_put(self, frames, policy, default_tier);
+		self->cluster = cluster;
+	return tree_put(self, frames, policy, default_cluster);
 }
 
 bool tree_sync_steal(tree_t *self, treeF_t min)
@@ -92,19 +92,19 @@ bool tree_sync_steal(tree_t *self, treeF_t min)
 	return false;
 }
 
-bool tree_change(tree_t *self, uint8_t match_tier, treeF_t min_free,
-		 uint8_t change_tier, llfree_tree_operation_t operation,
+bool tree_change(tree_t *self, uint8_t match_cluster, treeF_t min_free,
+		 uint8_t change_cluster, llfree_tree_operation_t operation,
 		 treeF_t online_free)
 {
 	if (self->reserved)
 		return false;
-	if (match_tier != LLFREE_TIER_NONE && self->tier != match_tier)
+	if (match_cluster != LLFREE_CLUSTER_NONE && self->cluster != match_cluster)
 		return false;
 	if (self->free < min_free)
 		return false;
 
-	if (change_tier != LLFREE_TIER_NONE)
-		self->tier = change_tier;
+	if (change_cluster != LLFREE_CLUSTER_NONE)
+		self->cluster = change_cluster;
 
 	switch (operation) {
 	case LLFREE_TREE_OP_NONE:
@@ -127,9 +127,9 @@ void tree_print(tree_t *self, tree_id_t idx, size_t indent)
 	if (indent == 0)
 		llfree_info_start();
 	llfree_info_cont("%stree[%" PRIuS
-			 "] { reserved: %d, tier: %u, free: %" PRIuS " }\n",
+			 "] { reserved: %d, cluster: %u, free: %" PRIuS " }\n",
 			 INDENT(indent), idx.value, self->reserved,
-			 (unsigned)self->tier, (size_t)self->free);
+			 (unsigned)self->cluster, (size_t)self->free);
 	if (indent == 0)
 		llfree_info_end();
 }

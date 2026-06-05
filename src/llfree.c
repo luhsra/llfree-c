@@ -24,13 +24,13 @@ static treeF_t init_tree_cb(frame_id_t tree_start_frame, void *ctx)
 	return sum;
 }
 
-llfree_meta_size_t llfree_metadata_size(const llfree_tiering_t *tiering,
+llfree_meta_size_t llfree_metadata_size(const llfree_clustering_t *clustering,
 					size_t frames)
 {
 	llfree_meta_size_t meta = {
 		.llfree = sizeof(llfree_t),
 		.trees = trees_metadata_size(frames),
-		.local = ll_local_size(tiering),
+		.local = ll_local_size(clustering),
 		.lower = lower_metadata_size(frames),
 	};
 	return meta;
@@ -63,13 +63,13 @@ static ll_unused bool check_meta(llfree_meta_t meta, llfree_meta_size_t sizes)
 }
 
 llfree_result_t llfree_init(llfree_t *self, size_t frames, uint8_t init,
-			    llfree_meta_t meta, const llfree_tiering_t *tiering)
+			    llfree_meta_t meta, const llfree_clustering_t *clustering)
 {
 	assert(self != NULL);
-	assert(tiering != NULL);
-	assert(tiering->num_tiers >= 1 &&
-	       tiering->num_tiers <= LLFREE_MAX_TIERS);
-	assert(check_meta(meta, llfree_metadata_size(tiering, frames)));
+	assert(clustering != NULL);
+	assert(clustering->num_clusters >= 1 &&
+	       clustering->num_clusters <= LLFREE_MAX_CLUSTERS);
+	assert(check_meta(meta, llfree_metadata_size(clustering, frames)));
 
 	llfree_info("llfree init frames=%" PRIuS " huge_size=%" PRIu32
 		    " tree_size=%" PRIu32,
@@ -93,13 +93,13 @@ llfree_result_t llfree_init(llfree_t *self, size_t frames, uint8_t init,
 	trees_init_fn init_fn = (init != LLFREE_INIT_NONE) ? init_tree_cb :
 							     NULL;
 	trees_init(&self->trees, frames, meta.trees, init_fn, &self->lower,
-		   tiering->default_tier);
+		   clustering->default_cluster);
 
 	self->local = (local_t *)meta.local;
-	ll_local_init(self->local, tiering);
+	ll_local_init(self->local, clustering);
 
-	self->policy = tiering->policy;
-	self->num_tiers = (uint8_t)tiering->num_tiers;
+	self->policy = clustering->policy;
+	self->num_clusters = (uint8_t)clustering->num_clusters;
 
 	return llfree_ok(frame_id(0), 0);
 }
@@ -117,7 +117,7 @@ llfree_meta_t llfree_metadata(const llfree_t *self)
 
 /// rate_args for trees_rate_fn: evaluate a tree for the given request.
 struct rate_args {
-	uint8_t tier; ///< requested tier
+	uint8_t cluster; ///< requested cluster
 	treeF_t frames; ///< 1 << order (minimum free for the tree to be usable)
 	llfree_policy_fn policy;
 };
@@ -125,13 +125,13 @@ struct rate_args {
 /// Rate a tree for search_and_reserve near search:
 /// Accept Match (keep priority), Demote-if-full (perfect match).
 /// Steal is rejected in near search (matching Rust).
-static llfree_policy_t rate_reserve_near_tree(uint8_t tree_tier, treeF_t free,
+static llfree_policy_t rate_reserve_near_tree(uint8_t tree_cluster, treeF_t free,
 					      void *args)
 {
 	struct rate_args *a = (struct rate_args *)args;
 	if (free < a->frames)
 		return (llfree_policy_t){ LLFREE_POLICY_INVALID, 0 };
-	llfree_policy_t policy = a->policy(a->tier, tree_tier, free);
+	llfree_policy_t policy = a->policy(a->cluster, tree_cluster, free);
 	if (policy.type == LLFREE_POLICY_MATCH)
 		return policy;
 	if (policy.type == LLFREE_POLICY_DEMOTE && free == LLFREE_TREE_SIZE)
@@ -144,13 +144,13 @@ static llfree_policy_t rate_reserve_near_tree(uint8_t tree_tier, treeF_t free,
 /// Demote-if-full -> perfect match (immediate try).
 /// Steal -> passed through (reserve_or_steal_cb handles it).
 /// Others -> Invalid.
-static llfree_policy_t rate_reserve_global_tree(uint8_t tree_tier, treeF_t free,
+static llfree_policy_t rate_reserve_global_tree(uint8_t tree_cluster, treeF_t free,
 						void *args)
 {
 	struct rate_args *a = (struct rate_args *)args;
 	if (free < a->frames)
 		return (llfree_policy_t){ LLFREE_POLICY_INVALID, 0 };
-	llfree_policy_t policy = a->policy(a->tier, tree_tier, free);
+	llfree_policy_t policy = a->policy(a->cluster, tree_cluster, free);
 	if (policy.type == LLFREE_POLICY_MATCH)
 		return (llfree_policy_t){ LLFREE_POLICY_MATCH, UINT8_MAX };
 	if (policy.type == LLFREE_POLICY_DEMOTE && free == LLFREE_TREE_SIZE)
@@ -160,13 +160,13 @@ static llfree_policy_t rate_reserve_global_tree(uint8_t tree_tier, treeF_t free,
 }
 
 /// Rate a tree for global get
-static llfree_policy_t rate_global_tree(uint8_t tree_tier, treeF_t free,
+static llfree_policy_t rate_global_tree(uint8_t tree_cluster, treeF_t free,
 					void *args)
 {
 	struct rate_args *a = (struct rate_args *)args;
 	if (free < a->frames)
 		return (llfree_policy_t){ LLFREE_POLICY_INVALID, 0 };
-	return a->policy(a->tier, tree_tier, free);
+	return a->policy(a->cluster, tree_cluster, free);
 }
 
 // == Core allocation helpers ==
@@ -176,23 +176,23 @@ static llfree_policy_t rate_global_tree(uint8_t tree_tier, treeF_t free,
 typedef struct reserve_or_steal_args {
 	llfree_t *self;
 	uint8_t order;
-	uint8_t tier;
+	uint8_t cluster;
 	size_t local;
 } reserve_or_steal_args_t;
 
 /// Swap out the currently reserved tree for a new one and write back the
 /// free counter to the formerly reserved global tree.
-static void swap_reserved(llfree_t *self, uint8_t tier, size_t local,
+static void swap_reserved(llfree_t *self, uint8_t cluster, size_t local,
 			  tree_id_t new_idx, treeF_t new_free)
 {
-	llfree_debug("swap tier=%u index=%zu idx=%zu free=%" PRIuS, tier, local,
+	llfree_debug("swap cluster=%u index=%zu idx=%zu free=%" PRIuS, cluster, local,
 		     new_idx.value, (size_t)new_free);
 	local_result_t old =
-		ll_local_swap(self->local, tier, local, new_idx, new_free);
+		ll_local_swap(self->local, cluster, local, new_idx, new_free);
 	assert(old.success);
 	if (old.present) {
 		trees_unreserve(&self->trees, tree_from_row(old.start_row),
-				old.free, old.tier, self->policy);
+				old.free, old.cluster, self->policy);
 	}
 }
 
@@ -207,23 +207,23 @@ static llfree_result_t reserve_or_steal_cb(tree_id_t idx, void *ctx)
 
 	bool reserved;
 	treeF_t old_free;
-	uint8_t target_tier;
+	uint8_t target_cluster;
 	if (!trees_reserve_or_steal(&self->trees, idx, frames, self->policy,
-				    rargs->tier, &reserved, &old_free,
-				    &target_tier))
+				    rargs->cluster, &reserved, &old_free,
+				    &target_cluster))
 		return llfree_err(LLFREE_ERR_MEMORY);
 
-	ll_optional_t tier_len = ll_local_tier_locals(self->local, target_tier);
-	if (!tier_len.present || tier_len.value == 0) {
+	ll_optional_t cluster_len = ll_local_cluster_locals(self->local, target_cluster);
+	if (!cluster_len.present || cluster_len.value == 0) {
 		if (reserved)
 			trees_unreserve(&self->trees, idx, old_free,
-					target_tier, self->policy);
+					target_cluster, self->policy);
 		else
 			trees_put(&self->trees, idx, frames, self->policy);
-		llfree_warn("no locals for tier %u", target_tier);
+		llfree_warn("no locals for cluster %u", target_cluster);
 		return llfree_err(LLFREE_ERR_MEMORY);
 	}
-	size_t local = rargs->local % tier_len.value;
+	size_t local = rargs->local % cluster_len.value;
 
 	llfree_result_t res = lower_get(&self->lower, frame_from_tree(idx),
 					rargs->order, frame_id_none());
@@ -233,14 +233,14 @@ static llfree_result_t reserve_or_steal_cb(tree_id_t idx, void *ctx)
 			     idx.value, reserved);
 		if (reserved) {
 			treeF_t new_free = old_free - frames;
-			swap_reserved(self, target_tier, local, idx, new_free);
+			swap_reserved(self, target_cluster, local, idx, new_free);
 		}
-		res.tier = target_tier;
+		res.cluster = target_cluster;
 	} else {
 		llfree_debug("reserve_or_steal failed idx=%zu", idx.value);
 		if (reserved)
 			trees_unreserve(&self->trees, idx, old_free,
-					target_tier, self->policy);
+					target_cluster, self->policy);
 		else
 			trees_put(&self->trees, idx, frames, self->policy);
 	}
@@ -254,8 +254,8 @@ static llfree_result_t steal_cb(tree_id_t idx, void *ctx)
 	llfree_t *self = rargs->self;
 	treeF_t frames = (treeF_t)(1u << rargs->order);
 
-	uint8_t tier = rargs->tier;
-	if (!trees_steal(&self->trees, idx, frames, &tier, self->policy))
+	uint8_t cluster = rargs->cluster;
+	if (!trees_steal(&self->trees, idx, frames, &cluster, self->policy))
 		return llfree_err(LLFREE_ERR_MEMORY);
 
 	llfree_result_t res = lower_get(&self->lower, frame_from_tree(idx),
@@ -263,7 +263,7 @@ static llfree_result_t steal_cb(tree_id_t idx, void *ctx)
 
 	if (llfree_is_ok(res)) {
 		llfree_debug("get_global success idx=%zu", idx.value);
-		res.tier = tier;
+		res.cluster = cluster;
 	} else {
 		llfree_debug("get_global failed idx=%zu", idx.value);
 		trees_put(&self->trees, idx, frames, self->policy);
@@ -272,7 +272,7 @@ static llfree_result_t steal_cb(tree_id_t idx, void *ctx)
 }
 
 /// Reserve and allocate from a new tree, using best-fit search near `start`.
-static llfree_result_t search_and_reserve(llfree_t *self, uint8_t tier,
+static llfree_result_t search_and_reserve(llfree_t *self, uint8_t cluster,
 					  size_t local, uint8_t order,
 					  tree_id_t start)
 {
@@ -283,16 +283,16 @@ static llfree_result_t search_and_reserve(llfree_t *self, uint8_t tier,
 	start = tree_id(align_down(start.value, next_pow2(2 * near)));
 
 	reserve_or_steal_args_t args = {
-		.self = self, .order = order, .tier = tier, .local = local
+		.self = self, .order = order, .cluster = cluster, .local = local
 	};
 
-	llfree_debug("reserve tier=%u index=%zu o=%d", tier, local, order);
+	llfree_debug("reserve cluster=%u index=%zu o=%d", cluster, local, order);
 
 	// Find best fit in neighborhood
 	if (order < LLFREE_HUGE_ORDER) {
-		llfree_debug("search best t=%d l=%zu", tier, local);
+		llfree_debug("search best t=%d l=%zu", cluster, local);
 		struct rate_args near_rate = {
-			.tier = tier,
+			.cluster = cluster,
 			.frames = (treeF_t)(1u << order),
 			.policy = self->policy,
 		};
@@ -304,9 +304,9 @@ static llfree_result_t search_and_reserve(llfree_t *self, uint8_t tier,
 	}
 
 	// Global search
-	llfree_debug("search any t=%d l=%zu", tier, local);
+	llfree_debug("search any t=%d l=%zu", cluster, local);
 	struct rate_args any_rate = {
-		.tier = tier,
+		.cluster = cluster,
 		.frames = (treeF_t)(1u << order),
 		.policy = self->policy,
 	};
@@ -316,7 +316,7 @@ static llfree_result_t search_and_reserve(llfree_t *self, uint8_t tier,
 }
 
 /// Synchronize local free counter with the global counter (steal from global).
-static bool sync_with_global(llfree_t *self, uint8_t tier, size_t index,
+static bool sync_with_global(llfree_t *self, uint8_t cluster, size_t index,
 			     treeF_t needed, local_result_t old)
 {
 	assert(self != NULL);
@@ -332,27 +332,27 @@ static bool sync_with_global(llfree_t *self, uint8_t tier, size_t index,
 	if (!trees_sync_steal(&self->trees, tree_idx, steal_min, &stolen))
 		return false;
 
-	if (!ll_local_put(self->local, tier, index, tree_idx, stolen)) {
-		llfree_warn("sync local failed tier=%u index=%zu idx=%zu", tier,
+	if (!ll_local_put(self->local, cluster, index, tree_idx, stolen)) {
+		llfree_warn("sync local failed cluster=%u index=%zu idx=%zu", cluster,
 			    index, tree_idx.value);
 		trees_put(&self->trees, tree_idx, stolen, self->policy);
 		return false;
 	}
-	llfree_debug("sync success tier=%u index=%zu free=%" PRIuS, tier, index,
+	llfree_debug("sync success cluster=%u index=%zu free=%" PRIuS, cluster, index,
 		     (size_t)stolen);
 	return true;
 }
 
-/// Try decrementing the local reservation for the given tier and local index.
-/// On success, returns the allocated frame and tier.
+/// Try decrementing the local reservation for the given cluster and local index.
+/// On success, returns the allocated frame and cluster.
 /// On failure, if there was a reservation, sets *start_out to its tree index.
-static llfree_result_t get_local(llfree_t *self, uint8_t tier, size_t index,
+static llfree_result_t get_local(llfree_t *self, uint8_t cluster, size_t index,
 				 uint8_t order, treeF_t frames,
 				 frame_id_optional_t frame, bool sync,
 				 tree_id_t *start_out)
 {
 	local_result_t old;
-	old = ll_local_get(self->local, tier, index,
+	old = ll_local_get(self->local, cluster, index,
 			   frame.present ?
 				   tree_id_some(tree_from_frame(frame.value)) :
 				   tree_id_none(),
@@ -364,10 +364,10 @@ static llfree_result_t get_local(llfree_t *self, uint8_t tier, size_t index,
 		if (llfree_is_ok(res)) {
 			row_id_t start_row = row_from_frame(res.frame);
 			if (old.start_row.value != start_row.value) {
-				ll_local_set_start(self->local, tier, index,
+				ll_local_set_start(self->local, cluster, index,
 						   start_row);
 			}
-			return llfree_ok(res.frame, tier);
+			return llfree_ok(res.frame, cluster);
 		}
 
 		trees_put(&self->trees, tree_from_row(old.start_row), frames,
@@ -377,11 +377,11 @@ static llfree_result_t get_local(llfree_t *self, uint8_t tier, size_t index,
 		return res;
 	}
 
-	llfree_debug("local miss tier=%u index=%zu present=%d", tier, index,
+	llfree_debug("local miss cluster=%u index=%zu present=%d", cluster, index,
 		     old.present);
 	if (sync && old.present &&
-	    sync_with_global(self, tier, index, frames, old)) {
-		return get_local(self, tier, index, order, frames, frame, false,
+	    sync_with_global(self, cluster, index, frames, old)) {
+		return get_local(self, cluster, index, order, frames, frame, false,
 				 start_out);
 	}
 
@@ -402,7 +402,7 @@ static llfree_result_t steal_local(llfree_t *self,
 				tree_id_none();
 	size_t index = request->local.present ? request->local.value : 0;
 
-	local_result_t res = ll_local_steal(self->local, request->tier, index,
+	local_result_t res = ll_local_steal(self->local, request->cluster, index,
 					    tree_idx, frames, self->policy);
 	if (res.success) {
 		frame_id_optional_t lower_frame = frame;
@@ -410,7 +410,7 @@ static llfree_result_t steal_local(llfree_t *self,
 						 frame_from_row(res.start_row),
 						 request->order, lower_frame);
 		if (llfree_is_ok(res2))
-			return llfree_ok(res2.frame, res.tier);
+			return llfree_ok(res2.frame, res.cluster);
 		trees_put(&self->trees, tree_from_row(res.start_row), frames,
 			  self->policy);
 		if (res2.error != LLFREE_ERR_MEMORY)
@@ -431,13 +431,13 @@ static llfree_result_t demote_local(llfree_t *self,
 				tree_id_none();
 
 	demote_any_result_t dem =
-		ll_local_demote_any(self->local, request->tier, request->local,
+		ll_local_demote_any(self->local, request->cluster, request->local,
 				    tree_idx, frames, self->policy);
 	if (dem.found) {
 		if (dem.unreserve) {
 			trees_unreserve(&self->trees,
 					tree_from_row(dem.unres_row),
-					dem.unres_free, dem.unres_tier,
+					dem.unres_free, dem.unres_cluster,
 					self->policy);
 		}
 
@@ -446,11 +446,11 @@ static llfree_result_t demote_local(llfree_t *self,
 						frame_from_row(dem.row),
 						request->order, lower_frame);
 		if (llfree_is_ok(res)) {
-			llfree_info("demote success tier=%u index=%zu",
-				    request->tier, request->local.value);
-			return llfree_ok(res.frame, request->tier);
+			llfree_info("demote success cluster=%u index=%zu",
+				    request->cluster, request->local.value);
+			return llfree_ok(res.frame, request->cluster);
 		}
-		llfree_warn("demote failed tier=%u index=%zu", request->tier,
+		llfree_warn("demote failed cluster=%u index=%zu", request->cluster,
 			    request->local.value);
 		trees_put(&self->trees, tree_from_row(dem.row), frames,
 			  self->policy);
@@ -470,20 +470,20 @@ static llfree_result_t llfree_get_at(llfree_t *self, frame_id_t frame,
 	// Try local reservation first
 	if (request.local.present) {
 		llfree_result_t res = get_local(
-			self, request.tier, request.local.value, request.order,
+			self, request.cluster, request.local.value, request.order,
 			frames, frame_id_some(frame), true, NULL);
 		if (res.error != LLFREE_ERR_MEMORY)
 			return res;
 	}
 
-	uint8_t new_tier = request.tier;
-	if (trees_steal(&self->trees, tree_idx, frames, &new_tier,
+	uint8_t new_cluster = request.cluster;
+	if (trees_steal(&self->trees, tree_idx, frames, &new_cluster,
 			self->policy)) {
 		llfree_result_t res = lower_get(&self->lower, frame,
 						request.order,
 						frame_id_some(frame));
 		if (llfree_is_ok(res))
-			return llfree_ok(res.frame, new_tier);
+			return llfree_ok(res.frame, new_cluster);
 		trees_put(&self->trees, tree_idx, frames, self->policy);
 		return res;
 	}
@@ -506,18 +506,18 @@ static bool validate_request(llfree_t *self, llfree_request_t request,
 		return false;
 	}
 
-	ll_optional_t tier_locals =
-		ll_local_tier_locals(self->local, request.tier);
-	if (!tier_locals.present) {
-		llfree_info("Arg: tier=%u is not configured", request.tier);
+	ll_optional_t cluster_locals =
+		ll_local_cluster_locals(self->local, request.cluster);
+	if (!cluster_locals.present) {
+		llfree_info("Arg: cluster=%u is not configured", request.cluster);
 		return false;
 	}
 
-	if (request.local.present && request.local.value >= tier_locals.value) {
+	if (request.local.present && request.local.value >= cluster_locals.value) {
 		llfree_info("Arg: local=%" PRIu64
-			    " out of bounds for tier=%u (locals=%" PRIuS ")",
-			    (uint64_t)request.local.value, request.tier,
-			    tier_locals.value);
+			    " out of bounds for cluster=%u (locals=%" PRIuS ")",
+			    (uint64_t)request.local.value, request.cluster,
+			    cluster_locals.value);
 		return false;
 	}
 
@@ -561,12 +561,12 @@ llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 		return llfree_get_at(self, frame.value, request);
 	}
 
-	ll_optional_t tier_count =
-		ll_local_tier_locals(self->local, request.tier);
+	ll_optional_t cluster_count =
+		ll_local_cluster_locals(self->local, request.cluster);
 	tree_id_t start;
-	if (tier_count.present && tier_count.value != 0 &&
+	if (cluster_count.present && cluster_count.value != 0 &&
 	    request.local.present) {
-		start = tree_id(self->trees.len / tier_count.value *
+		start = tree_id(self->trees.len / cluster_count.value *
 				request.local.value);
 	} else {
 		start = tree_id(0);
@@ -575,9 +575,9 @@ llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 	treeF_t frames = (treeF_t)(1u << request.order);
 
 	// Use local reservation if possible
-	if (request.local.present && tier_count.present &&
-	    tier_count.value != 0 && tier_count.value < self->trees.len) {
-		llfree_result_t res = get_local(self, request.tier,
+	if (request.local.present && cluster_count.present &&
+	    cluster_count.value != 0 && cluster_count.value < self->trees.len) {
+		llfree_result_t res = get_local(self, request.cluster,
 						request.local.value,
 						request.order, frames,
 						frame_id_none(), true, &start);
@@ -585,7 +585,7 @@ llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 			return res;
 
 		// Try reserving new tree
-		res = search_and_reserve(self, request.tier,
+		res = search_and_reserve(self, request.cluster,
 					 request.local.value, request.order,
 					 start);
 		if (res.error != LLFREE_ERR_MEMORY)
@@ -594,10 +594,10 @@ llfree_result_t llfree_get(llfree_t *self, frame_id_optional_t frame,
 		// Global search: reserves or steals from the best matching tree
 		reserve_or_steal_args_t args = { .self = self,
 						 .order = request.order,
-						 .tier = request.tier,
+						 .cluster = request.cluster,
 						 .local = 0 };
 		struct rate_args rate_a = {
-			.tier = request.tier,
+			.cluster = request.cluster,
 			.frames = frames,
 			.policy = self->policy,
 		};
@@ -638,7 +638,7 @@ llfree_result_t llfree_put(llfree_t *self, frame_id_t frame,
 
 	// Try updating own trees first
 	if (request.local.present &&
-	    ll_local_put(self->local, request.tier, request.local.value,
+	    ll_local_put(self->local, request.cluster, request.local.value,
 			 tree_idx, alloc_frames)) {
 		return llfree_ok(frame_id(0), 0);
 	}
@@ -666,8 +666,8 @@ llfree_result_t llfree_change_tree(llfree_t *self, llfree_tree_match_t matcher,
 
 void llfree_drain(llfree_t *self)
 {
-	for (uint8_t t = 0; t < LLFREE_MAX_TIERS; t++) {
-		ll_optional_t locals = ll_local_tier_locals(self->local, t);
+	for (uint8_t t = 0; t < LLFREE_MAX_CLUSTERS; t++) {
+		ll_optional_t locals = ll_local_cluster_locals(self->local, t);
 		if (!locals.present)
 			continue;
 		for (size_t i = 0; i < locals.value; i++) {
@@ -676,7 +676,7 @@ void llfree_drain(llfree_t *self)
 				continue;
 			trees_unreserve(&self->trees,
 					tree_from_row(old.start_row), old.free,
-					old.tier, self->policy);
+					old.cluster, self->policy);
 		}
 	}
 }
@@ -694,9 +694,9 @@ ll_tree_stats_t llfree_tree_stats(const llfree_t *self)
 	ll_tree_stats_t tree_stats = trees_stats(&self->trees);
 	stats.free_frames += tree_stats.free_frames;
 	stats.free_trees += tree_stats.free_trees;
-	for (size_t t = 0; t < LLFREE_MAX_TIERS; t++) {
-		stats.tiers[t].free_frames += tree_stats.tiers[t].free_frames;
-		stats.tiers[t].alloc_frames += tree_stats.tiers[t].alloc_frames;
+	for (size_t t = 0; t < LLFREE_MAX_CLUSTERS; t++) {
+		stats.clusters[t].free_frames += tree_stats.clusters[t].free_frames;
+		stats.clusters[t].alloc_frames += tree_stats.clusters[t].alloc_frames;
 	}
 	return stats;
 }
@@ -725,9 +725,9 @@ void llfree_print_debug(const llfree_t *self,
 	size_t frames = llfree_frames(self);
 	size_t huge = div_ceil(frames, 1 << LLFREE_HUGE_ORDER);
 	snprintf(msg, sizeof(msg),
-		 "LLC { tiers: %u, frames: %" PRIuS "/%" PRIuS ", huge: %" PRIuS
+		 "LLC { num_clusters: %u, frames: %" PRIuS "/%" PRIuS ", huge: %" PRIuS
 		 "/%" PRIuS ", trees: %" PRIuS "/%" PRIuS " }\n",
-		 self->num_tiers, stats.free_frames, frames, stats.free_huge,
+		 self->num_clusters, stats.free_frames, frames, stats.free_huge,
 		 huge, tree_stats.free_trees, self->trees.len);
 	writer(arg, msg);
 }
@@ -790,7 +790,7 @@ static void validate_tree(const llfree_t *self, local_result_t res)
 	tree_t tree = trees_load(&self->trees, tree_idx);
 
 	check(tree.reserved);
-	check(tree.tier < self->num_tiers);
+	check(tree.cluster < self->num_clusters);
 	treeF_t free = tree.free + res.free;
 	check(free <= LLFREE_TREE_SIZE);
 	ll_stats_t tree_stats = lower_stats_at(
@@ -808,7 +808,7 @@ void llfree_validate(const llfree_t *self)
 	     tree_idx = tree_id(tree_idx.value + 1)) {
 		tree_t tree = trees_load(&self->trees, tree_idx);
 		check(tree.free <= LLFREE_TREE_SIZE);
-		check(tree.tier < self->num_tiers);
+		check(tree.cluster < self->num_clusters);
 		if (!tree.reserved) {
 			ll_stats_t tree_stats = lower_stats_at(
 				&self->lower, frame_from_tree(tree_idx),

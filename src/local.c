@@ -92,7 +92,7 @@ static bool ll_reserved_take(reserved_t *self, tree_id_optional_t tree_idx,
 //
 // ----------------------------------------------------------------------------
 
-/// One local entry per core per tier
+/// One local entry per core per cluster
 typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) entry {
 	/// Currently reserved tree for this slot
 	_Atomic(reserved_t) preferred;
@@ -104,55 +104,55 @@ typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) entry {
 _Static_assert(sizeof(entry_t) == LLFREE_CACHE_SIZE,
 	       "entry_t exceeds cache line");
 
-/// Slice of entries for one tier (stored as offset into metadata buffer)
-typedef struct tier_locals {
+/// Slice of entries for one cluster (stored as offset into metadata buffer)
+typedef struct cluster_locals {
 	size_t offset; // byte offset from local base to first entry
-	ll_optional_t len; // ll_none() if tier not configured
-} tier_locals_t;
+	ll_optional_t len; // ll_none() if cluster not configured
+} cluster_locals_t;
 
 /// Locals struct
 typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) local {
-	/// Number of tiers
-	uint8_t num_tiers;
-	/// Per-tier slices into the metadata buffer, indexed by tier id
-	tier_locals_t tiers[LLFREE_MAX_TIERS];
+	/// Number of clusters
+	uint8_t num_clusters;
+	/// Per-cluster slices into the metadata buffer, indexed by cluster id
+	cluster_locals_t clusters[LLFREE_MAX_CLUSTERS];
 } local_t;
 
-size_t ll_local_size(const llfree_tiering_t *tiering)
+size_t ll_local_size(const llfree_clustering_t *clustering)
 {
 	size_t total = 0;
-	for (size_t i = 0; i < tiering->num_tiers; i++)
-		total += tiering->tiers[i].count;
+	for (size_t i = 0; i < clustering->num_clusters; i++)
+		total += clustering->clusters[i].count;
 	return align_up(sizeof(local_t), LLFREE_CACHE_SIZE) +
 	       (sizeof(entry_t) * total);
 }
 
-void ll_local_init(local_t *self, const llfree_tiering_t *tiering)
+void ll_local_init(local_t *self, const llfree_clustering_t *clustering)
 {
 	assert(self != NULL);
 	assert((size_t)self % LLFREE_CACHE_SIZE == 0);
 
-	self->num_tiers = (uint8_t)tiering->num_tiers;
+	self->num_clusters = (uint8_t)clustering->num_clusters;
 
 	// Entries start after the local_t header, cache-line aligned
 	size_t base_offset = align_up(sizeof(local_t), LLFREE_CACHE_SIZE);
 
-	// Initialize tier slices
-	for (size_t i = 0; i < LLFREE_MAX_TIERS; i++)
-		self->tiers[i] =
-			(tier_locals_t){ .offset = 0, .len = ll_none() };
+	// Initialize cluster slices
+	for (size_t i = 0; i < LLFREE_MAX_CLUSTERS; i++)
+		self->clusters[i] =
+			(cluster_locals_t){ .offset = 0, .len = ll_none() };
 
 	size_t offset = 0;
-	for (size_t i = 0; i < tiering->num_tiers; i++) {
-		uint8_t tier = tiering->tiers[i].tier;
-		size_t count = tiering->tiers[i].count;
-		self->tiers[tier] = (tier_locals_t){
+	for (size_t i = 0; i < clustering->num_clusters; i++) {
+		uint8_t cluster = clustering->clusters[i].cluster;
+		size_t count = clustering->clusters[i].count;
+		self->clusters[cluster] = (cluster_locals_t){
 			.offset = base_offset + (sizeof(entry_t) * offset),
 			.len = ll_some(count),
 		};
 		for (size_t j = 0; j < count; j++) {
 			entry_t *entry = (entry_t *)((uint8_t *)self +
-						     self->tiers[tier].offset) +
+						     self->clusters[cluster].offset) +
 					 j;
 			atom_store(&entry->preferred,
 				   ll_reserved_new(false, 0, row_id(0)));
@@ -164,108 +164,108 @@ void ll_local_init(local_t *self, const llfree_tiering_t *tiering)
 	}
 }
 
-uint8_t ll_local_num_tiers(const local_t *self)
+uint8_t ll_local_num_clusters(const local_t *self)
 {
-	return self->num_tiers;
+	return self->num_clusters;
 }
 
 size_t ll_local_mem_size(const local_t *self)
 {
 	size_t total = 0;
-	for (size_t i = 0; i < self->num_tiers; i++)
-		total += self->tiers[i].len.value;
+	for (size_t i = 0; i < self->num_clusters; i++)
+		total += self->clusters[i].len.value;
 	return align_up(sizeof(local_t), LLFREE_CACHE_SIZE) +
 	       (sizeof(entry_t) * total);
 }
 
-ll_optional_t ll_local_tier_locals(const local_t *self, uint8_t tier)
+ll_optional_t ll_local_cluster_locals(const local_t *self, uint8_t cluster)
 {
-	if (tier >= LLFREE_MAX_TIERS)
+	if (cluster >= LLFREE_MAX_CLUSTERS)
 		return ll_none();
-	return self->tiers[tier].len;
+	return self->clusters[cluster].len;
 }
 
-static inline local_result_t make_result(bool success, uint8_t tier,
+static inline local_result_t make_result(bool success, uint8_t cluster,
 					 reserved_t old)
 {
 	return (local_result_t){
 		.success = success,
 		.present = old.present,
-		.tier = tier,
+		.cluster = cluster,
 		.free = old.free,
 		.start_row = row_id(old.start_row),
 	};
 }
 
-local_result_t ll_local_get(local_t *self, uint8_t tier, size_t index,
+local_result_t ll_local_get(local_t *self, uint8_t cluster, size_t index,
 			    tree_id_optional_t tree_idx, treeF_t frames)
 {
-	assert(tier < LLFREE_MAX_TIERS);
-	assert(self->tiers[tier].len.present &&
-	       index < self->tiers[tier].len.value);
+	assert(cluster < LLFREE_MAX_CLUSTERS);
+	assert(self->clusters[cluster].len.present &&
+	       index < self->clusters[cluster].len.value);
 	entry_t *entry =
-		((entry_t *)((uint8_t *)self + self->tiers[tier].offset)) + index;
+		((entry_t *)((uint8_t *)self + self->clusters[cluster].offset)) + index;
 	reserved_t old;
 	bool ok = atom_update(&entry->preferred, old, ll_reserved_dec, tree_idx,
 			      frames);
-	return make_result(ok, tier, old);
+	return make_result(ok, cluster, old);
 }
 
-bool ll_local_put(local_t *self, uint8_t tier, size_t index, tree_id_t tree_idx,
+bool ll_local_put(local_t *self, uint8_t cluster, size_t index, tree_id_t tree_idx,
 		  treeF_t frames)
 {
-	assert(tier < LLFREE_MAX_TIERS);
-	assert(self->tiers[tier].len.present &&
-	       index < self->tiers[tier].len.value);
+	assert(cluster < LLFREE_MAX_CLUSTERS);
+	assert(self->clusters[cluster].len.present &&
+	       index < self->clusters[cluster].len.value);
 	entry_t *entry =
-		((entry_t *)((uint8_t *)self + self->tiers[tier].offset)) + index;
+		((entry_t *)((uint8_t *)self + self->clusters[cluster].offset)) + index;
 	reserved_t old;
 	return atom_update(&entry->preferred, old, ll_reserved_inc, tree_idx,
 			   frames);
 }
 
-local_result_t ll_local_set_start(local_t *self, uint8_t tier, size_t index,
+local_result_t ll_local_set_start(local_t *self, uint8_t cluster, size_t index,
 				  row_id_t start_row)
 {
-	assert(tier < LLFREE_MAX_TIERS);
-	assert(self->tiers[tier].len.present &&
-	       index < self->tiers[tier].len.value);
+	assert(cluster < LLFREE_MAX_CLUSTERS);
+	assert(self->clusters[cluster].len.present &&
+	       index < self->clusters[cluster].len.value);
 	entry_t *entry =
-		((entry_t *)((uint8_t *)self + self->tiers[tier].offset)) + index;
+		((entry_t *)((uint8_t *)self + self->clusters[cluster].offset)) + index;
 	reserved_t old;
 	bool ok = atom_update(&entry->preferred, old, ll_reserved_set_start,
 			      start_row);
-	return make_result(ok, tier, old);
+	return make_result(ok, cluster, old);
 }
 
-local_result_t ll_local_swap(local_t *self, uint8_t tier, size_t index,
+local_result_t ll_local_swap(local_t *self, uint8_t cluster, size_t index,
 			     tree_id_t new_tree_idx, treeF_t new_free)
 {
-	assert(tier < LLFREE_MAX_TIERS);
-	assert(self->tiers[tier].len.present &&
-	       index < self->tiers[tier].len.value);
+	assert(cluster < LLFREE_MAX_CLUSTERS);
+	assert(self->clusters[cluster].len.present &&
+	       index < self->clusters[cluster].len.value);
 	entry_t *entry =
-		((entry_t *)((uint8_t *)self + self->tiers[tier].offset)) + index;
+		((entry_t *)((uint8_t *)self + self->clusters[cluster].offset)) + index;
 	reserved_t new =
 		ll_reserved_new(true, new_free, row_from_tree(new_tree_idx));
 	reserved_t old;
 	atom_update(&entry->preferred, old, ll_reserved_swap, new);
-	return make_result(true, tier, old);
+	return make_result(true, cluster, old);
 }
 
 /// Steal frames from a slot where the policy allows Match or Steal.
-/// Iterates tier-by-tier, starting from the requested tier
-local_result_t ll_local_steal(local_t *self, uint8_t tier, size_t index,
+/// Iterates cluster-by-cluster, starting from the requested cluster
+local_result_t ll_local_steal(local_t *self, uint8_t cluster, size_t index,
 			      tree_id_optional_t tree_idx, treeF_t frames,
 			      llfree_policy_fn policy)
 {
-	for (size_t i = 0; i < LLFREE_MAX_TIERS; i++) {
-		uint8_t target_tier = (uint8_t)((i + tier) % LLFREE_MAX_TIERS);
-		tier_locals_t *target = &self->tiers[target_tier];
+	for (size_t i = 0; i < LLFREE_MAX_CLUSTERS; i++) {
+		uint8_t target_cluster = (uint8_t)((i + cluster) % LLFREE_MAX_CLUSTERS);
+		cluster_locals_t *target = &self->clusters[target_cluster];
 		if (!target->len.present || target->len.value == 0)
 			continue;
 
-		llfree_policy_t p = policy(tier, target_tier, frames);
+		llfree_policy_t p = policy(cluster, target_cluster, frames);
 		if (p.type != LLFREE_POLICY_MATCH &&
 		    p.type != LLFREE_POLICY_STEAL)
 			continue;
@@ -279,7 +279,7 @@ local_result_t ll_local_steal(local_t *self, uint8_t tier, size_t index,
 					      ll_reserved_dec, tree_idx,
 					      frames);
 			if (ok)
-				return make_result(true, target_tier, old);
+				return make_result(true, target_cluster, old);
 		}
 	}
 	return (local_result_t){ .success = false };
@@ -287,20 +287,20 @@ local_result_t ll_local_steal(local_t *self, uint8_t tier, size_t index,
 
 /// Find a slot where the policy returns Demote, atomically take it, and
 /// swap the decremented tree into the requesting local.
-demote_any_result_t ll_local_demote_any(local_t *self, uint8_t tier,
+demote_any_result_t ll_local_demote_any(local_t *self, uint8_t cluster,
 					ll_optional_t index,
 					tree_id_optional_t tree_idx,
 					treeF_t frames, llfree_policy_fn policy)
 {
 	demote_any_result_t fail = { .found = false };
 
-	for (uint8_t i = 1; i < LLFREE_MAX_TIERS; i++) {
-		uint8_t target_tier = (uint8_t)((i + tier) % LLFREE_MAX_TIERS);
-		tier_locals_t *target = &self->tiers[target_tier];
+	for (uint8_t i = 1; i < LLFREE_MAX_CLUSTERS; i++) {
+		uint8_t target_cluster = (uint8_t)((i + cluster) % LLFREE_MAX_CLUSTERS);
+		cluster_locals_t *target = &self->clusters[target_cluster];
 		if (!target->len.present || target->len.value == 0)
 			continue;
 
-		llfree_policy_t p = policy(tier, target_tier, frames);
+		llfree_policy_t p = policy(cluster, target_cluster, frames);
 		if (p.type != LLFREE_POLICY_DEMOTE)
 			continue;
 
@@ -322,7 +322,7 @@ demote_any_result_t ll_local_demote_any(local_t *self, uint8_t tier,
 			assert(success); // we just took it, so this should not fail
 
 			// Swap into the requesting local
-			tier_locals_t *req = &self->tiers[tier];
+			cluster_locals_t *req = &self->clusters[cluster];
 			if (index.present && req->len.present &&
 			    req->len.value > 0 && idx < req->len.value) {
 				entry_t *req_entries =
@@ -336,7 +336,7 @@ demote_any_result_t ll_local_demote_any(local_t *self, uint8_t tier,
 					.row = row_id(new_res.start_row),
 					.unreserve = prev.present,
 					.unres_row = row_id(prev.start_row),
-					.unres_tier = tier,
+					.unres_cluster = cluster,
 					.unres_free = prev.free,
 				};
 			}
@@ -346,7 +346,7 @@ demote_any_result_t ll_local_demote_any(local_t *self, uint8_t tier,
 				.row = row_id(new_res.start_row),
 				.unreserve = true,
 				.unres_row = row_id(new_res.start_row),
-				.unres_tier = tier,
+				.unres_cluster = cluster,
 				.unres_free = new_res.free,
 			};
 		}
@@ -373,45 +373,45 @@ static bool frees_inc(local_history_t *self, tree_id_t tree_idx)
 }
 #endif
 
-bool ll_local_free_inc(local_t *self, uint8_t tier, size_t index,
+bool ll_local_free_inc(local_t *self, uint8_t cluster, size_t index,
 		       tree_id_t tree_idx)
 {
 #if LLFREE_ENABLE_FREE_RESERVE
-	assert(tier < LLFREE_MAX_TIERS);
-	assert(index < self->tiers[tier].len);
+	assert(cluster < LLFREE_MAX_CLUSTERS);
+	assert(index < self->clusters[cluster].len);
 	entry_t *entry =
-		((entry_t *)((uint8_t *)self + self->tiers[tier].offset)) + index;
+		((entry_t *)((uint8_t *)self + self->clusters[cluster].offset)) + index;
 	local_history_t frees;
 	bool updated = atom_update(&entry->last, frees, frees_inc, tree_idx);
 	// !updated means threshold was reached → caller should reserve
 	return !updated;
 #else
 	(void)self;
-	(void)tier;
+	(void)cluster;
 	(void)index;
 	(void)tree_idx;
 	return false;
 #endif
 }
 
-local_result_t ll_local_drain(local_t *self, uint8_t tier, size_t index)
+local_result_t ll_local_drain(local_t *self, uint8_t cluster, size_t index)
 {
-	assert(tier < LLFREE_MAX_TIERS);
-	assert(self->tiers[tier].len.present &&
-	       index < self->tiers[tier].len.value);
+	assert(cluster < LLFREE_MAX_CLUSTERS);
+	assert(self->clusters[cluster].len.present &&
+	       index < self->clusters[cluster].len.value);
 	entry_t *entry =
-		((entry_t *)((uint8_t *)self + self->tiers[tier].offset)) + index;
+		((entry_t *)((uint8_t *)self + self->clusters[cluster].offset)) + index;
 	reserved_t old;
 	atom_update(&entry->preferred, old, ll_reserved_swap,
 		    ll_reserved_new(false, 0, row_id(0)));
-	return make_result(old.present, tier, old);
+	return make_result(old.present, cluster, old);
 }
 
 ll_tree_stats_t ll_local_stats(const local_t *self)
 {
 	ll_tree_stats_t stats = { 0 };
-	for (uint8_t t = 0; t < LLFREE_MAX_TIERS; t++) {
-		const tier_locals_t *tl = &self->tiers[t];
+	for (uint8_t t = 0; t < LLFREE_MAX_CLUSTERS; t++) {
+		const cluster_locals_t *tl = &self->clusters[t];
 		for (size_t j = 0; tl->len.present && j < tl->len.value; j++) {
 			entry_t *entries =
 				(entry_t *)((uint8_t *)self + tl->offset);
@@ -420,7 +420,7 @@ ll_tree_stats_t ll_local_stats(const local_t *self)
 				stats.free_frames += res.free;
 				stats.free_trees += res.free ==
 						    LLFREE_TREE_SIZE;
-				stats.tiers[t].free_frames += res.free;
+				stats.clusters[t].free_frames += res.free;
 			}
 		}
 	}
@@ -429,8 +429,8 @@ ll_tree_stats_t ll_local_stats(const local_t *self)
 
 local_result_t ll_local_stats_at(const local_t *self, tree_id_t tree_idx)
 {
-	for (uint8_t t = 0; t < LLFREE_MAX_TIERS; t++) {
-		const tier_locals_t *tl = &self->tiers[t];
+	for (uint8_t t = 0; t < LLFREE_MAX_CLUSTERS; t++) {
+		const cluster_locals_t *tl = &self->clusters[t];
 		for (size_t j = 0; tl->len.present && j < tl->len.value; j++) {
 			entry_t *entries =
 				(entry_t *)((uint8_t *)self + tl->offset);
@@ -454,16 +454,16 @@ void ll_local_print(const local_t *self, size_t indent)
 		llfree_info_start();
 	llfree_info_cont("%sll_local_t {\n", INDENT(indent));
 	size_t total = 0;
-	for (size_t i = 0; i < self->num_tiers; i++)
-		total += self->tiers[i].len.value;
-	llfree_info_cont("%snum_tiers: %u, total: %zu\n", INDENT(indent + 1),
-			 self->num_tiers, total);
+	for (size_t i = 0; i < self->num_clusters; i++)
+		total += self->clusters[i].len.value;
+	llfree_info_cont("%snum_clusters: %u, total: %zu\n", INDENT(indent + 1),
+			 self->num_clusters, total);
 
-	for (uint8_t t = 0; t < LLFREE_MAX_TIERS; t++) {
-		const tier_locals_t *tl = &self->tiers[t];
+	for (uint8_t t = 0; t < LLFREE_MAX_CLUSTERS; t++) {
+		const cluster_locals_t *tl = &self->clusters[t];
 		if (!tl->len.present || tl->len.value == 0)
 			continue;
-		llfree_info_cont("%stier %u (%zu entries):\n",
+		llfree_info_cont("%scluster %u (%zu entries):\n",
 				 INDENT(indent + 1), t, tl->len.value);
 		for (size_t j = 0; j < tl->len.value; j++) {
 			entry_t *entries =
@@ -495,8 +495,8 @@ void ll_local_validate(const local_t *self, const llfree_t *llfree,
 					     local_result_t res))
 {
 	assert(self != NULL);
-	for (uint8_t t = 0; t < LLFREE_MAX_TIERS; t++) {
-		const tier_locals_t *tl = &self->tiers[t];
+	for (uint8_t t = 0; t < LLFREE_MAX_CLUSTERS; t++) {
+		const cluster_locals_t *tl = &self->clusters[t];
 		for (size_t j = 0; tl->len.present && j < tl->len.value; j++) {
 			entry_t *entries =
 				(entry_t *)((uint8_t *)self + tl->offset);

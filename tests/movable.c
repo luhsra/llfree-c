@@ -6,8 +6,8 @@
 
 #include <stdlib.h>
 
-// Helper macros for movable tiering requests
-#define ll_cores(self) ll_local_tier_locals((self)->local, 0).value
+// Helper macros for movable clustering requests
+#define ll_cores(self) ll_local_cluster_locals((self)->local, 0).value
 #define llreq(self, core, order) \
 	llfree_movable_request(ll_cores(self), (uint8_t)(order), core, false)
 #define llreq_mov(self, core, order) \
@@ -16,15 +16,15 @@
 static llfree_t llfree_new(size_t cores, size_t frames, uint8_t init)
 {
 	llfree_t upper;
-	llfree_tiering_t tiering = llfree_tiering_movable(cores);
-	llfree_meta_size_t m = llfree_metadata_size(&tiering, frames);
+	llfree_clustering_t clustering = llfree_clustering_movable(cores);
+	llfree_meta_size_t m = llfree_metadata_size(&clustering, frames);
 	llfree_meta_t meta = {
 		.local = llfree_ext_alloc(LLFREE_CACHE_SIZE, m.local),
 		.trees = llfree_ext_alloc(LLFREE_CACHE_SIZE, m.trees),
 		.lower = llfree_ext_alloc(LLFREE_CACHE_SIZE, m.lower),
 	};
 	llfree_result_t ll_unused ret =
-		llfree_init(&upper, frames, init, meta, &tiering);
+		llfree_init(&upper, frames, init, meta, &clustering);
 	assert(llfree_is_ok(ret));
 	return upper;
 }

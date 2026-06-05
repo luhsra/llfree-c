@@ -4,17 +4,17 @@
 #include "utils.h"
 
 void trees_init(trees_t *self, size_t frames, uint8_t *buffer,
-		trees_init_fn init_fn, void *init_ctx, uint8_t default_tier)
+		trees_init_fn init_fn, void *init_ctx, uint8_t default_cluster)
 {
 	self->len = div_ceil(frames, LLFREE_TREE_SIZE);
 	self->entries = (_Atomic(tree_t) *)buffer;
-	self->default_tier = default_tier;
+	self->default_cluster = default_cluster;
 
 	if (init_fn != NULL) {
 		for (size_t i = 0; i < self->len; ++i) {
 			treeF_t free =
 				init_fn(frame_from_tree(tree_id(i)), init_ctx);
-			self->entries[i] = tree_new(false, default_tier, free);
+			self->entries[i] = tree_new(false, default_cluster, free);
 		}
 	}
 }
@@ -31,12 +31,12 @@ tree_t trees_load(const trees_t *self, tree_id_t idx)
 }
 
 bool trees_steal(trees_t *self, tree_id_t idx, treeF_t frames,
-	       uint8_t *tier, llfree_policy_fn policy)
+	       uint8_t *cluster, llfree_policy_fn policy)
 {
 	assert(idx.value < self->len);
 	tree_t old;
 	bool ok = atom_update(&self->entries[idx.value], old, tree_steal, frames,
-			      tier, policy);
+			      cluster, policy);
 	return ok;
 }
 
@@ -47,31 +47,31 @@ void trees_put(trees_t *self, tree_id_t idx, treeF_t frames,
 	(void)policy; // reserved for future use (see Rust tree_put policy check)
 	tree_t old;
 	atom_update(&self->entries[idx.value], old, tree_put, frames, policy,
-		    self->default_tier);
+		    self->default_cluster);
 }
 
 bool trees_reserve_or_steal(trees_t *self, tree_id_t idx, treeF_t frames,
-			    llfree_policy_fn policy, uint8_t tier,
+			    llfree_policy_fn policy, uint8_t cluster,
 			    bool *out_reserved, treeF_t *out_free,
-			    uint8_t *out_tier)
+			    uint8_t *out_cluster)
 {
 	assert(idx.value < self->len);
 	tree_t old;
 	bool ok = atom_update(&self->entries[idx.value], old,
-			       tree_reserve_or_steal, frames, policy, tier,
-			       out_reserved, out_tier);
+			       tree_reserve_or_steal, frames, policy, cluster,
+			       out_reserved, out_cluster);
 	if (ok && out_free != NULL)
 		*out_free = old.free;
 	return ok;
 }
 
-void trees_unreserve(trees_t *self, tree_id_t idx, treeF_t free, uint8_t tier,
+void trees_unreserve(trees_t *self, tree_id_t idx, treeF_t free, uint8_t cluster,
 		     llfree_policy_fn policy)
 {
 	assert(idx.value < self->len);
 	tree_t old;
 	atom_update(&self->entries[idx.value], old, tree_unreserve_add, free,
-		    tier, policy, self->default_tier);
+		    cluster, policy, self->default_cluster);
 }
 
 bool trees_sync_steal(trees_t *self, tree_id_t idx, treeF_t min,
@@ -133,7 +133,7 @@ llfree_result_t trees_search_best(const trees_t *self, tree_id_t start,
 			continue;
 
 		// Rate the tree
-		llfree_policy_t p = rate(tree.tier, tree.free, rate_args);
+		llfree_policy_t p = rate(tree.cluster, tree.free, rate_args);
 		if (p.type == LLFREE_POLICY_INVALID)
 			continue;
 
@@ -182,20 +182,20 @@ ll_tree_stats_t trees_stats(const trees_t *self)
 		stats.free_frames += t.free;
 		stats.free_trees += t.free == LLFREE_TREE_SIZE;
 
-		ll_tier_stats_t *tier = &stats.tiers[t.tier];
-		tier->free_frames += t.free;
-		tier->alloc_frames += LLFREE_TREE_SIZE - t.free;
+		ll_cluster_stats_t *cluster = &stats.clusters[t.cluster];
+		cluster->free_frames += t.free;
+		cluster->alloc_frames += LLFREE_TREE_SIZE - t.free;
 	}
 	return stats;
 }
 
-void trees_stats_at(const trees_t *self, tree_id_t idx, uint8_t *tier,
+void trees_stats_at(const trees_t *self, tree_id_t idx, uint8_t *cluster,
 		    treeF_t *free, bool *reserved)
 {
 	assert(idx.value < self->len);
 	tree_t t = atom_load(&self->entries[idx.value]);
-	if (tier != NULL)
-		*tier = t.tier;
+	if (cluster != NULL)
+		*cluster = t.cluster;
 	if (free != NULL)
 		*free = t.free;
 	if (reserved != NULL)
@@ -222,8 +222,8 @@ static llfree_result_t trees_change_at(tree_id_t idx, void *ctx)
 		}
 
 		tree_t desired = old;
-		if (!tree_change(&desired, args->matcher.tier,
-				 (treeF_t)args->matcher.free, args->change.tier,
+		if (!tree_change(&desired, args->matcher.cluster,
+				 (treeF_t)args->matcher.free, args->change.cluster,
 				 args->change.operation, online_free)) {
 			return llfree_err(LLFREE_ERR_MEMORY);
 		}
