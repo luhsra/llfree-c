@@ -183,6 +183,14 @@ llfree_result_t field_toggle(bitfield_t *field, size_t index, size_t order,
 					      ~mask)) {
 				continue;
 			}
+
+			// undo
+			for (size_t j = 0; j < i; j++) {
+				bool success = atom_cmp_exchange(
+					&field->rows[pos.row + i - j - 1],
+					&mask, ~mask);
+				assert(success);
+			}
 			return llfree_err(LLFREE_ERR_MEMORY);
 		}
 		return llfree_err(LLFREE_ERR_OK);

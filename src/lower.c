@@ -259,20 +259,11 @@ llfree_result_t lower_get(lower_t *self, const frame_id_t start_frame,
 static llfree_result_t split_huge(child_t old, _Atomic(child_t) *child,
 				  bitfield_t *field)
 {
-	(void)old;
-	uint64_t zero = 0;
-
-	bool success = atom_cmp_exchange(&field->rows[0], &zero, UINT64_MAX);
-	if (success) {
+	llfree_result_t res = field_toggle(field, 0, LLFREE_CHILD_ORDER, false);
+	if (llfree_is_ok(res)) {
 		llfree_debug("split huge");
-
-		for (size_t i = 1; i < FIELD_N; ++i) {
-			atom_store(&field->rows[i], UINT64_MAX);
-		}
-
-		child_t expected = child_new(0, true);
-		success = atom_cmp_exchange(child, &expected,
-					    child_new(0, false));
+		bool success =
+			atom_cmp_exchange(child, &old, child_new(0, false));
 		assert(success);
 	} else {
 		llfree_debug("split huge: wait");
