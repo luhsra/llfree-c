@@ -170,7 +170,8 @@ declare_test(lower_get)
 
 	ret = lower_get(&actual, frame_id(0), 0, frame_id_none());
 	check(ret.frame.value == 0);
-	ret = lower_get(&actual, frame_id(0), LLFREE_HUGE_ORDER, frame_id_none());
+	ret = lower_get(&actual, frame_id(0), LLFREE_HUGE_ORDER,
+			frame_id_none());
 
 	child_t child = atom_load(&actual.children[0].entries[1]);
 	check_equal("d", child.huge, true);
@@ -330,12 +331,13 @@ declare_test(lower_large)
 		// Use a different tree for each order to avoid conflicts
 		size_t tree = o;
 		llfree_result_t frame;
-		frame = lower_get(&lower, frame_id(tree * LLFREE_TREE_SIZE), o, frame_id_none());
+		frame = lower_get(&lower, frame_id(tree * LLFREE_TREE_SIZE), o,
+				  frame_id_none());
 
 		check_m(llfree_is_ok(frame), "%zu -> %" PRIuS, o,
 			(size_t)frame.error);
-		check_m(frame.frame.value % (1 << o) == 0, "%zu -> 0x%" PRIx64, o,
-			frame.frame.value);
+		check_m(frame.frame.value % (1 << o) == 0, "%zu -> 0x%" PRIx64,
+			o, frame.frame.value);
 		frames[o] = frame.frame.value;
 	}
 
@@ -358,13 +360,13 @@ declare_test(lower_huge)
 	const size_t FRAMES = LLFREE_CHILD_SIZE * 60lu;
 	lower_t actual = lower_new(FRAMES, LLFREE_INIT_FREE);
 
-	llfree_result_t frame1 =
-		lower_get(&actual, frame_id(0), LLFREE_HUGE_ORDER, frame_id_none());
+	llfree_result_t frame1 = lower_get(&actual, frame_id(0),
+					   LLFREE_HUGE_ORDER, frame_id_none());
 	check(llfree_is_ok(frame1));
 	uint64_t offset = frame1.frame.value % LLFREE_CHILD_SIZE;
 	check_equal(PRIu64, offset, (uint64_t)0ul);
-	llfree_result_t frame2 =
-		lower_get(&actual, frame_id(0), LLFREE_HUGE_ORDER, frame_id_none());
+	llfree_result_t frame2 = lower_get(&actual, frame_id(0),
+					   LLFREE_HUGE_ORDER, frame_id_none());
 	check(llfree_is_ok(frame2));
 	offset = frame2.frame.value % LLFREE_CHILD_SIZE;
 	check_equal(PRIu64, offset, (uint64_t)0ul);
@@ -373,35 +375,42 @@ declare_test(lower_huge)
 		    (size_t)(2 * LLFREE_CHILD_SIZE));
 
 	// request a regular frame
-	llfree_result_t regular = lower_get(&actual, frame_id(0), 0, frame_id_none());
+	llfree_result_t regular =
+		lower_get(&actual, frame_id(0), 0, frame_id_none());
 	assert(llfree_is_ok(regular));
 	// regular frame cannot be returned as HP
-	assert(!llfree_is_ok(
-		lower_put(&actual, frame_id(regular.frame.value), LLFREE_HUGE_ORDER)));
+	assert(!llfree_is_ok(lower_put(&actual, frame_id(regular.frame.value),
+				       LLFREE_HUGE_ORDER)));
 
 	// this HF must be in another child than the regular frame.
-	llfree_result_t frame3 = lower_get(&actual, frame_id(frame_from_row(row_id(10)).value), LLFREE_HUGE_ORDER, frame_id_none());
+	llfree_result_t frame3 =
+		lower_get(&actual, frame_id(frame_from_row(row_id(10)).value),
+			  LLFREE_HUGE_ORDER, frame_id_none());
 	check(llfree_is_ok(frame3));
 	offset = frame3.frame.value % LLFREE_CHILD_SIZE;
 	check_equal(PRIu64, offset, (uint64_t)0ul);
-	check_equal(PRIu64, frame3.frame.value, (uint64_t)(3lu * LLFREE_CHILD_SIZE));
+	check_equal(PRIu64, frame3.frame.value,
+		    (uint64_t)(3lu * LLFREE_CHILD_SIZE));
 
 	// free regular page und try get this child as complete HP
-	assert(llfree_is_ok(lower_put(&actual, frame_id(regular.frame.value), 0)));
-	llfree_result_t frame4 =
-		lower_get(&actual, frame_id(0), LLFREE_HUGE_ORDER, frame_id_none());
+	assert(llfree_is_ok(
+		lower_put(&actual, frame_id(regular.frame.value), 0)));
+	llfree_result_t frame4 = lower_get(&actual, frame_id(0),
+					   LLFREE_HUGE_ORDER, frame_id_none());
 	check(llfree_is_ok(frame4));
 	check(frame4.frame.value == regular.frame.value);
 
-	llfree_result_t ret =
-		lower_put(&actual, frame_id(frame2.frame.value), LLFREE_HUGE_ORDER);
+	llfree_result_t ret = lower_put(&actual, frame_id(frame2.frame.value),
+					LLFREE_HUGE_ORDER);
 	check(llfree_is_ok(ret));
 
 	// allocate the complete memory with HPs
 	for (size_t i = 3; i < 60; ++i) {
 		// get allocates only in chunks of N children. if there is no free HP in given chung it returns LLFREE_ERR_MEMORY
 		llfree_result_t frame = lower_get(
-			&actual, frame_id((i / LLFREE_TREE_CHILDREN) * LLFREE_TREE_SIZE), LLFREE_HUGE_ORDER, frame_id_none());
+			&actual,
+			frame_id((i / LLFREE_TREE_CHILDREN) * LLFREE_TREE_SIZE),
+			LLFREE_HUGE_ORDER, frame_id_none());
 		check(llfree_is_ok(frame));
 	}
 
@@ -409,26 +418,29 @@ declare_test(lower_huge)
 		      "fully allocated with huge frames");
 
 	// reservation at full memory must fail
-	llfree_result_t frame =
-		lower_get(&actual, frame_id(0), LLFREE_HUGE_ORDER, frame_id_none());
+	llfree_result_t frame = lower_get(&actual, frame_id(0),
+					  LLFREE_HUGE_ORDER, frame_id_none());
 	check(frame.error == LLFREE_ERR_MEMORY);
 
 	// return HP as regular Frame must succseed
-	check(llfree_is_ok(lower_put(&actual, frame_id(frame2.frame.value), 0)));
-	// HP ist converted into regular frames so returning the whole page must fail
-	check(lower_put(&actual, frame_id(frame2.frame.value), LLFREE_HUGE_ORDER).error ==
-	      LLFREE_ERR_ARGUMENT);
-
 	check(llfree_is_ok(
-		lower_put(&actual, frame_id(frame1.frame.value), LLFREE_HUGE_ORDER)));
+		lower_put(&actual, frame_id(frame2.frame.value), 0)));
+	// HP ist converted into regular frames so returning the whole page must fail
+	check(lower_put(&actual, frame_id(frame2.frame.value),
+			LLFREE_HUGE_ORDER)
+		      .error == LLFREE_ERR_ARGUMENT);
+
+	check(llfree_is_ok(lower_put(&actual, frame_id(frame1.frame.value),
+				     LLFREE_HUGE_ORDER)));
 
 	// check if right amout of free regular frames are present
 	check_equal("zu", lower_stats(&actual).free_frames,
 		    LLFREE_CHILD_SIZE + 1ul);
 
 	// new acquired frame should be in same positon as the old no 1
-	check(lower_get(&actual, frame_id(0), LLFREE_HUGE_ORDER, frame_id_none()).frame.value ==
-	      frame1.frame.value);
+	check(lower_get(&actual, frame_id(0), LLFREE_HUGE_ORDER,
+			frame_id_none())
+		      .frame.value == frame1.frame.value);
 
 	return success;
 }
@@ -442,7 +454,9 @@ declare_test(lower_max)
 	lower_t lower = lower_new(FRAMES, LLFREE_INIT_FREE);
 
 	for (size_t i = 0; i < FRAMES / (1 << LLFREE_TREE_ORDER); ++i) {
-		llfree_result_t frame = lower_get(&lower, frame_id(i * (1 << LLFREE_TREE_ORDER)), LLFREE_TREE_ORDER, frame_id_none());
+		llfree_result_t frame = lower_get(
+			&lower, frame_id(i * (1 << LLFREE_TREE_ORDER)),
+			LLFREE_TREE_ORDER, frame_id_none());
 		check_m(llfree_is_ok(frame), "%zu", i);
 	}
 
@@ -450,7 +464,8 @@ declare_test(lower_max)
 
 	for (size_t i = 0; i < FRAMES / (1 << LLFREE_TREE_ORDER); ++i) {
 		llfree_result_t ret = lower_put(
-			&lower, frame_id(i * (1 << LLFREE_TREE_ORDER)), LLFREE_TREE_ORDER);
+			&lower, frame_id(i * (1 << LLFREE_TREE_ORDER)),
+			LLFREE_TREE_ORDER);
 		check_m(llfree_is_ok(ret), "%zu", i);
 	}
 

@@ -14,11 +14,11 @@ bool first_zeros_aligned(uint64_t *v, size_t order, size_t *pos);
 		uint64_t val = (v);                                            \
 		size_t pos;                                                    \
 		bool found = first_zeros_aligned(&val, (order), &pos);         \
-		check_equal_m(PRIu64, val, (uint64_t)(expected_v), "value");               \
+		check_equal_m(PRIu64, val, (uint64_t)(expected_v), "value");   \
 		check_equal_m("d", found, (expected_pos) < SIZE_MAX, "found"); \
 		if (found)                                                     \
-			check_equal_m("zu", (size_t)pos, (size_t)(expected_pos),       \
-				      "position");                             \
+			check_equal_m("zu", (size_t)pos,                       \
+				      (size_t)(expected_pos), "position");     \
 	})
 
 declare_test(bitfield_first_zeros)

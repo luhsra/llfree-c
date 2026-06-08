@@ -5,7 +5,7 @@
 	check_equal("u", actual.free, expect.free); \
 	check_equal("u", actual.reserved, expect.reserved)
 
-// Simple policy: cluster 0 = small, cluster 1 = huge; same cluster matches only
+// Simple policy: class 0 = small, class 1 = huge; same class matches only
 static llfree_policy_t test_policy(uint8_t req, uint8_t tgt, size_t free)
 {
 	(void)free;
@@ -15,8 +15,6 @@ static llfree_policy_t test_policy(uint8_t req, uint8_t tgt, size_t free)
 		return (llfree_policy_t){ LLFREE_POLICY_STEAL, 0 };
 	return (llfree_policy_t){ LLFREE_POLICY_DEMOTE, 0 };
 }
-
-
 
 declare_test(tree_atomic)
 {
@@ -36,7 +34,7 @@ declare_test(tree_init)
 	tree_t actual = tree_new(reserved, 0, free);
 	check_equal("u", actual.free, free);
 	check_equal("u", actual.reserved, reserved);
-	check_equal("u", actual.cluster, 0);
+	check_equal("u", actual.class, 0);
 
 	free = LLFREE_TREE_SIZE; // maximum value
 	reserved = false;
@@ -58,15 +56,16 @@ declare_test(tree_reserve)
 	int success = true;
 	bool ret = false;
 	bool reserved = false;
-	uint8_t out_cluster = 0;
+	uint8_t out_class = 0;
 
-	// Use test_policy: same cluster -> Match -> reserve behavior
-	// tree_reserve_or_steal with Match sets reserved=true, free=0, cluster=req
+	// Use test_policy: same class -> Match -> reserve behavior
+	// tree_reserve_or_steal with Match sets reserved=true, free=0, class=req
 
 	tree_t actual = tree_new(false, 0, 764);
 	tree_t expect = tree_new(true, 0, 0);
 
-	ret = tree_reserve_or_steal(&actual, 1, test_policy, 0, &reserved, &out_cluster);
+	ret = tree_reserve_or_steal(&actual, 1, test_policy, 0, &reserved,
+				    &out_class);
 	check(ret);
 	check(reserved);
 	equal_trees(actual, expect);
@@ -74,14 +73,16 @@ declare_test(tree_reserve)
 	// if already reserved
 	actual = tree_new(true, 0, 456);
 	expect = actual;
-	ret = tree_reserve_or_steal(&actual, 1, test_policy, 0, &reserved, &out_cluster);
+	ret = tree_reserve_or_steal(&actual, 1, test_policy, 0, &reserved,
+				    &out_class);
 	check_m(!ret, "already reserved");
 	equal_trees(actual, expect);
 
 	// max counter value
 	actual = tree_new(false, 0, LLFREE_TREE_SIZE);
 	expect = tree_new(true, 0, 0);
-	ret = tree_reserve_or_steal(&actual, 1, test_policy, 0, &reserved, &out_cluster);
+	ret = tree_reserve_or_steal(&actual, 1, test_policy, 0, &reserved,
+				    &out_class);
 	check(ret);
 	check(reserved);
 	equal_trees(actual, expect);
@@ -89,11 +90,12 @@ declare_test(tree_reserve)
 	// Steal behavior: target > request -> Steal, decrements counter
 	actual = tree_new(false, 1, 764);
 	treeF_t free_before = actual.free;
-	ret = tree_reserve_or_steal(&actual, 4, test_policy, 0, &reserved, &out_cluster);
+	ret = tree_reserve_or_steal(&actual, 4, test_policy, 0, &reserved,
+				    &out_class);
 	check(ret);
 	check(!reserved);
 	check_equal("u", actual.free, free_before - 4);
-	check_equal("u", actual.cluster, 1); // cluster unchanged
+	check_equal("u", actual.class, 1); // class unchanged
 
 	return success;
 }
@@ -172,8 +174,8 @@ declare_test(tree_inc)
 
 	order = LLFREE_HUGE_ORDER;
 	free = LLFREE_TREE_SIZE - (1 << 9);
-	actual = tree_new(true, 1, free); // cluster 1 = huge
-	// When tree becomes entirely free, cluster resets to default_cluster (0)
+	actual = tree_new(true, 1, free); // class 1 = huge
+	// When tree becomes entirely free, class resets to default_class (0)
 	expect = tree_new(true, 0, free + (treeF_t)(1 << order));
 	ret = tree_put(&actual, (treeF_t)(1 << order), test_policy, 0);
 	check(ret);

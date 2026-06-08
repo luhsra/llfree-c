@@ -15,8 +15,8 @@ typedef struct __attribute__((aligned(LLFREE_CACHE_SIZE))) llfree {
 	/// Manages the tree array
 	trees_t trees;
 
-	/// Policy function for cluster-based allocation
+	/// Policy function for class-based allocation
 	llfree_policy_fn policy;
-	/// Number of clusters
-	uint8_t num_clusters;
+	/// Number of classes
+	uint8_t num_classes;
 } llfree_t;

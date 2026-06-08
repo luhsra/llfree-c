@@ -6,8 +6,8 @@
 
 #include <stdlib.h>
 
-// Helper macros for movable clustering requests
-#define ll_cores(self) ll_local_cluster_locals((self)->local, 0).value
+// Helper macros for movable classing requests
+#define ll_cores(self) ll_local_class_locals((self)->local, 0).value
 #define llreq(self, core, order) \
 	llfree_movable_request(ll_cores(self), (uint8_t)(order), core, false)
 #define llreq_mov(self, core, order) \
@@ -16,15 +16,15 @@
 static llfree_t llfree_new(size_t cores, size_t frames, uint8_t init)
 {
 	llfree_t upper;
-	llfree_clustering_t clustering = llfree_clustering_movable(cores);
-	llfree_meta_size_t m = llfree_metadata_size(&clustering, frames);
+	llfree_classing_t classing = llfree_classing_movable(cores);
+	llfree_meta_size_t m = llfree_metadata_size(&classing, frames);
 	llfree_meta_t meta = {
 		.local = llfree_ext_alloc(LLFREE_CACHE_SIZE, m.local),
 		.trees = llfree_ext_alloc(LLFREE_CACHE_SIZE, m.trees),
 		.lower = llfree_ext_alloc(LLFREE_CACHE_SIZE, m.lower),
 	};
 	llfree_result_t ll_unused ret =
-		llfree_init(&upper, frames, init, meta, &clustering);
+		llfree_init(&upper, frames, init, meta, &classing);
 	assert(llfree_is_ok(ret));
 	return upper;
 }
@@ -50,9 +50,11 @@ declare_test(alloc_movable)
 	const size_t len = 4 * LLFREE_TREE_SIZE;
 	uint64_t *frames = calloc(len, sizeof(uint64_t));
 
-	llfree_result_t movable = llfree_get(&llfree, frame_id_none(), llreq_mov(&llfree, 0, 0));
+	llfree_result_t movable =
+		llfree_get(&llfree, frame_id_none(), llreq_mov(&llfree, 0, 0));
 	check_m(llfree_is_ok(movable), "movable allocation failed");
-	llfree_result_t normal = llfree_get(&llfree, frame_id_none(), llreq(&llfree, 0, 0));
+	llfree_result_t normal =
+		llfree_get(&llfree, frame_id_none(), llreq(&llfree, 0, 0));
 	check_m(llfree_is_ok(normal), "normal allocation failed");
 
 	for (size_t i = 0; i < len; i++) {
@@ -71,10 +73,11 @@ declare_test(alloc_movable)
 	check(llfree_tree_stats(&llfree).free_frames ==
 	      (1 << 30) / LLFREE_FRAME_SIZE - len - 2);
 
-	llfree_result_t ret =
-		llfree_put(&llfree, frame_id(movable.frame.value), llreq(&llfree, 0, 0));
+	llfree_result_t ret = llfree_put(&llfree, frame_id(movable.frame.value),
+					 llreq(&llfree, 0, 0));
 	check_m(llfree_is_ok(ret), "free movable failed");
-	ret = llfree_put(&llfree, frame_id(normal.frame.value), llreq(&llfree, 0, 0));
+	ret = llfree_put(&llfree, frame_id(normal.frame.value),
+			 llreq(&llfree, 0, 0));
 	check_m(llfree_is_ok(ret), "free normal failed");
 
 	// llfree_print(&llfree);
@@ -82,8 +85,8 @@ declare_test(alloc_movable)
 	llfree_warn("freeing all");
 
 	for (size_t i = 0; i < len; i++) {
-		llfree_result_t ret =
-			llfree_put(&llfree, frame_id(frames[i]), llreq(&llfree, 0, 0));
+		llfree_result_t ret = llfree_put(&llfree, frame_id(frames[i]),
+						 llreq(&llfree, 0, 0));
 		check_m(llfree_is_ok(ret), "free allocation %zu failed", i);
 	}
 

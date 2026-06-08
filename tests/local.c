@@ -15,29 +15,29 @@ declare_test(local_last_free_inc)
 {
 	bool success = true;
 
-	// Simple 2-cluster clustering: cluster 0 (small, 1 slot), cluster 1 (huge, 1 slot)
-	llfree_clustering_t clustering = llfree_clustering_simple(1);
+	// Simple 2-class classing: class 0 (small, 1 slot), class 1 (huge, 1 slot)
+	llfree_classing_t classing = llfree_classing_simple(1);
 	local_t *local =
-		llfree_ext_alloc(LLFREE_CACHE_SIZE, ll_local_size(&clustering));
-	ll_local_init(local, &clustering);
+		llfree_ext_alloc(LLFREE_CACHE_SIZE, ll_local_size(&classing));
+	ll_local_init(local, &classing);
 
-	// cluster 0, index 0 (first slot of cluster 0)
-	uint8_t cluster = 0;
+	// class 0, index 0 (first slot of class 0)
+	uint8_t class = 0;
 	size_t index = 0;
 	for (size_t i = 0; i < LAST_FREES; i++) {
-		check(!ll_local_free_inc(local, cluster, index, tree_id(0)));
+		check(!ll_local_free_inc(local, class, index, tree_id(0)));
 	}
-	check(ll_local_free_inc(local, cluster, index, tree_id(0)));
-	check(ll_local_free_inc(local, cluster, index, tree_id(0)));
+	check(ll_local_free_inc(local, class, index, tree_id(0)));
+	check(ll_local_free_inc(local, class, index, tree_id(0)));
 
-	check(!ll_local_free_inc(local, cluster, index, tree_id(1)));
-	check(!ll_local_free_inc(local, cluster, index, tree_id(0)));
+	check(!ll_local_free_inc(local, class, index, tree_id(1)));
+	check(!ll_local_free_inc(local, class, index, tree_id(0)));
 
 	for (size_t i = 0; i < LAST_FREES; i++) {
-		check(!ll_local_free_inc(local, cluster, index, tree_id(1)));
+		check(!ll_local_free_inc(local, class, index, tree_id(1)));
 	}
-	check(ll_local_free_inc(local, cluster, index, tree_id(1)));
-	llfree_ext_free(LLFREE_CACHE_SIZE, ll_local_size(&clustering), local);
+	check(ll_local_free_inc(local, class, index, tree_id(1)));
+	llfree_ext_free(LLFREE_CACHE_SIZE, ll_local_size(&classing), local);
 	return success;
 }
 #endif
