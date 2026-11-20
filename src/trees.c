@@ -97,18 +97,19 @@ llfree_result_t trees_search(const trees_t *self, tree_id_t start,
 		llfree_result_t res = cb(tree_id(idx), ctx);
 		if (res.error != LLFREE_ERR_MEMORY) {
 			if (i - (int64_t)offset > 4)
-				llfree_debug(
-					"large search o=%zu i=%zd len=%zu -> tree %zu",
-					offset, (ssize_t)i, len,
-					llfree_is_ok(res) ?
-						tree_from_frame(res.frame).value :
-						(size_t)-1);
+				llfree_debug("large search o=%zu i=%" PRId64
+					     " len=%zu -> tree %zu",
+					     offset, i, len,
+					     llfree_is_ok(res) ?
+						     tree_from_frame(res.frame)
+							     .value :
+						     (size_t)-1);
 			return res;
 		}
 	}
 	if (len > 4)
 		llfree_debug("search failed o=%zu len=%zu start=%zu", offset,
-			     len, start);
+			     len, start.value);
 	return llfree_err(LLFREE_ERR_MEMORY);
 }
 
